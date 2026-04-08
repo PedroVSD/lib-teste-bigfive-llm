@@ -626,6 +626,11 @@ openai = [
     { name = "openai" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'all'", specifier = ">=0.30" },
@@ -644,6 +649,9 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
 ]
 provides-extras = ["openai", "anthropic", "gemini", "analysis", "all", "dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.3" }]
 
 [[package]]
 name = "numpy"

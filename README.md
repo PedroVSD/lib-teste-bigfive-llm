@@ -8,20 +8,28 @@ Suporta modelos via **API** (OpenAI, Anthropic) e **localmente** (Ollama), dois 
 
 ## Instalação
 
+## Instalação e Configuração
+
+Este projeto utiliza o [uv](https://docs.astral.sh/uv/) como gerenciador de dependências e ambientes virtuais, garantindo extrema velocidade e reprodutibilidade.
+
+### Pré-requisitos
+* Ter o `uv` instalado na sua máquina (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
+
+### Passo a passo
+
+1. **Clone o repositório:**
 ```bash
-# Dependência mínima (Ollama apenas)
-pip install httpx
-
-# Com suporte a API OpenAI
-pip install ".[openai]"
-
-# Com suporte a Anthropic
-pip install ".[anthropic]"
-
-# Tudo + análise de dados
-pip install ".[all]"
+git clone 
+cd llm-negotiation-analyst
 ```
-
+2. **Instale as dependências e crie o ambiente**
+```
+uv sync --all-extras
+```
+3. **Configure as variáveis de ambiente**
+```
+cp .env.example .env
+```
 ---
 
 ## Quick start
@@ -84,31 +92,23 @@ for model_name, adapter in [
 ```
 llm_negotiation_analyst/
 │
-├── adapters/               # Conectores para LLMs
-│   ├── base.py             # LLMAdapter (ABC) + AdapterConfig
-│   ├── openai_adapter.py   # OpenAI / Azure / Together
-│   ├── anthropic_adapter.py
-│   └── ollama_adapter.py   # Modelos locais via Ollama
+├── .venv/                  # Ambiente virtual (gerenciado pelo uv)
+├── .env                    # Variáveis de ambiente locais (NÃO ENVIAR PARA O GITHUB)
+├── .env.example            # Exemplo de configuração de ambiente
+├── pyproject.toml          # Configuração do projeto e dependências
+├── uv.lock                 # Lockfile para builds determinísticas
+├── experimento.py          # Script principal de execução
+├── documentacao.md         # Documentação estendida do projeto
 │
-├── scenarios/              # Cenários de negociação declarativos
-│   └── __init__.py         # NegotiationScenario + 3 cenários built-in
-│
-├── simulation/             # Motor de simulação
-│   └── engine.py           # SimulationEngine, NegotiationResult, Turn
-│
-├── scoring/                # Avaliação Big Five
-│   ├── big5.py             # Dimensões, metadados, rubricas, perfis
-│   └── evaluator.py        # Evaluator (LLM-as-judge), dual-judge IRR
-│
-├── storage/                # Persistência
-│   └── jsonl_store.py      # StorageManager (JSONL append-only)
-│
-├── report/                 # Relatórios
-│   └── generator.py        # generate_report() → Markdown
-│
-└── __init__.py             # run_negotiation(), run_benchmark()
+├── llm_negotiation_analyst/ # Código fonte principal
+│   ├── adapters/           # Conectores para LLMs (OpenAI, Anthropic, Ollama)
+│   ├── scenarios/          # Cenários de negociação declarativos
+│   ├── simulation/         # Motor de simulação + 3 cenários built-in
+│   ├── scoring/            # Avaliação Big Five e LLM-as-judge
+│   ├── storage/            # Persistência de dados
+│   ├── report/             # Relatórios
+│   └── tests/              # Suíte de testes automatizados
 ```
-
 ---
 
 ## Adaptadores
@@ -281,10 +281,12 @@ config_det = AdapterConfig(
 
 ---
 
-## Executar os testes
+## Executar os testes automatizados
+
+Este projeto utiliza o `pytest` para garantir a estabilidade do motor de simulação e da avaliação. O `uv run` garante que os testes rodem no ambiente isolado correto.
 
 ```bash
-pytest llm_negotiation_analyst/tests/ -v
+uv run pytest llm_negotiation_analyst/tests/ -v
 # 21 testes, sem necessidade de API key ou modelo local
 ```
 

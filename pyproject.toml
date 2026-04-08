@@ -34,3 +34,8 @@ testpaths = ["llm_negotiation_analyst/tests"]
 
 [tool.setuptools.packages.find]
 include = ["llm_negotiation_analyst*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
