@@ -2,7 +2,7 @@
 
 Uma biblioteca Python para estudar a expressão de traços de personalidade do **Big Five** em negociações conduzidas por LLMs.
 
-Suporta modelos via **API** (OpenAI, Anthropic) e **localmente** (Ollama), dois modos de simulação, avaliação automática por LLM-juiz, persistência em JSONL e geração de relatórios Markdown.
+Suporta modelos via **API** (OpenAI, Anthropic, Gemini) e **localmente** (Ollama), dois modos de simulação, avaliação automática por LLM-juiz, persistência em JSONL e geração de relatórios Markdown.
 
 ---
 
