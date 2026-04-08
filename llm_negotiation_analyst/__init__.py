@@ -21,7 +21,7 @@ Quick start — agent-vs-agent:
     print(report)
 """
 
-from .adapters import LLMAdapter, OpenAIAdapter, AnthropicAdapter, OllamaAdapter
+from .adapters import LLMAdapter, OpenAIAdapter, OllamaAdapter, GeminiAdapter
 from .scenarios import NegotiationScenario, SCENARIO_REGISTRY
 from .simulation import SimulationEngine, NegotiationResult
 from .scoring import Evaluator, EvaluatorConfig, Dimension, Big5Profile

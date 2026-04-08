@@ -1,0 +1,16 @@
+# Ambientes Virtuais
+.venv/
+venv/
+env/
+
+# Cache e arquivos compilados do Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Resultados locais
+results/
+outputs/
+
+.env

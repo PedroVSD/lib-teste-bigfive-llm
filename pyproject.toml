@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-negotiation-analyst"
@@ -8,19 +8,22 @@ version = "0.1.0"
 description = "Analyze Big Five personality expression in LLM negotiations"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 
 dependencies = [
     "httpx>=0.27",          # Ollama adapter + general HTTP
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]
 openai     = ["openai>=1.30"]
 anthropic  = ["anthropic>=0.30"]
+gemini     = ["google-genai>=0.1.0"]
 analysis   = ["pandas>=2.0", "numpy>=1.26"]
 all        = [
     "openai>=1.30",
     "anthropic>=0.30",
+    "google-genai>=0.1.0",
     "pandas>=2.0",
     "numpy>=1.26",
 ]
@@ -28,3 +31,6 @@ dev        = ["pytest>=8", "pytest-cov"]
 
 [tool.pytest.ini_options]
 testpaths = ["llm_negotiation_analyst/tests"]
+
+[tool.setuptools.packages.find]
+include = ["llm_negotiation_analyst*"]
