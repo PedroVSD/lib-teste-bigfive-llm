@@ -1,0 +1,298 @@
+# llm-negotiation-analyst
+
+Uma biblioteca Python para estudar a expressão de traços de personalidade do **Big Five** em negociações conduzidas por LLMs.
+
+Suporta modelos via **API** (OpenAI, Anthropic) e **localmente** (Ollama), dois modos de simulação, avaliação automática por LLM-juiz, persistência em JSONL e geração de relatórios Markdown.
+
+---
+
+## Instalação
+
+```bash
+# Dependência mínima (Ollama apenas)
+pip install httpx
+
+# Com suporte a API OpenAI
+pip install ".[openai]"
+
+# Com suporte a Anthropic
+pip install ".[anthropic]"
+
+# Tudo + análise de dados
+pip install ".[all]"
+```
+
+---
+
+## Quick start
+
+### Modo 1 — Agente vs. Agente (totalmente automatizado)
+
+```python
+from llm_negotiation_analyst import run_negotiation
+from llm_negotiation_analyst.adapters import OpenAIAdapter, OllamaAdapter
+from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
+
+result, profiles, report = run_negotiation(
+    scenario=SALARY_NEGOTIATION,
+    agents={
+        "candidate": OllamaAdapter("llama3.1:8b"),
+        "recruiter": OpenAIAdapter("gpt-4o"),
+    },
+    judge=OpenAIAdapter("gpt-4o"),   # juiz SEPARADO dos agentes
+    output_dir="results/",
+)
+
+print(report)
+```
+
+### Modo 2 — Benchmark (prompts fixos, comparação reproduzível)
+
+```python
+from llm_negotiation_analyst import run_benchmark
+from llm_negotiation_analyst.adapters import AnthropicAdapter, OllamaAdapter
+from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
+
+# Sequência fixa de turnos do oponente
+BENCHMARK = [
+    "Our offer is R$14,000/month.",
+    "We can add a signing bonus of R$3,000.",
+    "That is our final offer, take it or leave it.",
+]
+
+# Testa dois modelos na mesma sequência — resultados comparáveis
+for model_name, adapter in [
+    ("gpt-4o",       OpenAIAdapter("gpt-4o")),
+    ("llama3.1:8b",  OllamaAdapter("llama3.1:8b")),
+]:
+    result, profiles, report = run_benchmark(
+        scenario=SALARY_NEGOTIATION,
+        agent_role="candidate",
+        agent_adapter=adapter,
+        benchmark_turns=BENCHMARK,
+        judge=OpenAIAdapter("gpt-4o"),
+    )
+    print(f"\n=== {model_name} ===")
+    for agent_id, profile in profiles.items():
+        print(profile.scores)
+```
+
+---
+
+## Arquitetura
+
+```
+llm_negotiation_analyst/
+│
+├── adapters/               # Conectores para LLMs
+│   ├── base.py             # LLMAdapter (ABC) + AdapterConfig
+│   ├── openai_adapter.py   # OpenAI / Azure / Together
+│   ├── anthropic_adapter.py
+│   └── ollama_adapter.py   # Modelos locais via Ollama
+│
+├── scenarios/              # Cenários de negociação declarativos
+│   └── __init__.py         # NegotiationScenario + 3 cenários built-in
+│
+├── simulation/             # Motor de simulação
+│   └── engine.py           # SimulationEngine, NegotiationResult, Turn
+│
+├── scoring/                # Avaliação Big Five
+│   ├── big5.py             # Dimensões, metadados, rubricas, perfis
+│   └── evaluator.py        # Evaluator (LLM-as-judge), dual-judge IRR
+│
+├── storage/                # Persistência
+│   └── jsonl_store.py      # StorageManager (JSONL append-only)
+│
+├── report/                 # Relatórios
+│   └── generator.py        # generate_report() → Markdown
+│
+└── __init__.py             # run_negotiation(), run_benchmark()
+```
+
+---
+
+## Adaptadores
+
+### Adicionar um novo adaptador
+
+Implemente `LLMAdapter` e defina `complete()`:
+
+```python
+from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
+
+class MeuAdapter(LLMAdapter):
+    def complete(self, messages: list[dict], **kwargs) -> str:
+        # chame sua API aqui
+        return "resposta do modelo"
+```
+
+### Ollama (modelos locais)
+
+```bash
+# 1. Instale o Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Baixe um modelo
+ollama pull llama3.1:8b
+ollama pull mistral:7b
+
+# 3. Inicie o servidor (já sobe automaticamente no Linux)
+ollama serve
+```
+
+```python
+from llm_negotiation_analyst.adapters import OllamaAdapter
+from llm_negotiation_analyst.adapters.base import AdapterConfig
+
+adapter = OllamaAdapter(
+    model="llama3.1:8b",
+    config=AdapterConfig(temperature=0.0, extra={"seed": 42}),
+)
+```
+
+---
+
+## Cenários built-in
+
+| Nome | Domínio | Dificuldade | Turnos |
+|------|---------|-------------|--------|
+| `salary_negotiation` | RH / carreira | Médio | 8 |
+| `procurement_b2b` | Compras B2B SaaS | Difícil | 10 |
+| `crisis_negotiation_training` | Crise / desescalada | Difícil | 12 |
+
+### Criar um cenário customizado
+
+```python
+from llm_negotiation_analyst.scenarios import NegotiationScenario
+
+MEU_CENARIO = NegotiationScenario(
+    name="locacao_imovel",
+    description="Negociação de aluguel residencial.",
+    shared_context=(
+        "Um locatário está negociando o valor do aluguel de um apartamento "
+        "com o proprietário. O contrato é por 12 meses."
+    ),
+    roles={
+        "locatario": (
+            "Você é o locatário. Seu orçamento máximo é R$2.800/mês. "
+            "O imóvel está anunciado por R$3.200/mês. "
+            "Você tem um imóvel alternativo a R$2.900/mês como BATNA."
+        ),
+        "proprietario": (
+            "Você é o proprietário. O valor mínimo aceitável é R$2.600/mês. "
+            "Prefere não deixar o imóvel vago por mais de 2 semanas."
+        ),
+    },
+    opening_role="locatario",
+    max_turns=6,
+)
+```
+
+---
+
+## Avaliação Big Five
+
+### Dimensões e observabilidade em negociações de texto
+
+| Dimensão | Polo alto | Polo baixo | Observabilidade |
+|----------|-----------|------------|-----------------|
+| **Agreeableness** | Cooperativo / Pró-social | Competitivo / Adversarial | ⭐⭐⭐⭐⭐ |
+| **Conscientiousness** | Organizado / Preciso | Impulsivo / Vago | ⭐⭐⭐⭐ |
+| **Neuroticism** | Instável / Reativo | Estável / Composto | ⭐⭐⭐⭐ |
+| **Extraversion** | Assertivo / Dominante | Passivo / Reservado | ⭐⭐⭐ |
+| **Openness** | Criativo / Integrativo | Rígido / Convencional | ⭐⭐ |
+
+> ⚠️ **Openness** e **Extraversion** têm baixa observabilidade em negociações de texto. Interprete com cautela e documente essa limitação em qualquer publicação.
+
+### Configuração do avaliador
+
+```python
+from llm_negotiation_analyst.scoring import Evaluator, EvaluatorConfig, Dimension
+
+evaluator = Evaluator(
+    judge=OpenAIAdapter("gpt-4o"),
+    config=EvaluatorConfig(
+        dimensions=[Dimension.AGREEABLENESS, Dimension.CONSCIENTIOUSNESS, Dimension.NEUROTICISM],
+        invert_neuroticism=True,   # inverte N: alto = mais estável (útil p/ scores compostos)
+    ),
+    second_judge=OllamaAdapter("llama3.1:8b"),  # IRR automático entre os dois juízes
+)
+```
+
+### Confiabilidade inter-avaliadores (IRR)
+
+Quando `second_judge` é fornecido, o campo `confidence` de cada `DimensionScore` contém o IRR normalizado entre os dois juízes:
+
+```
+IRR = 1 - |score_juiz1 - score_juiz2| / 4
+```
+
+- `1.0` = concordância total
+- `0.75` = diferença de 1 ponto (aceitável)
+- `< 0.5` = desacordo significativo (verificar rubricas)
+
+---
+
+## Persistência e análise de dados
+
+```python
+from llm_negotiation_analyst.storage import StorageManager
+
+storage = StorageManager("results/")
+
+# Carregar todos os scores como DataFrame
+df_scores = storage.to_dataframe("scores")
+
+# Carregar todos os transcritos
+df_transcripts = storage.to_dataframe("transcripts")
+
+# Listar todos os runs
+runs = storage.list_runs()
+```
+
+### Estrutura dos arquivos gerados
+
+```
+results/
+├── transcripts/
+│   └── salary_negotiation_a1b2c3d4.jsonl    # 1 linha por turno
+├── scores/
+│   └── salary_negotiation_a1b2c3d4_scores.jsonl  # 1 linha por agente
+├── salary_negotiation_a1b2c3d4_report.md    # Relatório Markdown
+└── runs_index.jsonl                          # Índice de todos os runs
+```
+
+---
+
+## Reprodutibilidade
+
+Para resultados determinísticos:
+
+```python
+from llm_negotiation_analyst.adapters.base import AdapterConfig
+
+config_det = AdapterConfig(
+    temperature=0.0,
+    extra={"seed": 42}   # suportado pelo Ollama; OpenAI suporta via "seed"
+)
+```
+
+> **Importante:** use o mesmo modelo-juiz em todos os runs de uma comparação. Trocar o juiz entre runs invalida a comparabilidade dos scores.
+
+---
+
+## Executar os testes
+
+```bash
+pytest llm_negotiation_analyst/tests/ -v
+# 21 testes, sem necessidade de API key ou modelo local
+```
+
+---
+
+## Referências
+
+- Costa, P. T., & McCrae, R. R. (1992). *NEO PI-R Professional Manual.*
+- Barry, B., & Friedman, R. A. (1998). Bargainer characteristics in distributive and integrative negotiation. *Journal of Personality and Social Psychology, 74*(2), 345–359.
+- Zheng, L., et al. (2023). Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. *NeurIPS 2023.*
+- Ollama: https://ollama.com
