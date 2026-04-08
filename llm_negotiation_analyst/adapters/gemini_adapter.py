@@ -26,44 +26,64 @@ class GeminiAdapter(LLMAdapter):
         self.client = genai.Client(api_key=key)
 
     def complete(self, messages: list[dict], **kwargs) -> str:
-        system_instruction = None
-        contents = []
+            system_instruction = None
+            contents = []
 
-        # Mapeando o histórico para o formato estrito do novo SDK
-        for msg in messages:
-            if msg["role"] == "system":
-                system_instruction = msg["content"]
-            else:
+            # 1. Mapeando e limpando o histórico para o formato estrito do Gemini
+            for msg in messages:
+                if msg["role"] == "system":
+                    # Se o motor enviar múltiplos system prompts, nós os concatenamos
+                    if system_instruction:
+                        system_instruction += f"\n\n{msg['content']}"
+                    else:
+                        system_instruction = msg["content"]
+                    continue
+
                 role = "user" if msg["role"] == "user" else "model"
-                contents.append(
-                    types.Content(
-                        role=role,
-                        parts=[types.Part.from_text(text=msg["content"])]
+
+                # O Gemini NÃO aceita duas mensagens seguidas com o mesmo papel.
+                # Se o papel atual for igual ao anterior, concatenamos o texto na mesma mensagem.
+                if contents and contents[-1].role == role:
+                    contents[-1].parts[0].text += f"\n\n{msg['content']}"
+                else:
+                    contents.append(
+                        types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=msg["content"])]
+                        )
                     )
+
+            # 2. A Regra de Ouro: A última mensagem DEVE ser do 'user'.
+            if not contents:
+                # Se a lista está vazia (só tinha system prompt), forçamos o início
+                contents.append(types.Content(role="user", parts=[types.Part.from_text(text="Inicie a negociação.")]))
+            elif contents[-1].role == "model":
+                # Se o motor terminou o histórico com 'model', passamos a bola de volta
+                contents.append(types.Content(role="user", parts=[types.Part.from_text(text="Continue a negociação e faça sua jogada.")]))
+
+            # 3. Configurando os parâmetros
+            config_args = {
+                "temperature": self.config.temperature,
+                "max_output_tokens": self.config.max_tokens,
+                **self.config.extra
+            }
+            if system_instruction:
+                config_args["system_instruction"] = system_instruction
+
+            generation_config = types.GenerateContentConfig(**config_args)
+
+            # 4. Chamada da API
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=generation_config
                 )
+                return response.text
 
-        # Configurando os parâmetros
-        config_args = {
-            "temperature": self.config.temperature,
-            "max_output_tokens": self.config.max_tokens,
-            **self.config.extra
-        }
-        if system_instruction:
-            config_args["system_instruction"] = system_instruction
-
-        generation_config = types.GenerateContentConfig(**config_args)
-
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=contents,
-                config=generation_config
-            )
-            return response.text
-
-        except Exception as e:
-            print(f"[GeminiAdapter Error] Falha ao comunicar com a API: {e}")
-            raise
+            except Exception as e:
+                print(f"\n[GeminiAdapter Error] Falha ao comunicar com a API: {e}\n")
+                raise
 
     @property
     def identifier(self) -> str:

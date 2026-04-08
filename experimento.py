@@ -1,22 +1,27 @@
 import os
+from dotenv import load_dotenv
+
 from llm_negotiation_analyst import run_negotiation
-from llm_negotiation_analyst.adapters import OpenAIAdapter, GeminiAdapter
+from llm_negotiation_analyst.adapters.gemini_adapter import GeminiAdapter
 from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
 
-os.environ["OPENAI_API_KEY"] = "sk-sua-chave-aqui"
-os.environ["GEMINI_API_KEY"] = "AIza-sua-chave-aqui"
+# 1. Carrega as variáveis de ambiente (GEMINI_API_KEY)
+load_dotenv()
 
-print("Iniciando a Batalha: Gemini (Candidato) vs GPT-4o (Recrutador)...")
+print("Iniciando a simulação da negociação com modelos Gemini...")
 
+# 2. Roda a simulação
 result, profiles, report = run_negotiation(
     scenario=SALARY_NEGOTIATION,
     agents={
+        # O Flash é absurdamente rápido e barato para os agentes conversarem
         "candidate": GeminiAdapter("gemini-2.5-flash"),
-        "recruiter": OpenAIAdapter("gpt-4o-mini"),
+        "recruiter": GeminiAdapter("gemini-2.5-flash"),
     },
-    judge=OpenAIAdapter("gpt-4o"), # Usando o GPT-4o maior como juiz do Big Five
-    output_dir="resultados_oficiais/",
+    # O Pro tem maior capacidade de raciocínio lógico para atuar como Juiz do Big Five
+    judge=GeminiAdapter("gemini-2.5-pro"),
+    output_dir="results/",
 )
 
-print(f"Negociação finalizada em {result.total_turns} turnos!")
-print(f"Relatório gerado na pasta: resultados_oficiais/")
+print("Simulação concluída com sucesso!")
+print("Verifique a pasta 'results/' para ler o relatório em Markdown e os logs em JSONL.")
