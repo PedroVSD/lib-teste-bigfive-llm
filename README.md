@@ -294,7 +294,9 @@ uv run pytest llm_negotiation_analyst/tests/ -v
 
 ## Referências
 
-- Costa, P. T., & McCrae, R. R. (1992). *NEO PI-R Professional Manual.*
-- Barry, B., & Friedman, R. A. (1998). Bargainer characteristics in distributive and integrative negotiation. *Journal of Personality and Social Psychology, 74*(2), 345–359.
-- Zheng, L., et al. (2023). Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. *NeurIPS 2023.*
+- Yin Jou Huang and Rafk Hadf (2024). *How Personality Traits Infuence Negotiation Outcomes? A Simulation based on Large Language Models.*
+- Yoshiki Takenami ,Yin Jou Huang, Yugo Murawaki, Chenhui Chu (2025). *How Does Cognitive Bias Affect Large Language Models? A Case Study on the Anchoring Effect in Price Negotiation Simulations.*
+- Minjun Ren, Wentao Xu (2025). *The Impact of Big Five Personality Traits on AI Agent Decision-Making in Public Spaces: A Social Simulation Study.*
+- Aleksandra Sorokovikova, Natalia Fedorova, Sharwin Rezagholi, Ivan P. Yamshchikov (2024). *LLMs Simulate Big Five Personality Traits: Further Evidence.*
+- Junhyuk Choi, Hyeonchu Park , Haemin Lee, Hyebeen Shin, Hyun Joung Jin, Bugeun Kim (2025).*Pay What LLM Wants: Can LLM Simulate Economics Experiment with 522 Real-human Persona?.*
 - Ollama: https://ollama.com

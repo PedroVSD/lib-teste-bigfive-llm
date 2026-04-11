@@ -14,11 +14,11 @@ print("Iniciando a simulação da negociação com modelos Gemini...")
 result, profiles, report = run_negotiation(
     scenario=SALARY_NEGOTIATION,
     agents={
-        # O Flash é absurdamente rápido e barato para os agentes conversarem
+
         "candidate": GeminiAdapter("gemini-2.5-flash"),
         "recruiter": GeminiAdapter("gemini-2.5-flash"),
     },
-    # O Pro tem maior capacidade de raciocínio lógico para atuar como Juiz do Big Five
+
     judge=GeminiAdapter("gemini-2.5-pro"),
     output_dir="results/",
 )
