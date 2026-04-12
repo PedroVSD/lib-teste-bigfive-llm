@@ -36,13 +36,20 @@ def run_negotiation(
     output_dir: str = "results",
     evaluator_config=None,
     second_judge=None,
+    personas=None,#parte referente à customização da personalidade
+    context=None,#parte referente à customização do contexto
     verbose: bool = True,
 ):
     import logging
     if verbose:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
-    engine = SimulationEngine(scenario=scenario, agents=agents)
+    engine = SimulationEngine(
+        scenario=scenario,
+        agents=agents,
+        personas=personas,
+        context=context
+    )
     result = engine.run()
 
     evaluator = Evaluator(judge=judge, config=evaluator_config, second_judge=second_judge)
