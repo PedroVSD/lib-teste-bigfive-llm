@@ -38,6 +38,7 @@ def run_negotiation(
     second_judge=None,
     personas=None,#parte referente à customização da personalidade
     context=None,#parte referente à customização do contexto
+    turn_delay_seconds = 0.0,
     verbose: bool = True,
 ):
     import logging

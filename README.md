@@ -2,7 +2,7 @@
 
 Uma biblioteca Python para estudar a expressão de traços de personalidade do **Big Five** em negociações conduzidas por LLMs.
 
-Suporta modelos via **API** (OpenAI, Anthropic, Gemini) e **localmente** (Ollama), dois modos de simulação, avaliação automática por LLM-juiz, persistência em JSONL e geração de relatórios Markdown.
+Suporta modelos via **API** (OpenAI, Anthropic, Gemini, entre outros) e **localmente** (Ollama, entre outros), dois modos de simulação, avaliação automática por LLM-juiz, persistência em JSONL e geração de relatórios Markdown.
 
 ---
 
@@ -29,6 +29,16 @@ uv sync --all-extras
 3. **Configure as variáveis de ambiente**
 ```
 cp .env.example .env
+```
+```bash
+uv run pytest
+```
+4. **Rodando o experimento**
+
+É possível alterar como o projeto roda diretamente no config.yaml. No arquivo contem tudo o que pode ser alterado para a eecução do experimento.
+
+```bash
+uv run python experimento.py
 ```
 ---
 
@@ -102,10 +112,12 @@ llm_negotiation_analyst/
 │
 ├── llm_negotiation_analyst/ # Código fonte principal
 │   ├── adapters/           # Conectores para LLMs (OpenAI, Anthropic, Ollama)
-│   ├── scenarios/          # Cenários de negociação declarativos
+│   ├── context/            # SituationalContext — inflação, juros, crises, governo
+│   ├── persona/            # Big5Persona — indução de traços antes da negociação
+│   ├── scenarios/          # Cenários de negociação declarativos (3 built-in + customizáveis)
 │   ├── simulation/         # Motor de simulação + 3 cenários built-in
-│   ├── scoring/            # Avaliação Big Five e LLM-as-judge
-│   ├── storage/            # Persistência de dados
+│   ├── scoring/            # Avaliação Big Five e LLM-as-judge(Evaluator — LLM-as-judge, Big Five, IRR)
+│   ├── storage/            # Persistência de dados(JSONL append-only)
 │   ├── report/             # Relatórios
 │   └── tests/              # Suíte de testes automatizados
 ```
@@ -287,7 +299,6 @@ Este projeto utiliza o `pytest` para garantir a estabilidade do motor de simula�
 
 ```bash
 uv run pytest llm_negotiation_analyst/tests/ -v
-# 21 testes, sem necessidade de API key ou modelo local
 ```
 
 ---

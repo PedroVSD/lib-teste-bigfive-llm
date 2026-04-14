@@ -167,12 +167,14 @@ class SimulationEngine:
         personas: Optional[dict[str, Big5Persona]] = None,
         context: Optional[SituationalContext] = None,
         benchmark_turns: Optional[list[str]] = None,
+        turn_delay_seconds: float = 0.0,
     ):
         self.scenario = scenario
         self.raw_agents = agents
         self.personas = personas or {}
         self.context = context
         self.benchmark_turns = benchmark_turns
+        self.turn_delay_seconds = turn_delay_seconds
 
     def run(self) -> NegotiationResult:
         if self.benchmark_turns is not None:
@@ -245,6 +247,10 @@ class SimulationEngine:
                 )
                 transcript.append(turn)
                 logger.info("[Turn %d | %s] %s", turn_index, role, content[:120])
+
+                if self.turn_delay_seconds > 0:
+                    logger.info("Aguardando %.1fs antes do próximo turno...", self.turn_delay_seconds)
+                    time.sleep(self.turn_delay_seconds)
 
                 for other_role, other_agent in agents.items():
                     if other_role != role:
