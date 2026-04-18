@@ -1,6 +1,6 @@
 experiment:
   name: "teste_crise_brasil_2025"
-  turn_delay_seconds: 10.0
+  turn_delay_seconds: 30.0
 
 # Define a pressão do mundo externo
 context:
@@ -32,4 +32,4 @@ models:
 
   judge:
     provider: "gemini"
-    name: "gemini-2.5-pro"
+    name: "gemini-3-flash-preview"
