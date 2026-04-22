@@ -52,7 +52,7 @@ class NegotiationScenario:
 # ---------------------------------------------------------------------------
 # Built-in scenarios
 # ---------------------------------------------------------------------------
-
+#Abaixo é como controla os cenários dos experimento. É possível criar cada cenário
 SALARY_NEGOTIATION = NegotiationScenario(
     name="salary_negotiation",
     description="Job offer salary negotiation between a candidate and an HR recruiter.",

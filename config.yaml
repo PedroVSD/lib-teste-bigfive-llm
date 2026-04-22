@@ -22,7 +22,7 @@ models:
       agreeableness: 5
       neuroticism: 2
       extra_instructions: "Você está desesperado por este emprego."
-
+  #Dá para adicionar o efeito âncora pela extra_instuctions acima
   recruiter:
     provider: "gemini"
     name: "gemini-2.5-flash"
