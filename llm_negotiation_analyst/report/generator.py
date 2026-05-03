@@ -3,9 +3,9 @@ Report generator: produces a structured Markdown report from a negotiation run.
 
 Includes:
   - Scenario summary
-  - Induced Big Five personas (if used)
+  - Induced Personas (if used)
   - Situational context (if used)
-  - Per-agent Big Five observed profiles (text bars + narrative)
+  - Per-agent Observed profiles (text bars + narrative)
   - Persona vs. observed comparison (if persona was used)
   - Full annotated transcript
   - Methodology notes
@@ -42,8 +42,8 @@ def _comparison_bar(induced: Optional[int], observed: Optional[float], width: in
     for i in range(obs_filled):
         if bar[i] == _EMPTY:
             bar[i] = _BAR
-    induced_str  = f"induced={induced}"      if induced  is not None else "induced=—"
-    observed_str = f"observed={observed:.2f}" if observed > 0          else "observed=—"
+    induced_str  = f"induced={induced}"       if induced  is not None else "induced=—"
+    observed_str = f"observed={observed:.2f}" if observed > 0         else "observed=—"
     return "".join(bar) + f"  {induced_str} | {observed_str}"
 
 
@@ -56,7 +56,7 @@ def generate_report(
     a = lines.append
     e = lines.extend
 
-    personas_meta: dict        = result.metadata.get("personas", {})
+    personas_meta: dict           = result.metadata.get("personas", {})
     context_meta:  Optional[dict] = result.metadata.get("context")
 
     # ── HEADER ────────────────────────────────────────────────────────
@@ -90,9 +90,9 @@ def generate_report(
         a(f"| `{agent_id}` | `{model_id}` | {role} |")
     a("")
 
-    e(["### 1.3 Induced Big Five Personas", ""])
+    e(["### 1.3 Induced Behavioral Personas", ""])
     if personas_meta:
-        a("_These personality instructions were injected into each agent's system prompt "
+        a("_These behavioral instructions were injected into each agent's system prompt "
           "before the negotiation. They represent the **intended** disposition — "
           "see Section 3 for observed scores._")
         a("")
@@ -103,8 +103,12 @@ def generate_report(
             a("")
             a("```")
             for dim_key, score in scores.items():
-                meta = BIG5_META[Dimension(dim_key)]
-                a(f"{meta.name:<24} {_bar(float(score))}")
+                # Evita falhar se o usuário colocou uma métrica no YAML que não está no Enum
+                try:
+                    meta = BIG5_META[Dimension(dim_key)]
+                    a(f"{meta.name:<30} {_bar(float(score))}")
+                except ValueError:
+                    pass
             a("```")
             a("")
     else:
@@ -167,13 +171,18 @@ def generate_report(
         a(f"| `{agent_id}` | {role} | {count} |")
     a("")
 
-    # ── 3. OBSERVED BIG FIVE PROFILES ─────────────────────────────────
-    e(["## 3. Observed Big Five Profiles", ""])
+    # ── 3. OBSERVED BEHAVIORAL PROFILES ─────────────────────────────────
+    e(["## 3. Observed Behavioral Profiles", ""])
     a("_Scores = mean of per-turn LLM-as-judge evaluations. "
       "Scale: 1 (low pole) → 5 (high pole). "
       "Turns where the judge failed are excluded. "
       "⚠ = low observability in text negotiations._")
     a("")
+
+    # Descobre quais métricas foram ativamente avaliadas nesta simulação
+    evaluated_dims = set()
+    for profile in profiles.values():
+        evaluated_dims.update(profile.scores.keys())
 
     for agent_id, profile in profiles.items():
         role    = result.agent_roles.get(agent_id, "")
@@ -183,13 +192,13 @@ def generate_report(
         a(f"**Model:** `{profile.model_identifier}`")
         a("")
 
-        # Observed bars
+        # Observed bars (Só mostra as que foram efetivamente medidas)
         a("```")
-        for dim in Dimension:
+        for dim in sorted(list(evaluated_dims), key=lambda d: d.value):
             meta  = BIG5_META[dim]
             score = profile.scores.get(dim, 0.0)
-            note  = "⚠ low observability" if meta.observability <= 2 else ""
-            a(f"{meta.name:<24} {_bar(score)}  {note}")
+            note  = "⚠ low observability" if meta.observability in ("baixa", "low") or str(meta.observability) <= "2" else ""
+            a(f"{meta.name:<30} {_bar(score)}  {note}")
         a("```")
         a("")
 
@@ -198,14 +207,16 @@ def generate_report(
             a("**Induced (▼) vs. Observed (█) comparison:**")
             a("")
             a("```")
-            header_bar = f"{'Dimension':<24} {'1────────────3────────────5'}"
+            header_bar = f"{'Dimension':<30} {'1────────────3────────────5'}"
             a(header_bar)
             a("-" * len(header_bar))
-            for dim in Dimension:
+            # Mostra apenas as que o usuário induziu no config ou que foram medidas
+            dims_to_compare = [d for d in Dimension if (d.value in induced or d in evaluated_dims)]
+            for dim in dims_to_compare:
                 meta     = BIG5_META[dim]
                 ind_val  = induced.get(dim.value)
                 obs_val  = profile.scores.get(dim)
-                a(f"{meta.name:<24} {_comparison_bar(ind_val, obs_val)}")
+                a(f"{meta.name:<30} {_comparison_bar(ind_val, obs_val)}")
             a("```")
             a("")
             a("_▼ = induced score (instructed). █ = observed score (emergent). "
@@ -215,16 +226,16 @@ def generate_report(
         # Behavioral observations
         a("#### Behavioral Observations")
         a("")
-        scored = [d for d in Dimension if profile.scores.get(d) is not None]
+        scored = [d for d in evaluated_dims if profile.scores.get(d) is not None]
         if not scored:
             a("_No dimensions were successfully scored._")
             a("")
         else:
-            for dim in scored:
+            for dim in sorted(scored, key=lambda d: d.value):
                 meta  = BIG5_META[dim]
                 score = profile.scores[dim]
                 pole  = meta.high_pole if score >= 3 else meta.low_pole
-                warn  = " _(⚠ interpret with caution)_" if meta.observability <= 2 else ""
+                warn  = " _(⚠ interpret with caution)_" if meta.observability in ("baixa", "low") or str(meta.observability) <= "2" else ""
 
                 justifications = [
                     s.justification
@@ -248,14 +259,14 @@ def generate_report(
 
     # ── 4. CROSS-AGENT SUMMARY ────────────────────────────────────────
     e(["## 4. Cross-Agent Comparison", ""])
-    a("_Side-by-side observed Big Five scores. Useful for spotting behavioral asymmetries._")
+    a("_Side-by-side observed scores. Useful for spotting behavioral asymmetries._")
     a("")
     agent_ids = list(profiles.keys())
     a("| Dimension |" + "".join(f" {aid} |" for aid in agent_ids))
     a("|-----------|" + "".join("-----------|" for _ in agent_ids))
-    for dim in Dimension:
+    for dim in sorted(list(evaluated_dims), key=lambda d: d.value):
         meta = BIG5_META[dim]
-        flag = " ⚠" if meta.observability <= 2 else ""
+        flag = " ⚠" if meta.observability in ("baixa", "low") or str(meta.observability) <= "2" else ""
         row  = f"| {meta.name}{flag} |"
         for aid in agent_ids:
             score = profiles[aid].scores.get(dim)
@@ -300,13 +311,12 @@ def generate_report(
     e(["## 6. Methodology Notes", ""])
     a("- **Scoring:** LLM-as-judge with structured JSON rubrics, one call per dimension per turn.")
     a("- **Aggregation:** Arithmetic mean of valid per-turn scores (confidence > 0).")
-    a("- **Neuroticism direction:** Score 5 = emotionally reactive. NEO-PI-R convention, not inverted.")
-    a("- **Observability:** O and E are less reliable in text. Treat with caution.")
+    a("- **Observability:** Some psychological metrics are less reliable in text. Treat with caution.")
     a("- **Persona injection:** Behavioral instructions prepended to system prompt. "
       "Models may deviate from induced disposition.")
     a("- **Situational context:** Injected equally into all agents. Effect is not directly measured.")
     a("- **Judge independence:** Judge should differ from negotiating agents to avoid self-evaluation bias.")
-    a("- **Reproducibility:** Use `temperature=0` and `seed` (Ollama) for deterministic results.")
+    a("- **Reproducibility:** Use `temperature=0` and `seed` (Ollama/LMStudio) for deterministic results.")
     a("- **IRR:** When `second_judge` is used, `confidence` reflects normalized inter-rater reliability per turn. "
       "Values below 0.75 indicate significant disagreement.")
     a("")
@@ -319,20 +329,6 @@ def generate_report(
     a(f"- `scores/{result.scenario_name}_{result.run_id}_scores.jsonl` — one row per agent")
     a(f"- `runs_index.jsonl` — global index of all runs")
     a("")
-    a("```python")
-    a("import pandas as pd")
-    a("")
-    a(f"df_scores = pd.read_json(")
-    a(f"    'results/scores/{result.scenario_name}_{result.run_id}_scores.jsonl', lines=True")
-    a(f")")
-    a(f"df_transcript = pd.read_json(")
-    a(f"    'results/transcripts/{result.scenario_name}_{result.run_id}.jsonl', lines=True")
-    a(f")")
-    a("")
-    a("# Agreeableness por agente")
-    a("df_scores['agreeableness'] = df_scores['scores'].apply(lambda s: s.get('agreeableness'))")
-    a("print(df_scores[['agent_id', 'model_identifier', 'agreeableness']])")
-    a("```")
 
     report_md = "\n".join(lines)
 

@@ -27,7 +27,15 @@ class Dimension(str, Enum):
     EXTRAVERSION      = "extraversion"
     AGREEABLENESS     = "agreeableness"
     NEUROTICISM       = "neuroticism"
-
+    ANCHORING = "anchoring"
+    CONDITIONAL_CONCESSION = "conditional_concession"
+    VALUE_CREATION = "value_creation"
+    RAPPORT = "rapport"
+    RESILIENCE = "resilience"
+    FACT_JUSTIFICATION = "fact_justification"
+    CLARITY = "clarity"
+    ANCHOR_SUSCEPTIBILITY = "anchor_susceptibility"
+    LOSS_AVERSION = "loss_aversion"
 
 @dataclass
 class DimensionMeta:
@@ -156,6 +164,139 @@ BIG5_META: dict[Dimension, DimensionMeta] = {
                 "Reframes the problem to find mutual gains."
             ),
         },
+    ),
+    # ---------------------------------------------------------
+    # MÉTRICAS DE TÁTICAS E COMPORTAMENTO
+    # ---------------------------------------------------------
+    # obsevabilit são do tipo número -> 1 até 5
+    Dimension.ANCHORING: DimensionMeta(
+        name="Firmeza na Oferta Inicial (Anchoring)",
+        abbreviation="ANC",
+        observability=5,
+        facets=[],
+        high_pole="Âncora Forte/Inflexível",
+        low_pole="Cede Rapidamente",
+        behavioral_anchors={
+            1: "Faz uma oferta inicial fraca, ancorando contra si mesmo, ou cede imediatamente seu valor ao primeiro sinal de resistência.",
+            3: "Faz uma oferta razoável, tenta defendê-la brevemente, mas cede rapidamente se o oponente insistir.",
+            5: "Faz uma oferta extrema a seu favor (ancoragem forte) e defende o valor com unhas e dentes antes de fazer qualquer concessão."
+        }
+    ),
+    Dimension.CONDITIONAL_CONCESSION: DimensionMeta(
+        name="Uso de Concessões Condicionais",
+        abbreviation="CON",
+        observability=5,
+        facets=[],
+        high_pole="Trocas Estritas (Toma-Lá-Dá-Cá)",
+        low_pole="Concessão Unilateral",
+        behavioral_anchors={
+            1: "Faz concessões de forma unilateral, abaixando seu preço ou cedendo benefícios sem pedir absolutamente nada em troca.",
+            3: "Às vezes pede contrapartidas, mas em outros momentos cede apenas para fazer a negociação avançar.",
+            5: "Toda concessão é estritamente vinculada a um ganho ('Se eu aceitar esse salário menor, você DEVE me dar o home office')."
+        }
+    ),
+    Dimension.VALUE_CREATION: DimensionMeta(
+        name="Foco em Criação de Valor (Win-Win)",
+        abbreviation="VAL",
+        observability=3,
+        facets=[],
+        high_pole="Integrativo/Criativo",
+        low_pole="Distributivo/Soma-Zero",
+        behavioral_anchors={
+                1: "Foca exclusivamente em brigar por uma única métrica (ex: apenas o salário), tratando a negociação como um cabo de guerra.",
+                3: "Aceita discutir outras variáveis se o oponente propor, mas não tenta ativamente expandir as opções.",
+                5: "Proativamente adiciona novas variáveis à mesa (bônus, dias de folga, prazos) para criar um pacote que beneficie ambos os lados."
+            }
+        ),
+
+    # ---------------------------------------------------------
+    # MÉTRICAS DE INTELIGÊNCIA EMOCIONAL E RELACIONAMENTO
+    # ---------------------------------------------------------
+    Dimension.RAPPORT: DimensionMeta(
+        name="Construção de Rapport (Empatia)",
+        abbreviation="RAP",
+        observability=5,
+        facets=[],
+        high_pole="Altamente Empático/Parceiro",
+        low_pole="Frio/Transacional",
+        behavioral_anchors={
+            1: "Tom frio, robótico ou puramente transacional. Ignora o lado humano ou as necessidades do oponente.",
+            3: "Mantém a educação e a cordialidade padrão, mas sem esforço ativo para criar conexão.",
+            5: "Valida ativamente as emoções do oponente, usa tom colaborativo e foca explicitamente em construir uma parceria de longo prazo."
+        }
+    ),
+    Dimension.RESILIENCE: DimensionMeta(
+        name="Resiliência à Pressão",
+        abbreviation="RES",
+        observability=3,
+        facets=[],
+        high_pole="Calmo/Inabalável",
+        low_pole="Impulsivo/Amedrontado",
+        behavioral_anchors={
+            1: "Cede instantaneamente a ultimatos, demonstra desespero ou reage com agressividade desproporcional quando pressionado.",
+            3: "Sente o impacto da pressão e recua um pouco, mas tenta manter a negociação viva.",
+            5: "Totalmente inabalável diante de ameaças de cancelamento ou exigências duras. Redireciona o foco para os fatos com calma."
+        }
+    ),
+
+    # ---------------------------------------------------------
+    # MÉTRICAS DE ARGUMENTAÇÃO LÓGICA
+    # ---------------------------------------------------------
+    Dimension.FACT_JUSTIFICATION: DimensionMeta(
+        name="Justificação Baseada em Fatos",
+        abbreviation="JUS",
+        observability=5,
+        facets=[],
+        high_pole="Altamente Embasado",
+        low_pole="Argumentos Vazios",
+        behavioral_anchors={
+            1: "Faz exigências baseadas apenas em 'desejo' pessoal ou necessidades subjetivas, sem nenhuma justificativa de mercado.",
+            3: "Dá justificativas genéricas (ex: 'eu tenho muita experiência') mas sem citar dados concretos.",
+            5: "Apoia cada oferta em dados sólidos (cenário macroeconômico, inflação, média de mercado, métricas de ROI)."
+        }
+    ),
+    Dimension.CLARITY: DimensionMeta(
+        name="Clareza e Estruturação Lógica",
+        abbreviation="CLA",
+        observability=5,
+        facets=[],
+        high_pole="Estruturado/Matemático",
+        low_pole="Confuso/Desorganizado",
+        behavioral_anchors={
+            1: "Mistura propostas, propõe valores matematicamente conflitantes ou se expressa de forma muito vaga e difícil de acompanhar.",
+            3: "Comunicação funcional, a proposta é compreensível mas apresentada em um bloco de texto sem destaque.",
+            5: "Altamente estruturado. Separa propostas por tópicos, resume os valores claramente e faz matemática impecável."
+        }
+    ),
+
+    # ---------------------------------------------------------
+    # MÉTRICAS DE VIESES COGNITIVOS
+    # ---------------------------------------------------------
+    Dimension.ANCHOR_SUSCEPTIBILITY: DimensionMeta(
+        name="Suscetibilidade à Âncora",
+        abbreviation="SUS",
+        observability=1,
+        facets=[],
+        high_pole="Facilmente Influenciado",
+        low_pole="Imune/Objetivo",
+        behavioral_anchors={
+            1: "Totalmente imune. Ignora valores extremos jogados pelo oponente e contrapropõe seu valor original planejado.",
+            3: "Ajusta um pouco a sua proposta para encontrar um meio-termo com a âncora do oponente.",
+            5: "Abandona sua estratégia original e passa a orbitar quase inteiramente o valor absurdo que o oponente propôs."
+        }
+    ),
+    Dimension.LOSS_AVERSION: DimensionMeta(
+        name="Aversão à Perda",
+        abbreviation="LSS",
+        observability=1,
+        facets=[],
+        high_pole="Reativo à Perda",
+        low_pole="Focado no Ganho Final",
+        behavioral_anchors={
+            1: "Foca no valor total do pacote de forma racional, não se importando se um benefício específico foi retirado contanto que seja compensado.",
+            3: "Demonstra leve incômodo ao perder algo, mas aceita seguir em frente com outras compensações.",
+            5: "Luta desesperadamente contra a retirada de qualquer coisa que já considerava garantida, mesmo que lhe ofereçam o dobro de valor em outra área."
+        }
     ),
 }
 

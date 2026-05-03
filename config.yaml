@@ -17,7 +17,7 @@ context:
 models:
   candidate:
     provider: "lmstudio"
-    name: "qwen3.5-9b"
+    name: "google/gemma-4-e2b"
     persona:
       agreeableness: 5
       neuroticism: 2
@@ -28,11 +28,17 @@ models:
   digo: pode ter condição global para ambos
   recruiter:
     provider: "lmstudio"
-    name: "qwen3.5-9b"
+    name: "google/gemma-4-e2b"
     persona:
       agreeableness: 1
       extraversion: 5
 
   judge:
     provider: "lmstudio"
-    name: "qwen3.5-9b"
+    name: "nvidia/nemotron-3-nano-4b"
+    metrics:
+      - "agreeableness"
+      - "anchoring"
+      - "conditional_concession"
+      - "value_creation"
+      - "fact_justification"

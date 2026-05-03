@@ -8,12 +8,16 @@ from llm_negotiation_analyst.adapters.openai_adapter import OpenAIAdapter
 from llm_negotiation_analyst.adapters.lmstudio_adapter import LMStudioAdapter
 from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
 
-# Importando as suas novas classes
+# Importando classes de Persona e Contexto
 from llm_negotiation_analyst.persona import Big5Persona
 from llm_negotiation_analyst.context import (
     SituationalContext, InflationLevel, InterestRateLevel,
     GovernmentOrientation, CrisisType
 )
+
+# Importando as classes do Avaliador e das Dimensões
+from llm_negotiation_analyst.scoring.evaluator import EvaluatorConfig
+from llm_negotiation_analyst.scoring.big5 import Dimension
 
 load_dotenv()
 
@@ -30,7 +34,7 @@ def create_adapter(config_dict: dict):
     elif provider == "openai":
         return OpenAIAdapter(model=model_name)
     elif provider == "lmstudio":
-            return LMStudioAdapter(model=model_name)
+        return LMStudioAdapter(model=model_name)
     raise ValueError(f"Provedor desconhecido: {provider}")
 
 def parse_persona(persona_dict: dict) -> Big5Persona:
@@ -80,7 +84,17 @@ if __name__ == "__main__":
     # 3. Carrega Contexto Macroeconômico
     macro_context = parse_context(config.get("context"))
 
-    # 4. Roda a Simulação
+    # 4. Carrega Configuração do Avaliador (Métricas)
+    metricas_textos = config["models"]["judge"].get("metrics", [])
+    if metricas_textos:
+        # Se encontrou métricas no YAML, converte elas para o Enum do Python
+        dimensoes_ativas = [Dimension(m) for m in metricas_textos]
+        config_juiz = EvaluatorConfig(dimensions=dimensoes_ativas)
+    else:
+        # Se não tiver, envia None (o juiz usará o Big Five padrão)
+        config_juiz = None
+
+    # 5. Roda a Simulação
     result, profiles, report = run_negotiation(
         scenario=SALARY_NEGOTIATION,
         agents={
@@ -88,6 +102,7 @@ if __name__ == "__main__":
             "recruiter": ag_recruiter,
         },
         judge=ag_judge,
+        evaluator_config=config_juiz,  # <-- Injetando a configuração do juiz aqui!
         turn_delay_seconds=config["experiment"]["turn_delay_seconds"],
         personas=personas_dict,
         context=macro_context,

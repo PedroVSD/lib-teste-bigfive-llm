@@ -6,6 +6,8 @@ from llm_negotiation_analyst.adapters.base import LLMAdapter
 from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
 from llm_negotiation_analyst.persona import Big5Persona
 from llm_negotiation_analyst.context import SituationalContext, InflationLevel
+from llm_negotiation_analyst.scoring.evaluator import EvaluatorConfig
+from llm_negotiation_analyst.scoring.big5 import Dimension
 
 class MockAdapter(LLMAdapter):
     def __init__(self, model="mock-model", response_text="Concordo com a proposta."):
@@ -32,6 +34,22 @@ def test_full_pipeline_integration():
 
         persona_candidate = Big5Persona(agreeableness=5, extraversion=4)
         ctx = SituationalContext(inflation=InflationLevel.HIGH, country="Brasil")
+
+        config_teste = EvaluatorConfig(
+            dimensions=[Dimension.ANCHORING, Dimension.VALUE_CREATION]
+        )
+
+        result, profiles, report_md = run_negotiation(
+            scenario=SALARY_NEGOTIATION,
+            agents={"candidate": mock_agent, "recruiter": mock_agent},
+            judge=mock_judge,
+            evaluator_config=config_teste, # <-- Injeta aqui no teste!
+            personas={"candidate": persona_candidate},
+            context=ctx,
+            output_dir=tmp_dir,
+            verbose=False,
+            turn_delay_seconds=0.0
+        )
 
         result, profiles, report_md = run_negotiation(
             scenario=SALARY_NEGOTIATION,
