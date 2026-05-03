@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from llm_negotiation_analyst import run_negotiation
 from llm_negotiation_analyst.adapters.gemini_adapter import GeminiAdapter
 from llm_negotiation_analyst.adapters.openai_adapter import OpenAIAdapter
+from llm_negotiation_analyst.adapters.lmstudio_adapter import LMStudioAdapter
 from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
 
 # Importando as suas novas classes
@@ -28,6 +29,8 @@ def create_adapter(config_dict: dict):
         return GeminiAdapter(model=model_name)
     elif provider == "openai":
         return OpenAIAdapter(model=model_name)
+    elif provider == "lmstudio":
+            return LMStudioAdapter(model=model_name)
     raise ValueError(f"Provedor desconhecido: {provider}")
 
 def parse_persona(persona_dict: dict) -> Big5Persona:

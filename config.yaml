@@ -16,20 +16,23 @@ context:
 
 models:
   candidate:
-    provider: "gemini"
-    name: "gemini-2.5-flash"
+    provider: "lmstudio"
+    name: "qwen3.5-9b"
     persona:
       agreeableness: 5
       neuroticism: 2
       extra_instructions: "Você está desesperado por este emprego."
-  #Dá para adicionar o efeito âncora pela extra_instuctions acima
+  # Dá para adicionar o efeito âncora pela extra_instuctions acima
+  # E também dá para adicionar instruções separadas para cada agente
+  # As condições de necessidade, devem existir para ambos que negociam. inclusive podem ser distintas
+  digo: pode ter condição global para ambos
   recruiter:
-    provider: "gemini"
-    name: "gemini-2.5-flash"
+    provider: "lmstudio"
+    name: "qwen3.5-9b"
     persona:
       agreeableness: 1
       extraversion: 5
 
   judge:
-    provider: "gemini"
-    name: "gemini-3-flash-preview"
+    provider: "lmstudio"
+    name: "qwen3.5-9b"
