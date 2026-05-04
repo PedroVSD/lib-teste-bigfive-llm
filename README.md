@@ -30,10 +30,17 @@ uv sync --all-extras
 ```
 cp .env.example .env
 ```
-```bash
-uv run pytest
-```
-4. **Rodando o experimento**
+4. **Rodando os testes**
+  - teste estrutural
+    ```bash
+        uv run pytest
+    ```
+  - teste de integração
+    ```bash
+        uv run pytest test_integration.py
+    ```
+
+5. **Rodando o experimento**
 
 É possível alterar como o projeto roda diretamente no config.yaml. No arquivo contem tudo o que pode ser alterado para a eecução do experimento.
 

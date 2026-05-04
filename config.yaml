@@ -35,7 +35,7 @@ models:
 
   judge:
     provider: "lmstudio"
-    name: "nvidia/nemotron-3-nano-4b"
+    name: "qwen/qwen3-vl-4b"
     metrics:
       - "agreeableness"
       - "anchoring"
