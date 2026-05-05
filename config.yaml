@@ -35,6 +35,7 @@ models:
     persona:
       agreeableness: 1
       extraversion: 5
+      extra_instructions:
 
   judge:
     provider: "lmstudio"
