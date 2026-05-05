@@ -1,6 +1,7 @@
 experiment:
-  name: "teste_crise_brasil_2025"
+  name: "teste_b2b_crise_brasil_2025"
   turn_delay_seconds: 30.0
+  scenario: "procurement_b2b"
 
 # Define a pressão do mundo externo
 context:
@@ -21,25 +22,25 @@ context:
 # digo pode ter condição global para ambos
 models:
   # CANDIDATO
-  candidate:
+  agent_1:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
     persona:
       agreeableness: 5
       neuroticism: 2
-      extra_instructions: "Você está desesperado por este emprego."
+      extra_instructions: "Sua empresa (varejo) está sofrendo muito com a recessão. Você TEM que conseguir um desconto agressivo no software ou o projeto será cancelado. Jogue duro e não aceite a primeira oferta."
   # RECRUTADOR
-  recruiter:
+  agent_2:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
     persona:
       agreeableness: 1
       extraversion: 5
-      extra_instructions:
+      extra_instructions: "Você precisa bater sua meta de vendas do trimestre. Seja empático, tente construir relacionamento, mas use concessões condicionais: só diminua o preço se o cliente abrir mão de algo."
 
   judge:
     provider: "lmstudio"
-    name: "qwen/qwen3-vl-4b"
+    name: "google/gemma-4-e2b"
     metrics:
       - "agreeableness"
       - "anchoring"

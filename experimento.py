@@ -6,7 +6,7 @@ from llm_negotiation_analyst import run_negotiation
 from llm_negotiation_analyst.adapters.gemini_adapter import GeminiAdapter
 from llm_negotiation_analyst.adapters.openai_adapter import OpenAIAdapter
 from llm_negotiation_analyst.adapters.lmstudio_adapter import LMStudioAdapter
-from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
+from llm_negotiation_analyst.scenarios import SCENARIO_REGISTRY
 
 # Importando classes de Persona e Contexto
 from llm_negotiation_analyst.persona import Big5Persona
@@ -20,6 +20,8 @@ from llm_negotiation_analyst.scoring.evaluator import EvaluatorConfig
 from llm_negotiation_analyst.scoring.big5 import Dimension
 
 load_dotenv()
+
+BIG5_VALIDOS = {d.value for d in Dimension}
 
 def load_config(filepath: str):
     with open(filepath, "r", encoding="utf-8") as file:
@@ -37,49 +39,66 @@ def create_adapter(config_dict: dict):
         return LMStudioAdapter(model=model_name)
     raise ValueError(f"Provedor desconhecido: {provider}")
 
-def parse_persona(persona_dict: dict) -> Big5Persona:
+def parse_persona(persona_dict: dict) -> Big5Persona | None:
     if not persona_dict:
         return None
-    # Passa diretamente os valores do YAML (1 a 5) para a dataclass
-    return Big5Persona(**persona_dict)
+    return Big5Persona(**{k: v for k, v in persona_dict.items() if v is not None})
 
 def parse_context(context_dict: dict) -> SituationalContext:
     if not context_dict or not context_dict.get("enabled", True):
         return SituationalContext.disabled()
 
-    # Converte as strings do YAML para os Enums do Python de forma segura
-    inflation_val = context_dict.get("inflation")
-    interest_val = context_dict.get("interest_rates")
-    gov_val = context_dict.get("government")
-    crises_list = context_dict.get("crises", [])
 
     return SituationalContext(
         enabled=True,
-        inflation=getattr(InflationLevel, inflation_val) if inflation_val else None,
-        interest_rates=getattr(InterestRateLevel, interest_val) if interest_val else None,
-        government=getattr(GovernmentOrientation, gov_val) if gov_val else None,
-        crises=[getattr(CrisisType, c) for c in crises_list],
+        inflation=getattr(InflationLevel, context_dict["inflation"])
+            if context_dict.get("inflation") else None,
+        interest_rates=getattr(InterestRateLevel, context_dict["interest_rates"])
+            if context_dict.get("interest_rates") else None,
+        government=getattr(GovernmentOrientation, context_dict["government"])
+            if context_dict.get("government") else None,
+        crises=[getattr(CrisisType, c) for c in context_dict.get("crises", []) if c],
         country=context_dict.get("country"),
-        year=str(context_dict.get("year")) if context_dict.get("year") else None,
+        year=str(context_dict["year"]) if context_dict.get("year") else None,
         gdp_growth=context_dict.get("gdp_growth"),
         unemployment=context_dict.get("unemployment"),
-        custom_conditions=context_dict.get("custom_conditions", [])
+        custom_conditions=[c for c in context_dict.get("custom_conditions") or [] if c],
     )
 
 if __name__ == "__main__":
     config = load_config("config.yaml")
-    print(f"Iniciando experimento: {config['experiment']['name']}...")
+    exp    = config["experiment"]
+    print(f"Iniciando experimento: {exp['name']}...")
+
+    scenario_name = exp["scenario"]
+    if scenario_name not in SCENARIO_REGISTRY:
+        raise ValueError(f"Cenário '{scenario_name}' não encontrado!")
+
+    scenario = SCENARIO_REGISTRY[exp["scenario"]]
 
     # 1. Instancia os Agentes e o Juiz
-    ag_candidate = create_adapter(config["models"]["candidate"])
-    ag_recruiter = create_adapter(config["models"]["recruiter"])
     ag_judge = create_adapter(config["models"]["judge"])
 
+    papeis_do_cenario = list(scenario.roles.keys())
+    chaves_agentes_yaml = [k for k in config["models"].keys() if k != "judge"]
+
+    if len(chaves_agentes_yaml) < len(papeis_do_cenario):
+        raise ValueError("Você não configurou agentes suficientes no YAML para este cenário!")
+
+    agents_dict = {}
+    personas_dict = {}
+
     # 2. Carrega Personalidades
-    personas_dict = {
-        "candidate": parse_persona(config["models"]["candidate"].get("persona")),
-        "recruiter": parse_persona(config["models"]["recruiter"].get("persona")),
-    }
+    print("-" * 40)
+    for i, role_name in enumerate(papeis_do_cenario):
+        chave_do_agente = chaves_agentes_yaml[i] # Pega agent_1, depois agent_2...
+
+        # Cria o modelo e a persona
+        agents_dict[role_name] = create_adapter(config["models"][chave_do_agente])
+        personas_dict[role_name] = parse_persona(config["models"][chave_do_agente].get("persona"))
+
+        print(f"✅ Papel '{role_name.upper()}' assumido por -> '{chave_do_agente}'")
+    print("-" * 40)
 
     # 3. Carrega Contexto Macroeconômico
     macro_context = parse_context(config.get("context"))
@@ -96,11 +115,8 @@ if __name__ == "__main__":
 
     # 5. Roda a Simulação
     result, profiles, report = run_negotiation(
-        scenario=SALARY_NEGOTIATION,
-        agents={
-            "candidate": ag_candidate,
-            "recruiter": ag_recruiter,
-        },
+        scenario=scenario,
+        agents=agents_dict,
         judge=ag_judge,
         evaluator_config=config_juiz,  # <-- Injetando a configuração do juiz aqui!
         turn_delay_seconds=config["experiment"]["turn_delay_seconds"],
