@@ -83,6 +83,9 @@ class GovernmentOrientation(str, Enum):
     TECHNOCRATIC      = "technocratic"
     POPULIST          = "populist"
     TRANSITIONAL      = "transitional"   # e.g., post-election uncertainty
+    CONSERVATIVE      = "conservative"
+    ANCAP             = "anarcho_capitalist"
+    LIBERAL_ON_MARKET = "austrian"
 
 
 class CrisisType(str, Enum):
@@ -182,6 +185,28 @@ _GOVERNMENT_DESC: dict[GovernmentOrientation, str] = {
         "Policy direction is uncertain. Both parties should treat long-term "
         "regulatory assumptions with caution."
     ),
+    GovernmentOrientation.CONSERVATIVE: (
+        "The current government is conservative, prioritizing institutional "
+        "stability, traditional values, and gradual policy evolution. Regulatory "
+        "changes tend to be incremental, and contract enforcement is generally "
+        "reliable. Market conditions are stable, though reforms may proceed cautiously."
+    ),
+    GovernmentOrientation.ANCAP: (
+        "The government follows an anarcho-capitalist orientation, with minimal "
+        "or absent state intervention in economic activities. Regulation is minimal as possible "
+        "limited, and market forces dictate contractual and commercial outcomes. "
+        "While flexibility is high, parties should account for potential gaps in "
+        "institutional enforcement and legal recourse."
+        "He draws inspiration from Murray Rothbard, Hans Hermann Hoppe, David D. Friedman and other economists who follow the same path."
+        ),
+    GovernmentOrientation.LIBERAL_ON_MARKET: (
+        "The government adopts a market-liberal stance influenced by Austrian "
+        "economic principles, emphasizing free markets, low regulation, and "
+        "sound monetary policy. Regulatory risk is low, and economic policy "
+        "favors private sector initiative and capital efficiency. Parties can "
+        "generally expect a predictable and business-friendly environment."
+        "He draws inspiration from Friedrich Hayek, Mises, Thomas Sowell, and other economists who follow the same path."
+        ),
 }
 
 _CRISIS_DESC: dict[CrisisType, str] = {

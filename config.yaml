@@ -13,8 +13,14 @@ context:
     - "POLITICAL_INSTABILITY"
   country: "Brazil"
   year: "2025"
+  custom_conditions:
 
+# Dá para adicionar o efeito âncora pela extra_instuctions acima
+# E também dá para adicionar instruções separadas para cada agente
+# As condições de necessidade, devem existir para ambos que negociam. inclusive podem ser distintas
+# digo pode ter condição global para ambos
 models:
+  # CANDIDATO
   candidate:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
@@ -22,10 +28,7 @@ models:
       agreeableness: 5
       neuroticism: 2
       extra_instructions: "Você está desesperado por este emprego."
-  # Dá para adicionar o efeito âncora pela extra_instuctions acima
-  # E também dá para adicionar instruções separadas para cada agente
-  # As condições de necessidade, devem existir para ambos que negociam. inclusive podem ser distintas
-  digo: pode ter condição global para ambos
+  # RECRUTADOR
   recruiter:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
