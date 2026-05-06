@@ -102,7 +102,7 @@ PROCUREMENT_NEGOTIATION = NegotiationScenario(
     roles={
         "buyer": (
             "You are the procurement manager for a retail chain. "
-            "Your budget for this contract is R$120,000/year. "
+            "Your budget for this contract is R$150,000/year. "
             "The vendor's listed price is R$180,000/year. "
             "You need a 99.5% uptime SLA and implementation within 60 days. "
             "Your BATNA is a competing vendor offering R$130,000/year with a weaker SLA. "
@@ -110,7 +110,7 @@ PROCUREMENT_NEGOTIATION = NegotiationScenario(
         ),
         "seller": (
             "You are an enterprise account executive at a SaaS company. "
-            "Your floor price for this deal is R$140,000/year (below this you need VP approval). "
+            "Your floor price for this deal is R$114,000/year (below this you need VP approval). "
             "You can offer 99.9% uptime SLA. Standard implementation is 90 days; "
             "expedited (60 days) costs an additional R$15,000. "
             "Your goal is to close a 2-year contract at or above R$150,000/year. "

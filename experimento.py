@@ -13,7 +13,7 @@ from llm_negotiation_analyst.adapters.ollama_local_adapter import OllamaLocalAda
 from llm_negotiation_analyst.scenarios import SCENARIO_REGISTRY
 from llm_negotiation_analyst.adapters.base import AdapterConfig
 from llm_negotiation_analyst.scoring import EvaluatorConfig
-
+from llm_negotiation_analyst.persona import Big5Persona, TacticsPromptBuilder
 
 # Importando classes de Persona e Contexto
 from llm_negotiation_analyst.persona import Big5Persona
@@ -52,10 +52,33 @@ def create_adapter(config_dict: dict):
         return OllamaAdapter(model=model_name, base_url=url, config=config_obj)
     raise ValueError(f"Provedor desconhecido: {provider}")
 
-def parse_persona(persona_dict: dict) -> Big5Persona | None:
-    if not persona_dict:
+def parse_persona(agent_config: dict) -> Big5Persona | None:
+    persona_dict = agent_config.get("persona") or {}
+    tactics_dict = agent_config.get("tactics") or {}
+
+    if not persona_dict and not tactics_dict:
         return None
-    return Big5Persona(**{k: v for k, v in persona_dict.items() if v is not None})
+
+    # 1. Filtra apenas as chaves válidas do Big Five
+    chaves_big5 = {"openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"}
+    filtered_persona = {k: v for k, v in persona_dict.items() if k in chaves_big5 and v is not None}
+
+    # 2. Pega as instruções extras normais (se houver)
+    instrucoes_originais = persona_dict.get("extra_instructions", "")
+
+    # 3. Constrói o bloco de texto das Táticas de Negociação
+    builder = TacticsPromptBuilder()
+    texto_taticas = builder.build(tactics_dict)
+
+    # 4. Junta as instruções do usuário com as Táticas geradas
+    texto_final = instrucoes_originais
+    if texto_taticas:
+        texto_final = f"{instrucoes_originais}\n\n{texto_taticas}".strip()
+
+    if texto_final:
+        filtered_persona["extra_instructions"] = texto_final
+
+    return Big5Persona(**filtered_persona)
 
 def parse_context(context_dict: dict) -> SituationalContext:
     if not context_dict or not context_dict.get("enabled", True):
@@ -112,7 +135,7 @@ if __name__ == "__main__":
 
         # Cria o modelo e a persona
         agents_dict[role_name] = create_adapter(config["models"][chave_do_agente])
-        personas_dict[role_name] = parse_persona(config["models"][chave_do_agente].get("persona"))
+        personas_dict[role_name] = parse_persona(config["models"][chave_do_agente])
 
         print(f"Papel '{role_name.upper()}' assumido por -> '{chave_do_agente}'")
     print("-" * 40)

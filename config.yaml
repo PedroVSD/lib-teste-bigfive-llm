@@ -1,7 +1,7 @@
 experiment:
   name: "teste_b2b_crise_brasil_2025"
   turn_delay_seconds: 30.0
-  max_turns: 1
+  max_turns: 5
   scenario: "procurement_b2b"
 
 # Define a pressão do mundo externo
@@ -22,7 +22,7 @@ context:
 # As condições de necessidade, devem existir para ambos que negociam. inclusive podem ser distintas
 # digo pode ter condição global para ambos
 models:
-  # CANDIDATO
+  # Primeira role
   agent_1:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
@@ -30,16 +30,43 @@ models:
     persona:
       agreeableness: 5
       neuroticism: 2
+      extraversion: 2
+      openness: 3
+      conscientiousness: 3
       extra_instructions: "Sua empresa (varejo) está sofrendo muito com a recessão. Você TEM que conseguir um desconto agressivo no software ou o projeto será cancelado. Jogue duro e não aceite a primeira oferta."
-  # RECRUTADOR
+    tatics:
+      anchoring: 5
+      conditional_concession: 3
+      value_creation: 2
+      rapport: 5
+      resilience: 4
+      clarity: 4
+      anchor_susceptibility: 3
+      loss_aversion: 1
+      fact_justification: 5
+
+  # Segunda role
   agent_2:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
     temperature: 0.7
     persona:
       agreeableness: 1
+      neuroticism: 5
       extraversion: 5
+      openness: 2
+      conscientiousness: 3
       extra_instructions: "Você precisa bater sua meta de vendas do trimestre. Seja empático, tente construir relacionamento, mas use concessões condicionais: só diminua o preço se o cliente abrir mão de algo."
+    tatics:
+      anchoring: 2
+      conditional_concession: 4
+      value_creation: 5
+      rapport: 5
+      resilience: 4
+      clarity: 4
+      anchor_susceptibility: 3
+      loss_aversion: 3
+      fact_justification: 5
 
   judge:
     provider: "ollama"
@@ -47,7 +74,16 @@ models:
     temperature: 0.0
     metrics:
       - "agreeableness"
+      - "neuroticism"
+      - "extraversion"
+      - "openness"
+      - "conscientiousness"
       - "anchoring"
       - "conditional_concession"
       - "value_creation"
+      - "rapport"
+      - "resilience"
+      - "clarity"
+      - "anchor_susceptibility"
+      - "loss_aversion"
       - "fact_justification"
