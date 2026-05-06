@@ -1,32 +1,33 @@
+import os
 from typing import Optional
 from .base import LLMAdapter, AdapterConfig
 
-
 class OllamaAdapter(LLMAdapter):
     """
-    Adapter for local models via Ollama (https://ollama.com).
+    Adapter for local and cloud models via Ollama.
 
     Ollama exposes an OpenAI-compatible REST API, so this adapter uses
-    httpx directly to avoid requiring the openai package for local runs.
-
-    Usage:
-        adapter = OllamaAdapter(model="llama3.1:8b")
-        reply = adapter.complete([{"role": "user", "content": "Hello"}])
-
-    Requirements:
-        - Ollama running locally: `ollama serve`
-        - Model pulled: `ollama pull llama3.1:8b`
-        - pip install httpx
+    httpx directly. It supports optional authentication for cloud endpoints,
+    but works perfectly without keys for local instances.
     """
 
     def __init__(
         self,
-        model: str = "llama3.1:8b",
-        base_url: str = "http://localhost:11434",
+        model: str = "",
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         config: Optional[AdapterConfig] = None,
     ):
         super().__init__(model, config)
-        self.base_url = base_url.rstrip("/")
+        raw_url = base_url or os.environ.get("OLLAMA_BASE_URL")
+
+        if not raw_url:
+            raise ValueError("Falta a URL da API! Defina 'base_url' no YAML ou 'OLLAMA_BASE_URL' no arquivo .env")
+
+        self.base_url = raw_url.rstrip("/")
+
+        self.api_key = api_key or os.environ.get("OLLAMA_API_KEY")
+
         try:
             import httpx
             self._httpx = httpx
@@ -44,9 +45,16 @@ class OllamaAdapter(LLMAdapter):
                 **self.config.extra,
             },
         }
+
+        # Configurando os cabeçalhos de autenticação apenas se a chave existir (Nuvem)
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
         response = self._httpx.post(
-            f"{self.base_url}/api/chat",
+            self.base_url,
             json=payload,
+            headers=headers, # Se for local, o headers vai vazio {}. Se for nuvem, vai com a chave!
             timeout=self.config.timeout,
         )
         response.raise_for_status()
@@ -54,4 +62,6 @@ class OllamaAdapter(LLMAdapter):
 
     @property
     def identifier(self) -> str:
-        return f"Ollama:{self.model}@{self.base_url}"
+        # Mostra no log se está usando autenticação ou não
+        auth_status = "Auth" if self.api_key else "Local/NoAuth"
+        return f"Ollama:{self.model}@{self.base_url}({auth_status})"

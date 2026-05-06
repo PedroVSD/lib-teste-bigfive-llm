@@ -1,6 +1,7 @@
 experiment:
   name: "teste_b2b_crise_brasil_2025"
   turn_delay_seconds: 30.0
+  max_turns: 2
   scenario: "procurement_b2b"
 
 # Define a pressão do mundo externo
@@ -25,6 +26,7 @@ models:
   agent_1:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
+    temperature: 0.7
     persona:
       agreeableness: 5
       neuroticism: 2
@@ -33,14 +35,16 @@ models:
   agent_2:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
+    temperature: 0.7
     persona:
       agreeableness: 1
       extraversion: 5
       extra_instructions: "Você precisa bater sua meta de vendas do trimestre. Seja empático, tente construir relacionamento, mas use concessões condicionais: só diminua o preço se o cliente abrir mão de algo."
 
   judge:
-    provider: "lmstudio"
-    name: "google/gemma-4-e2b"
+    provider: "ollama"
+    name: "gpt-oss:120b-cloud"
+    temperature: 0.0
     metrics:
       - "agreeableness"
       - "anchoring"
