@@ -1,25 +1,74 @@
 """
-LLM-as-judge evaluator for Big Five dimensions.
+LLM-as-judge evaluator.
+
+Avalia utterances de negociação em duas famílias de métricas:
+
+  Big Five (Dimension)          — traços de personalidade OCEAN
+  NegotiationMetric             — táticas, emoções, argumentação e vieses
+
+Ambas as famílias usam a mesma estrutura DimensionMeta e o mesmo
+pipeline de avaliação via LLM-as-judge com rubricas estruturadas.
 
 Design decisions:
-  - Judge is a SEPARATE LLM adapter, decoupled from the negotiating agents.
-    This avoids self-evaluation bias: a model judging its own outputs.
-  - Each turn is scored independently; aggregate scores are the mean.
-  - Judge is prompted to return structured JSON, parsed with fallback.
-  - Optional dual-judge mode: pass two judges; inter-rater reliability
-    (Cohen's κ or Pearson r) is computed and stored in the report.
+  - Judge separado dos agentes para evitar viés de auto-avaliação.
+  - Cada turno é pontuado independentemente; score final = média.
+  - Judge retorna JSON estruturado; fallback em caso de falha.
+  - Dual-judge opcional: IRR calculado e armazenado por turno.
 """
 
 import json
 import re
 import logging
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Union
 
 from ..adapters.base import LLMAdapter
 from .big5 import Dimension, DimensionScore, Big5Profile, BIG5_META
+from .negotiation_metrics import NegotiationMetric, NEGOTIATION_META
 
 logger = logging.getLogger(__name__)
+
+# Tipo unificado para qualquer métrica avaliável
+AnyMetric = Union[Dimension, NegotiationMetric]
+
+# Registro unificado de metadados — lookup único para o evaluator
+ALL_METRICS_META = {**BIG5_META, **NEGOTIATION_META}
+
+
+# ---------------------------------------------------------------------------
+# Helpers de resolução de string → enum
+# ---------------------------------------------------------------------------
+
+def resolve_metric(value: str) -> AnyMetric:
+    """
+    Converte uma string (ex: 'agreeableness', 'anchoring') para o enum correto.
+    Tenta Big Five primeiro, depois NegotiationMetric.
+
+    Raises:
+        ValueError: se a string não corresponde a nenhuma métrica conhecida.
+    """
+    try:
+        return Dimension(value)
+    except ValueError:
+        pass
+    try:
+        return NegotiationMetric(value)
+    except ValueError:
+        pass
+    raise ValueError(
+        f"Métrica desconhecida: '{value}'. "
+        f"Big Five válidos: {[d.value for d in Dimension]}. "
+        f"Métricas de negociação válidas: {[m.value for m in NegotiationMetric]}."
+    )
+
+
+def is_big5(metric: AnyMetric) -> bool:
+    return isinstance(metric, Dimension)
+
+
+def is_negotiation_metric(metric: AnyMetric) -> bool:
+    return isinstance(metric, NegotiationMetric)
+
 
 # ---------------------------------------------------------------------------
 # Prompt templates
@@ -27,13 +76,13 @@ logger = logging.getLogger(__name__)
 
 _JUDGE_SYSTEM = """You are an expert researcher in behavioral economics, psychology, and \
 negotiation science. Your task is to evaluate a single utterance from a \
-negotiation transcript according to the specific metric framework provided.
+negotiation transcript according to the specific metric provided.
 
 You will be given:
   - The negotiation context (scenario description)
   - The role of the speaker (e.g., buyer, seller, employer, candidate)
-  - A specific Big Five dimension to score
-  - Behavioral anchors for scores 1–5
+  - The metric name and its high/low poles
+  - Behavioral anchors for scores 1, 3 and 5
   - The utterance to evaluate
 
 You must respond ONLY with a valid JSON object. Do not include markdown fences, \
@@ -52,7 +101,7 @@ _JUDGE_USER = """## Negotiation Context
 ## Speaker Role
 {role}
 
-## Dimension: {dimension_name} ({high_pole} ↔ {low_pole})
+## Metric: {metric_name} ({high_pole} ↔ {low_pole})
 
 ### Scoring Anchors
 1 — {anchor_1}
@@ -62,32 +111,86 @@ _JUDGE_USER = """## Negotiation Context
 ## Utterance to Evaluate (Turn {turn_index})
 \"\"\"{utterance}\"\"\"
 
-Evaluate this utterance on {dimension_name}. Respond with JSON only."""
+Evaluate this utterance on the metric "{metric_name}". Respond with JSON only."""
 
 
 # ---------------------------------------------------------------------------
-# Evaluator class
+# EvaluatorConfig
 # ---------------------------------------------------------------------------
 
 @dataclass
 class EvaluatorConfig:
-    dimensions: list[Dimension] = None   # None = all 5
-    score_per_turn: bool = True          # if False, evaluate full transcript at once
-    invert_neuroticism: bool = False     # flip N so high=stable for composite scores
+    """
+    Controla quais métricas o juiz vai avaliar.
+
+    Aceita qualquer combinação de Dimension (Big Five) e NegotiationMetric.
+
+    Exemplos:
+        # Só Big Five
+        EvaluatorConfig(dimensions=list(Dimension))
+
+        # Só métricas de negociação
+        EvaluatorConfig(dimensions=list(NegotiationMetric))
+
+        # Misto
+        EvaluatorConfig(dimensions=[
+            Dimension.AGREEABLENESS,
+            NegotiationMetric.ANCHORING,
+            NegotiationMetric.RAPPORT,
+        ])
+
+        # A partir de strings (ex: lidas do config.yaml)
+        EvaluatorConfig.from_strings(["agreeableness", "anchoring", "rapport"])
+    """
+    dimensions: list[AnyMetric] = field(default_factory=list)
+    score_per_turn: bool = True
+    invert_neuroticism: bool = False  # flip N: alto = mais estável
 
     def __post_init__(self):
-        if self.dimensions is None:
+        if not self.dimensions:
+            # Default: apenas Big Five
             self.dimensions = list(Dimension)
 
+    @classmethod
+    def from_strings(cls, metric_strings: list[str], **kwargs) -> "EvaluatorConfig":
+        """
+        Cria EvaluatorConfig a partir de uma lista de strings.
+        Strings inválidas são ignoradas com um warning.
+
+        Uso típico (lendo do config.yaml):
+            EvaluatorConfig.from_strings(["agreeableness", "anchoring", "rapport"])
+        """
+        resolved = []
+        for s in metric_strings:
+            try:
+                resolved.append(resolve_metric(s))
+            except ValueError as e:
+                logger.warning("EvaluatorConfig.from_strings: %s — ignorando.", e)
+        return cls(dimensions=resolved or list(Dimension), **kwargs)
+
+    @property
+    def big5_dimensions(self) -> list[Dimension]:
+        """Retorna apenas as dimensões Big Five da configuração."""
+        return [d for d in self.dimensions if is_big5(d)]
+
+    @property
+    def negotiation_metrics(self) -> list[NegotiationMetric]:
+        """Retorna apenas as métricas de negociação da configuração."""
+        return [d for d in self.dimensions if is_negotiation_metric(d)]
+
+
+# ---------------------------------------------------------------------------
+# Evaluator
+# ---------------------------------------------------------------------------
 
 class Evaluator:
     """
-    Uses a judge LLM to score negotiation utterances on Big Five dimensions.
+    Usa um LLM-juiz para pontuar utterances de negociação.
 
     Args:
-        judge: LLM adapter used as the evaluator (ideally different from agents).
-        config: EvaluatorConfig controlling which dimensions to score.
-        second_judge: Optional second judge for inter-rater reliability.
+        judge:        LLMAdapter do juiz (separado dos agentes negociadores).
+        config:       EvaluatorConfig — define quais métricas avaliar.
+        second_judge: Segundo juiz opcional para cálculo de IRR por turno.
     """
 
     def __init__(
@@ -101,7 +204,7 @@ class Evaluator:
         self.second_judge = second_judge
 
     # ------------------------------------------------------------------
-    # Public API
+    # API pública
     # ------------------------------------------------------------------
 
     def evaluate_turn(
@@ -110,49 +213,48 @@ class Evaluator:
         role: str,
         scenario_context: str,
         turn_index: int,
-        dimensions: Optional[list[Dimension]] = None,
+        dimensions: Optional[list[AnyMetric]] = None,
     ) -> list[DimensionScore]:
-        """Score a single utterance across the requested dimensions."""
-        dims = dimensions or self.config.dimensions
+        """Pontua um único turno em todas as métricas configuradas."""
+        metrics = dimensions or self.config.dimensions
         scores = []
-        for dim in dims:
-            score = self._score_one(utterance, role, scenario_context, turn_index, dim, self.judge)
-            scores.append(score)
+        for metric in metrics:
+            score = self._score_one(utterance, role, scenario_context, turn_index, metric, self.judge)
             if self.second_judge:
-                score2 = self._score_one(utterance, role, scenario_context, turn_index, dim, self.second_judge)
+                score2 = self._score_one(utterance, role, scenario_context, turn_index, metric, self.second_judge)
                 score.confidence = self._irr(score.score, score2.score)
+            scores.append(score)
         return scores
 
     def evaluate_transcript(
         self,
-        transcript: list[dict],  # [{"role": str, "content": str}, ...]
-        agent_roles: dict[str, str],  # {"agent_a": "buyer", "agent_b": "seller"}
+        transcript: list[dict],
+        agent_roles: dict[str, str],
         scenario_context: str,
     ) -> dict[str, Big5Profile]:
         """
-        Score a full negotiation transcript.
+        Pontua o transcript completo e retorna um Big5Profile por agente.
 
-        Returns a Big5Profile per agent.
+        Nota: 'Big5Profile' aqui armazena tanto scores Big Five quanto
+        scores de métricas de negociação — o nome é histórico.
         """
         profiles: dict[str, Big5Profile] = {}
 
-        # Initialize profiles
         for agent_id, role in agent_roles.items():
             profiles[agent_id] = Big5Profile(
                 agent_id=agent_id,
-                model_identifier=agent_id,  # overridden by engine
+                model_identifier=agent_id,
             )
 
-        # Score each turn
         for i, turn in enumerate(transcript):
-            role = turn.get("role")
-            content = turn.get("content", "")
-            agent_id = turn.get("agent_id", role)
+            role      = turn.get("role")
+            content   = turn.get("content", "")
+            agent_id  = turn.get("agent_id", role)
 
             if agent_id not in profiles:
                 continue
 
-            agent_role = agent_roles.get(agent_id, role)
+            agent_role  = agent_roles.get(agent_id, role)
             turn_scores = self.evaluate_turn(
                 utterance=content,
                 role=agent_role,
@@ -161,22 +263,23 @@ class Evaluator:
             )
             profiles[agent_id].per_turn_scores.extend(turn_scores)
 
-        # Aggregate: mean per dimension per agent
+        # Agrega: média por métrica por agente
         for agent_id, profile in profiles.items():
-            for dim in self.config.dimensions:
+            for metric in self.config.dimensions:
                 dim_scores = [
-                    s.score for s in profile.per_turn_scores if s.dimension == dim
+                    s.score for s in profile.per_turn_scores
+                    if s.dimension == metric
                 ]
                 if dim_scores:
                     agg = sum(dim_scores) / len(dim_scores)
-                    if self.config.invert_neuroticism and dim == Dimension.NEUROTICISM:
-                        agg = 6.0 - agg  # invert: 5→1, 1→5
-                    profile.scores[dim] = round(agg, 2)
+                    if self.config.invert_neuroticism and metric == Dimension.NEUROTICISM:
+                        agg = 6.0 - agg
+                    profile.scores[metric] = round(agg, 2)
 
         return profiles
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Helpers internos
     # ------------------------------------------------------------------
 
     def _score_one(
@@ -185,14 +288,14 @@ class Evaluator:
         role: str,
         scenario_context: str,
         turn_index: int,
-        dimension: Dimension,
+        metric: AnyMetric,
         judge: LLMAdapter,
     ) -> DimensionScore:
-        meta = BIG5_META[dimension]
+        meta = ALL_METRICS_META[metric]
         prompt = _JUDGE_USER.format(
             scenario_context=scenario_context,
             role=role,
-            dimension_name=meta.name,
+            metric_name=meta.name,
             high_pole=meta.high_pole,
             low_pole=meta.low_pole,
             anchor_1=meta.behavioral_anchors[1],
@@ -206,19 +309,19 @@ class Evaluator:
             {"role": "user",   "content": prompt},
         ]
         try:
-            raw = judge.complete(messages)
+            raw    = judge.complete(messages)
             parsed = self._parse_json(raw)
             return DimensionScore(
-                dimension=dimension,
+                dimension=metric,
                 score=float(parsed["score"]),
                 justification=parsed.get("justification", ""),
                 turn_index=turn_index,
                 confidence=float(parsed.get("confidence", 1.0)),
             )
         except Exception as e:
-            logger.warning("Judge failed for dim=%s turn=%d: %s", dimension, turn_index, e)
+            logger.warning("Judge failed for dim=%s turn=%d: %s", metric, turn_index, e)
             return DimensionScore(
-                dimension=dimension,
+                dimension=metric,
                 score=3.0,
                 justification=f"[Evaluation failed: {e}]",
                 turn_index=turn_index,
@@ -227,14 +330,10 @@ class Evaluator:
 
     @staticmethod
     def _parse_json(raw: str) -> dict:
-        """Parse JSON, stripping accidental markdown fences."""
         clean = re.sub(r"```(?:json)?|```", "", raw).strip()
         return json.loads(clean)
 
     @staticmethod
     def _irr(score1: float, score2: float) -> float:
-        """
-        Simplified inter-rater reliability as normalized agreement.
-        Returns 1.0 for identical scores, 0.0 for maximum disagreement (|diff|=4).
-        """
+        """IRR normalizado: 1.0 = concordância total, 0.0 = máximo desacordo."""
         return max(0.0, 1.0 - abs(score1 - score2) / 4.0)

@@ -12,6 +12,7 @@ from llm_negotiation_analyst.adapters.ollama_adapter import OllamaAdapter
 from llm_negotiation_analyst.adapters.ollama_local_adapter import OllamaLocalAdapter
 from llm_negotiation_analyst.scenarios import SCENARIO_REGISTRY
 from llm_negotiation_analyst.adapters.base import AdapterConfig
+from llm_negotiation_analyst.scoring import EvaluatorConfig
 
 
 # Importando classes de Persona e Contexto
@@ -23,11 +24,9 @@ from llm_negotiation_analyst.context import (
 
 # Importando as classes do Avaliador e das Dimensões
 from llm_negotiation_analyst.scoring.evaluator import EvaluatorConfig
-from llm_negotiation_analyst.scoring.big5 import Dimension
+
 
 load_dotenv()
-
-BIG5_VALIDOS = {d.value for d in Dimension}
 
 def load_config(filepath: str):
     with open(filepath, "r", encoding="utf-8") as file:
@@ -125,8 +124,8 @@ if __name__ == "__main__":
     metricas_textos = config["models"]["judge"].get("metrics", [])
     if metricas_textos:
         # Se encontrou métricas no YAML, converte elas para o Enum do Python
-        dimensoes_ativas = [Dimension(m) for m in metricas_textos]
-        config_juiz = EvaluatorConfig(dimensions=dimensoes_ativas)
+        #dimensoes_ativas = [Dimension(m) for m in metricas_textos]
+        config_juiz = EvaluatorConfig.from_strings(metricas_textos)
     else:
         # Se não tiver, envia None (o juiz usará o Big Five padrão)
         config_juiz = None

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from ..simulation.engine import NegotiationResult
-from ..scoring.big5 import Big5Profile, Dimension, BIG5_META
+from ..scoring import Big5Profile, ALL_METRICS_META, resolve_metric
 
 _BAR   = "█"
 _EMPTY = "░"
@@ -103,9 +103,10 @@ def generate_report(
             a("")
             a("```")
             for dim_key, score in scores.items():
-                # Evita falhar se o usuário colocou uma métrica no YAML que não está no Enum
+                # Evita falhar se o utilizador colocou uma métrica no YAML que não existe
                 try:
-                    meta = BIG5_META[Dimension(dim_key)]
+                    metric = resolve_metric(dim_key)
+                    meta = ALL_METRICS_META[metric]
                     a(f"{meta.name:<30} {_bar(float(score))}")
                 except ValueError:
                     pass
@@ -195,9 +196,9 @@ def generate_report(
         # Observed bars (Só mostra as que foram efetivamente medidas)
         a("```")
         for dim in sorted(list(evaluated_dims), key=lambda d: d.value):
-            meta  = BIG5_META[dim]
+            meta  = ALL_METRICS_META[dim]
             score = profile.scores.get(dim, 0.0)
-            note  = "⚠ low observability" if meta.observability in ("baixa", "low") or str(meta.observability) <= "2" else ""
+            note  = "⚠ low observability" if str(meta.observability) in ("baixa", "low", "1", "2") else ""
             a(f"{meta.name:<30} {_bar(score)}  {note}")
         a("```")
         a("")
@@ -210,10 +211,10 @@ def generate_report(
             header_bar = f"{'Dimension':<30} {'1────────────3────────────5'}"
             a(header_bar)
             a("-" * len(header_bar))
-            # Mostra apenas as que o usuário induziu no config ou que foram medidas
-            dims_to_compare = [d for d in Dimension if (d.value in induced or d in evaluated_dims)]
-            for dim in dims_to_compare:
-                meta     = BIG5_META[dim]
+            # Mostra apenas as que o utilizador induziu no config ou que foram medidas
+            dims_to_compare = [d for d in ALL_METRICS_META.keys() if (d.value in induced or d in evaluated_dims)]
+            for dim in sorted(dims_to_compare, key=lambda d: d.value):
+                meta     = ALL_METRICS_META[dim]
                 ind_val  = induced.get(dim.value)
                 obs_val  = profile.scores.get(dim)
                 a(f"{meta.name:<30} {_comparison_bar(ind_val, obs_val)}")
@@ -232,10 +233,10 @@ def generate_report(
             a("")
         else:
             for dim in sorted(scored, key=lambda d: d.value):
-                meta  = BIG5_META[dim]
+                meta  = ALL_METRICS_META[dim]
                 score = profile.scores[dim]
                 pole  = meta.high_pole if score >= 3 else meta.low_pole
-                warn  = " _(⚠ interpret with caution)_" if meta.observability in ("baixa", "low") or str(meta.observability) <= "2" else ""
+                warn  = " _(⚠ interpret with caution)_" if str(meta.observability) in ("baixa", "low", "1", "2") else ""
 
                 justifications = [
                     s.justification
@@ -265,8 +266,8 @@ def generate_report(
     a("| Dimension |" + "".join(f" {aid} |" for aid in agent_ids))
     a("|-----------|" + "".join("-----------|" for _ in agent_ids))
     for dim in sorted(list(evaluated_dims), key=lambda d: d.value):
-        meta = BIG5_META[dim]
-        flag = " ⚠" if meta.observability in ("baixa", "low") or str(meta.observability) <= "2" else ""
+        meta = ALL_METRICS_META[dim]
+        flag = " ⚠" if str(meta.observability) in ("baixa", "low", "1", "2") else ""
         row  = f"| {meta.name}{flag} |"
         for aid in agent_ids:
             score = profiles[aid].scores.get(dim)
@@ -298,7 +299,7 @@ def generate_report(
         valid = {d: s for d, s in dim_scores.items() if s.confidence > 0}
         if valid:
             parts = " | ".join(
-                f"{BIG5_META[d].abbreviation}={s.score:.1f}(conf={s.confidence:.2f})"
+                f"{ALL_METRICS_META[d].abbreviation}={s.score:.1f}(conf={s.confidence:.2f})"
                 for d, s in valid.items()
             )
             a(f"<sub>📊 {parts}</sub>")
