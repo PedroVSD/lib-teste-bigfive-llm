@@ -163,5 +163,7 @@ HOSTAGE_CRISIS_DEBRIEF = NegotiationScenario(
 
 # Registry for easy lookup
 SCENARIO_REGISTRY: dict[str, NegotiationScenario] = {
-    s.name: s for s in [SALARY_NEGOTIATION, PROCUREMENT_NEGOTIATION, HOSTAGE_CRISIS_DEBRIEF]
+    s.name: s for s in [
+        SALARY_NEGOTIATION, PROCUREMENT_NEGOTIATION, HOSTAGE_CRISIS_DEBRIEF
+    ]
 }

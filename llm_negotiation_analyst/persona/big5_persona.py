@@ -217,7 +217,7 @@ class Big5Persona:
 
     # Optional free-text additions appended after the generated instructions.
     # Use this for persona details that don't fit the 1–5 scale, e.g.:
-    #   extra_instructions="You tend to use sports metaphors when negotiating."
+    # extra_instructions="You tend to use sports metaphors when negotiating."
     extra_instructions: Optional[str] = None
 
     def __post_init__(self):
@@ -312,43 +312,3 @@ class PersonaPromptBuilder:
 # ---------------------------------------------------------------------------
 # Convenience presets
 # ---------------------------------------------------------------------------
-
-class PersonaPresets:
-    """
-    Ready-made personas for common experimental conditions.
-
-    Use these as starting points; adjust scores as needed.
-    """
-
-    @staticmethod
-    def cooperative() -> Big5Persona:
-        """High Agreeableness + High Conscientiousness + Low Neuroticism."""
-        return Big5Persona(agreeableness=5, conscientiousness=4, neuroticism=1)
-
-    @staticmethod
-    def competitive() -> Big5Persona:
-        """Low Agreeableness + High Extraversion + Low Neuroticism."""
-        return Big5Persona(agreeableness=1, extraversion=5, neuroticism=1)
-
-    @staticmethod
-    def creative() -> Big5Persona:
-        """High Openness + High Extraversion."""
-        return Big5Persona(openness=5, extraversion=4)
-
-    @staticmethod
-    def volatile() -> Big5Persona:
-        """High Neuroticism + Low Conscientiousness."""
-        return Big5Persona(neuroticism=5, conscientiousness=1)
-
-    @staticmethod
-    def analyst() -> Big5Persona:
-        """High Conscientiousness + Low Extraversion + Low Neuroticism."""
-        return Big5Persona(conscientiousness=5, extraversion=1, neuroticism=1)
-
-    @staticmethod
-    def neutral() -> Big5Persona:
-        """All dimensions at midpoint — minimal behavioral influence."""
-        return Big5Persona(
-            openness=3, conscientiousness=3, extraversion=3,
-            agreeableness=3, neuroticism=3,
-        )
