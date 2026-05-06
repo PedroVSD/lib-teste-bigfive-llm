@@ -25,10 +25,9 @@ logger = logging.getLogger(__name__)
 # Prompt templates
 # ---------------------------------------------------------------------------
 
-_JUDGE_SYSTEM = """You are an expert researcher in personality psychology and \
+_JUDGE_SYSTEM = """You are an expert researcher in behavioral economics, psychology, and \
 negotiation science. Your task is to evaluate a single utterance from a \
-negotiation transcript according to the Big Five personality framework, \
-specifically in the context of negotiation behavior.
+negotiation transcript according to the specific metric framework provided.
 
 You will be given:
   - The negotiation context (scenario description)

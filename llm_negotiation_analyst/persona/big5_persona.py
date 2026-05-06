@@ -307,8 +307,3 @@ class PersonaPromptBuilder:
         if not block:
             return system_prompt
         return f"{system_prompt}\n\n{block}"
-
-
-# ---------------------------------------------------------------------------
-# Convenience presets
-# ---------------------------------------------------------------------------

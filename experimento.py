@@ -115,7 +115,7 @@ if __name__ == "__main__":
         agents_dict[role_name] = create_adapter(config["models"][chave_do_agente])
         personas_dict[role_name] = parse_persona(config["models"][chave_do_agente].get("persona"))
 
-        print(f"✅ Papel '{role_name.upper()}' assumido por -> '{chave_do_agente}'")
+        print(f"Papel '{role_name.upper()}' assumido por -> '{chave_do_agente}'")
     print("-" * 40)
 
     # 3. Carrega Contexto Macroeconômico
