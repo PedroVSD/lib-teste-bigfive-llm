@@ -2,7 +2,22 @@
 
 Uma biblioteca Python para estudar a expressão de traços de personalidade do **Big Five** em negociações conduzidas por LLMs.
 
-Suporta modelos via **API** (OpenAI, Anthropic, Gemini, entre outros) e **localmente** (Ollama, entre outros), dois modos de simulação, avaliação automática por LLM-juiz, persistência em JSONL e geração de relatórios Markdown.
+Suporta modelos via **API** 
+* OpenAI
+* Anthropic
+* Gemini
+* Ollama cloud
+* entre outros(caso necessário)
+
+**localmente**
+* Ollama
+* Lmstudio
+
+Há vários modos de simulação, sendo que também é possível criar um personalizado.
+
+* Avaliação automática por LLM-juiz, podendo ter ois juízes por negociação
+* Persistência em JSONL
+* Geração de relatórios Markdown.
 
 ---
 
@@ -31,76 +46,28 @@ uv sync --all-extras
 cp .env.example .env
 ```
 4. **Rodando os testes**
-  - teste estrutural
-    ```bash
-        uv run pytest
-    ```
-  - teste de integração
-    ```bash
-        uv run pytest test_integration.py
-    ```
+- teste estrutural
+```bash
+uv run pytest
+```
+- teste de integração
+```bash
+uv run pytest test_integration.py
+```
 
 5. **Rodando o experimento**
 
-É possível alterar como o projeto roda diretamente no config.yaml. No arquivo contem tudo o que pode ser alterado para a eecução do experimento.
+É possível alterar como o projeto roda diretamente no config.yaml. No arquivo contém tudo o que pode ser alterado para a execução do experimento.
 
 ```bash
 uv run python experimento.py
 ```
+6. **.yaml**
+Todo o experimento é controlado pelo arquivo .yaml, lá há toda configuração das simulações. Seja suas variáveis, contexto, modelos utilizados, caracteristicas do modelo, instruções extras etc.
+
 ---
 
-## Quick start
-
-### Modo 1 — Agente vs. Agente (totalmente automatizado)
-
-```python
-from llm_negotiation_analyst import run_negotiation
-from llm_negotiation_analyst.adapters import OpenAIAdapter, OllamaAdapter
-from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
-
-result, profiles, report = run_negotiation(
-    scenario=SALARY_NEGOTIATION,
-    agents={
-        "candidate": OllamaAdapter("llama3.1:8b"),
-        "recruiter": OpenAIAdapter("gpt-4o"),
-    },
-    judge=OpenAIAdapter("gpt-4o"),   # juiz SEPARADO dos agentes
-    output_dir="results/",
-)
-
-print(report)
-```
-
-### Modo 2 — Benchmark (prompts fixos, comparação reproduzível)
-
-```python
-from llm_negotiation_analyst import run_benchmark
-from llm_negotiation_analyst.adapters import AnthropicAdapter, OllamaAdapter
-from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION
-
-# Sequência fixa de turnos do oponente
-BENCHMARK = [
-    "Our offer is R$14,000/month.",
-    "We can add a signing bonus of R$3,000.",
-    "That is our final offer, take it or leave it.",
-]
-
-# Testa dois modelos na mesma sequência — resultados comparáveis
-for model_name, adapter in [
-    ("gpt-4o",       OpenAIAdapter("gpt-4o")),
-    ("llama3.1:8b",  OllamaAdapter("llama3.1:8b")),
-]:
-    result, profiles, report = run_benchmark(
-        scenario=SALARY_NEGOTIATION,
-        agent_role="candidate",
-        agent_adapter=adapter,
-        benchmark_turns=BENCHMARK,
-        judge=OpenAIAdapter("gpt-4o"),
-    )
-    print(f"\n=== {model_name} ===")
-    for agent_id, profile in profiles.items():
-        print(profile.scores)
-```
+## Overview
 
 ---
 
@@ -128,146 +95,6 @@ llm_negotiation_analyst/
 │   ├── report/             # Relatórios
 │   └── tests/              # Suíte de testes automatizados
 ```
----
-
-## Adaptadores
-
-### Adicionar um novo adaptador
-
-Implemente `LLMAdapter` e defina `complete()`:
-
-```python
-from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
-
-class MeuAdapter(LLMAdapter):
-    def complete(self, messages: list[dict], **kwargs) -> str:
-        # chame sua API aqui
-        return "resposta do modelo"
-```
-
-### Ollama (modelos locais)
-
-```bash
-# 1. Instale o Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# 2. Baixe um modelo
-ollama pull llama3.1:8b
-ollama pull mistral:7b
-
-# 3. Inicie o servidor (já sobe automaticamente no Linux)
-ollama serve
-```
-
-```python
-from llm_negotiation_analyst.adapters import OllamaAdapter
-from llm_negotiation_analyst.adapters.base import AdapterConfig
-
-adapter = OllamaAdapter(
-    model="llama3.1:8b",
-    config=AdapterConfig(temperature=0.0, extra={"seed": 42}),
-)
-```
-
----
-
-## Cenários built-in
-
-| Nome | Domínio | Dificuldade | Turnos |
-|------|---------|-------------|--------|
-| `salary_negotiation` | RH / carreira | Médio | 8 |
-| `procurement_b2b` | Compras B2B SaaS | Difícil | 10 |
-| `crisis_negotiation_training` | Crise / desescalada | Difícil | 12 |
-
-### Criar um cenário customizado
-
-```python
-from llm_negotiation_analyst.scenarios import NegotiationScenario
-
-MEU_CENARIO = NegotiationScenario(
-    name="locacao_imovel",
-    description="Negociação de aluguel residencial.",
-    shared_context=(
-        "Um locatário está negociando o valor do aluguel de um apartamento "
-        "com o proprietário. O contrato é por 12 meses."
-    ),
-    roles={
-        "locatario": (
-            "Você é o locatário. Seu orçamento máximo é R$2.800/mês. "
-            "O imóvel está anunciado por R$3.200/mês. "
-            "Você tem um imóvel alternativo a R$2.900/mês como BATNA."
-        ),
-        "proprietario": (
-            "Você é o proprietário. O valor mínimo aceitável é R$2.600/mês. "
-            "Prefere não deixar o imóvel vago por mais de 2 semanas."
-        ),
-    },
-    opening_role="locatario",
-    max_turns=6,
-)
-```
-
----
-
-## Avaliação Big Five
-
-### Dimensões e observabilidade em negociações de texto
-
-| Dimensão | Polo alto | Polo baixo | Observabilidade |
-|----------|-----------|------------|-----------------|
-| **Agreeableness** | Cooperativo / Pró-social | Competitivo / Adversarial | ⭐⭐⭐⭐⭐ |
-| **Conscientiousness** | Organizado / Preciso | Impulsivo / Vago | ⭐⭐⭐⭐ |
-| **Neuroticism** | Instável / Reativo | Estável / Composto | ⭐⭐⭐⭐ |
-| **Extraversion** | Assertivo / Dominante | Passivo / Reservado | ⭐⭐⭐ |
-| **Openness** | Criativo / Integrativo | Rígido / Convencional | ⭐⭐ |
-
-> ⚠️ **Openness** e **Extraversion** têm baixa observabilidade em negociações de texto. Interprete com cautela e documente essa limitação em qualquer publicação.
-
-### Configuração do avaliador
-
-```python
-from llm_negotiation_analyst.scoring import Evaluator, EvaluatorConfig, Dimension
-
-evaluator = Evaluator(
-    judge=OpenAIAdapter("gpt-4o"),
-    config=EvaluatorConfig(
-        dimensions=[Dimension.AGREEABLENESS, Dimension.CONSCIENTIOUSNESS, Dimension.NEUROTICISM],
-        invert_neuroticism=True,   # inverte N: alto = mais estável (útil p/ scores compostos)
-    ),
-    second_judge=OllamaAdapter("llama3.1:8b"),  # IRR automático entre os dois juízes
-)
-```
-
-### Confiabilidade inter-avaliadores (IRR)
-
-Quando `second_judge` é fornecido, o campo `confidence` de cada `DimensionScore` contém o IRR normalizado entre os dois juízes:
-
-```
-IRR = 1 - |score_juiz1 - score_juiz2| / 4
-```
-
-- `1.0` = concordância total
-- `0.75` = diferença de 1 ponto (aceitável)
-- `< 0.5` = desacordo significativo (verificar rubricas)
-
----
-
-## Persistência e análise de dados
-
-```python
-from llm_negotiation_analyst.storage import StorageManager
-
-storage = StorageManager("results/")
-
-# Carregar todos os scores como DataFrame
-df_scores = storage.to_dataframe("scores")
-
-# Carregar todos os transcritos
-df_transcripts = storage.to_dataframe("transcripts")
-
-# Listar todos os runs
-runs = storage.list_runs()
-```
 
 ### Estrutura dos arquivos gerados
 
@@ -280,6 +107,236 @@ results/
 ├── salary_negotiation_a1b2c3d4_report.md    # Relatório Markdown
 └── runs_index.jsonl                          # Índice de todos os runs
 ```
+
+---
+
+## Adaptadores
+A pasta de adaptadores contém todos os adaptadores os agentes. É nessa pasta que é possível adicionar novos modelos às simulações, sejam eles locais ou de APIs.
+
+#### IPC:
+Um ponto importante é que para o caso do ollama, como o mesmo possui suporte para rodar localmente e via API. Optei por ter adaptadores individuais. Por padrão o ollama se utiliza de URLs bases diferentes para o uso local ou API. Abaixo estão ambas.
+
+* Ollama_cloud: base_url: "https://ollama.com/api/generate"
+* Ollama_local: base_url:  http://localhost:11434/api/generate -d
+
+---
+
+## context/situational.py
+
+Define o contexto e situação da simulação. Pode ser ativado e desativado no config.yaml.
+```yaml
+context:
+  enabled: true
+  inflation: "very_high"
+  interest_rates: "high"
+  government: "austrian"
+  crises:
+    - "currency_crisis"
+    - "political_instability"
+  gdp_growth: "Queda acentuada no último semestre."
+  unemployment: "Taxas estáveis, mas em mercado informal."
+  year: "2023"
+  country: "Argentina"
+  custom_conditions:
+    - "O fornecedor principal ameaçou cancelar contratos anteriores."
+    - "Só há orçamento aprovado para pagamentos parcelados."
+```
+Todos esses campos são opcionais. Se não quiser definir a inflação, por exemplo, basta não colocar a linha inflation: no seu YAML que o sistema a ignorará.
+
+**Toda situação pode ser alterado ou criada em situational.py**. Dentro de situational.py há alguns configurações que vou destacar abaixo.
+##### InflationLevel
+Os valores que estão representando as porcetagens são definidos por quem está configurando a simulação. **Isso é configurado no próprio situational.py**
+```python
+VERY_LOW = "very_low" # < 2%
+LOW = "low" # 2–4%
+MODERATE = "moderate" # 4–7%
+HIGH = "high" # 7–10%
+VERY_HIGH = "very_high" # > 10%
+```
+##### InterestRateLevel
+```python
+VERY_LOW = "very_low"
+LOW = "low"
+MODERATE = "moderate"
+HIGH = "high"
+VERY_HIGH = "very_high"
+```
+##### GovernmentOrientation
+```python
+MARKET_FRIENDLY = "market_friendly"
+INTERVENTIONIST = "interventionist"
+TECHNOCRATIC = "technocratic"
+POPULIST = "populist"
+TRANSITIONAL = "transitional"
+CONSERVATIVE = "conservative"
+ANCAP = "anarcho_capitalist"
+LIBERAL_ON_MARKET = "austrian"
+```
+##### CrisisType
+```python
+ECONOMIC_RECESSION = "economic_recession"
+FINANCIAL_CRISIS = "financial_crisis"
+POLITICAL_INSTABILITY = "political_instability"
+HEALTH_PANDEMIC = "health_pandemic"
+SUPPLY_CHAIN = "supply_chain_disruption"
+ENERGY_CRISIS = "energy_crisis"
+GEOPOLITICAL = "geopolitical_conflict"
+CURRENCY_CRISIS = "currency_crisis"
+```
+As crises podem receber múltiplos valores.
+
+Os valores de inflação e interesse, são definidos logo abaixo da declaração do enum, no dict correspondente a cada um.
+
+É possível adicionar um método próprio que define a situação da simulação, basta passar os parâmetros:
+```python
+class ContextPresets:
+    @staticmethod
+    def meu_cenario() -> SituationalContext:
+        """Cenário customizado para negociação"""
+        return SituationalContext(
+            inflation=InflationLevel.LOW,
+            interest_rates=InterestRateLevel.VERY_HIGH,
+            government=GovernmentOrientation.MARKET_FRIENDLY,
+            country="Brasil",
+            custom_conditions=[
+                "O mercado de venture capital está em baixa.",
+                "A parte vendedora precisa demonstrar tração imediata aos investidores."
+            ]
+        )
+```
+---
+
+## scenarios/\_\_init\_\_.py
+
+É possível criar ou modificar os cenários da simulação.
+
+Abaixo tem o corpo das simulações:
+```python
+FREELANCE_RECSYS = NegotiationScenario(
+    name=”nome do cenário”
+    description=”descrição de como vai ser”
+    shared_context=(“contexto compartilhado para ambos. É possível passar contexto isolado diretamente pelo .yaml”),
+roles={
+    “modelo_1“:(“O que faz o modelo”),
+    “modelo_2“:(“O que faz o modelo”),
+}
+opening_role="Quem vai iniciar a conversa",
+opening_prompt=(""),
+max_turns=Quantas rodadas, uma rodada é composta pela fala de ambos,
+metadata={"domain": "Tech Freelance", "currency": "BRL", "difficulty": "medium"}->informações extras do cenário,
+)
+```
+###### Feito isso, basta adicionar ao dicionário no final do arquivo
+```python
+SCENARIO_REGISTRY: dict[str, NegotiationScenario] = {
+    s.name: s for s in [
+        SALARY_NEGOTIATION, 
+        PROCUREMENT_NEGOTIATION, 
+        HOSTAGE_CRISIS_DEBRIEF,
+        CENARIO_PERSONALIZADO  # <- Seu cenário personalizado
+    ]
+}
+```
+---
+
+## persona/big5_persona.py
+
+Onde ocorre toda a configuração de injeção de traços de personalidade das LLMs.
+
+O modelo big5 se baseia em cindo traços dde personalidade, sendo eles:
+
+| Dimensão | Polo alto | Polo baixo | Descrição |
+|----------|-----------|------------|-----------------|
+| **Agreeableness** | Cooperativo / Pró-social | Competitivo / Adversarial | Cooperação e compaixão |
+| **Conscientiousness** | Organizado / Preciso | Impulsivo / Vago | É o nível organizacional, disciplina e orientação a objetivos. |
+| **Neuroticism** | Instável / Reativo | Estável / Composto | Como é a reação a emoções negativas |
+| **Extraversion** | Assertivo / Dominante | Passivo / Reservado | A busca por estímulos sociais e assertividade(habilidade social de se expressar de forma clara, direta e honesta). |
+| **Openness** | Criativo / Integrativo | Rígido / Convencional | É a abertura a novas experiências |
+
+Os níveis vão de 1 até 5, sendo:
+
+* 1: "a very low level of"
+* 2: "a low level of"
+* 3: "a moderate level of"
+* 4: "a high level of"
+* 5: "a very high level of"
+
+##### IPC: As instruções do que representa cada valor, podem ser alteradas no dicionário _GUIDANCE
+
+**Toda e qualquer alteração para personalidades pode ser feita no arquivo big5_persona.py**
+
+Os traços de personalidades são enviados ao modelo posteriormente a negociação se iniciar.
+
+---
+
+## scoring/evaluator
+
+Como mencionado antes, a avaliação da negociação é feita por uma ou duas LLMs, que ao final da negociação verifica como foi o andamento e dá as "notas" para algumas classes das avaliações. Um ponto importante é que, as métricas de utilidade e satisfação **NÃO** são de responsabilidade do juiz, e sim de quem utiliza a biblioteca para o experimento.
+
+Abaixo segue como é feita a avaliação realizada pelo juiz.
+
+1. Avaliação Granular (Frase por Frase)
+O motor não envia a transcrição inteira para o juiz. A função evaluate_turn isola uma única fala (utterance) de um agente de cada vez. Se um agente falou 5 vezes durante a simulação, o juiz avaliará esse agente 5 vezes separadas. Além disso, a avaliação é isolada por métrica: para uma mesma frase, o juiz é consultado individualmente para cada dimensão exigida (ex: uma consulta para Ancoragem, outra para Amabilidade, etc).
+
+2. O "Gabarito" de Correção (Behavioral Anchors)
+Para que o juiz (que é um LLM) não use seus próprios critérios subjetivos, o sistema injeta um "gabarito" estrito no prompt. Esse gabarito vem dos dicionários BIG5_META e NEGOTIATION_META.
+Quando o juiz vai avaliar a "Firmeza na Oferta Inicial" (Anchoring), por exemplo, o código extrai as Âncoras Comportamentais (Behavioral Anchors) específicas daquela métrica e envia para o modelo, explicando exatamente o que significa tirar nota 1, nota 3 e nota 5.
+
+3. A Construção do Prompt (_JUDGE_USER)
+Para cada frase avaliada, a função _score_one monta um prompt contextualizado. O juiz recebe:
+
+* O contexto do cenário (para entender o que está sendo negociado).
+* O papel de quem está falando (ex: cliente ou vendedor).
+* O nome da métrica e seus extremos (ex: "Firmeza na Oferta Inicial: Âncora Forte ↔ Cede Rapidamente").
+* O texto exato das réguas de nota 1, 3 e 5.
+* A frase exata dita pelo agente naquele turno.
+
+4. Resposta em JSON
+* O prompt de sistema do juiz (_JUDGE_SYSTEM) é desenhado para proibir tagarelice. Ele obriga o LLM a responder exclusivamente com um objeto JSON contendo três chaves:
+* score: Um número inteiro de 1 a 5.
+* justification: Uma explicação curta (1 a 3 frases) referenciando palavras específicas usadas pelo agente para provar o porquê da nota.
+* confidence: O nível de confiança da IA naquela avaliação (de 0.0 a 1.0).
+
+5. O Boletim Final (Média Matemática)
+Após avaliar todos os turnos da conversa, o método evaluate_transcript é executado para a nota. Ele pega todas as notas que um agente tirou ao longo do tempo para uma métrica específica e calcula a média aritmética (sum(dim_scores) / len(dim_scores)).
+Exemplo: Se o candidato tirou as notas 1, 3 e 5 em "Criação de Valor" durante os três turnos que falou, a nota final dele no relatório (o Big5Profile.scores) será 3.00.
+
+6. Opcional: Duplo Juiz
+É possível instanciar a classe Evaluator passando um second_judge (um segundo modelo LLM), o sistema fará com que os dois juízes avaliem a mesma frase independentemente. O código então calcula o IRR (Confiabilidade Interavaliadores), substituindo a métrica de "confiança" padrão por um cálculo matemático que reflete o quanto os dois modelos concordaram entre si (1.0 - abs(score1 - score2) / 4.0).
+
+#### Confiabilidade inter-avaliadores (IRR)
+
+Quando `second_judge` é fornecido, o campo `confidence` de cada `DimensionScore` contém o IRR normalizado entre os dois juízes:
+
+``` python
+IRR = 1 - |score_juiz1 - score_juiz2| / 4
+```
+
+- `1.0` = concordância total
+- `0.75` = diferença de 1 ponto (aceitável)
+- `< 0.5` = desacordo significativo (verificar rubricas)
+
+**Importante:** use o mesmo modelo-juiz em todos os runs de uma comparação. Trocar o juiz entre runs invalida a comparabilidade dos scores.
+
+---
+##  Métricas
+
+Há várias métricas que são avaliadas com as simulações.
+
+Sendo que elas foram separadas por categorias, sendo:
+
+* Categoria 1: Táticas e Comportamento de Negociação
+  * Essas métricas avaliam como o agente está negociando, independentemente da sua personalidade.
+* Categoria 2: Inteligência Emocional e Relacionamento
+  * Avaliando a forma como o agente constrói a relação e lida com a situação.
+* Categoria 3: Argumentação Lógica e Uso de Dados
+  * Avaliando a racionalidade por trás das propostas.
+* Categoria 4: Vieses e Erros Cognitivos
+  * Economia comportamental.
+* Utilidade(métrica objetiva)
+  * Avalia o quão efetivo foi o efeito âncora.
+* Satisfação(métrica subjetiva)
+  * Avalia como foi a satisfação final do agente ao final da negociação.
 
 ---
 
@@ -296,18 +353,6 @@ config_det = AdapterConfig(
 )
 ```
 
-> **Importante:** use o mesmo modelo-juiz em todos os runs de uma comparação. Trocar o juiz entre runs invalida a comparabilidade dos scores.
-
----
-
-## Executar os testes automatizados
-
-Este projeto utiliza o `pytest` para garantir a estabilidade do motor de simulação e da avaliação. O `uv run` garante que os testes rodem no ambiente isolado correto.
-
-```bash
-uv run pytest llm_negotiation_analyst/tests/ -v
-```
-
 ---
 
 ## Referências
@@ -317,4 +362,12 @@ uv run pytest llm_negotiation_analyst/tests/ -v
 - Minjun Ren, Wentao Xu (2025). *The Impact of Big Five Personality Traits on AI Agent Decision-Making in Public Spaces: A Social Simulation Study.*
 - Aleksandra Sorokovikova, Natalia Fedorova, Sharwin Rezagholi, Ivan P. Yamshchikov (2024). *LLMs Simulate Big Five Personality Traits: Further Evidence.*
 - Junhyuk Choi, Hyeonchu Park , Haemin Lee, Hyebeen Shin, Hyun Joung Jin, Bugeun Kim (2025).*Pay What LLM Wants: Can LLM Simulate Economics Experiment with 522 Real-human Persona?.*
-- Ollama: https://ollama.com
+- TVERSKY, A.; KAHNEMAN, D. *Judgment under Uncertainty: Heuristics and Biases. Science, v. 185, n. 4157, p. 1124-1131, 1974.*
+- KAHNEMAN, D.; TVERSKY, A. *Prospect Theory: An Analysis of Decision under Risk. Econometrica, v. 47, n. 2, p. 263-291, 1979.*
+- FISHER, R.; URY, W.; *PATTON, B. Getting to Yes: Negotiating Agreement Without Giving In. 2. ed*
+- WALTON, R. E.; MCKERSIE, R. B. *A Behavioral Theory of Labor Negotiations: An Analysis of a Social Interaction System. Nova York: McGraw-Hill, 1965.*
+- CIALDINI, R. B. *Influence: The Psychology of Persuasion. Nova York: Harper Business, 1984.*
+- GOULDNER, A. W. *The Norm of Reciprocity: A Preliminary Statement. American Sociological Review, v. 25, n. 2, p. 161-178, 1960.*
+- BARRY, B.; OLIVER, R. L. *Affect in Negotiation: A Model and Propositions. Organizational Behavior and Human Decision Processes, v. 67, n. 2, p. 127-143, 1996.*
+- ALTER, A. L.; OPPENHEIMER, D. M. *Uniting the Tribes of Fluency to Form a Metacognitive Nation. Personality and Social Psychology Review, v. 13, n. 3, p. 219-235, 2009.*
+- GRICE, H. P. Logic and conversation. In: COLE, P.; MORGAN, J. L. (Eds.). *Syntax and semantics: Vol. 3. Speech acts. Nova York: Academic Press, 1975. p. 41-58.*

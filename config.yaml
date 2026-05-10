@@ -26,7 +26,7 @@ models:
   agent_1:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
-    temperature: 0.7
+    temperature: 1.0
     persona:
       agreeableness: 5
       neuroticism: 2
@@ -49,7 +49,7 @@ models:
   agent_2:
     provider: "lmstudio"
     name: "google/gemma-4-e2b"
-    temperature: 0.7
+    temperature: 1.0
     persona:
       agreeableness: 1
       neuroticism: 5
@@ -87,3 +87,4 @@ models:
       - "anchor_susceptibility"
       - "loss_aversion"
       - "fact_justification"
+#deepseek-v4-pro:cloud
