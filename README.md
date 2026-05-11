@@ -340,8 +340,13 @@ Sendo que elas foram separadas por categorias, sendo:
 
 #### Utilidade
 
-Utilidade do vendedor: $$u_s(p) = \frac{p - \underline{p_s}}{\overline{p_s} - \underline{p_s}}$$
-Utilidade do comprador: $$u_b(p) = \frac{\overline{p_b} - p}{\overline{p_b} - \underline{p_b}}$$
+Utilidade do vendedor:
+
+$$u_s(p) = \frac{p - \underline{p_s}}{\overline{p_s} - \underline{p_s}}$$
+
+Utilidade do comprador:
+$$u_b(p) = \frac{\overline{p_b} - p}{\overline{p_b} - \underline{p_b}}$$
+
 
 * $p$ é o valor dado ao produto
 * $\overline{p_s}$ representa o valor alvo do vendedor
@@ -352,15 +357,19 @@ Utilidade do comprador: $$u_b(p) = \frac{\overline{p_b} - p}{\overline{p_b} - \u
 #### Satifação
 
 * Sentimento em Relação ao Resultado (Outcome):
+
 $$a_{Outcome} = \frac{1}{4}(a_1 + a_2 + (7 - a_3) + a_4)$$
 
 * Sentimento em Relação a Si Mesmo (Self):
+
 $$a_{Self} = \frac{1}{4}((7 - a_5) + a_6 + a_7 + a_8)$$
 
 * Sentimento em Relação ao Processo (Process):
+
 $$a_{Process} = \frac{1}{4}(a_9 + a_{10} + a_{11} + a_{12})$$
 
 * Sentimento em Relação ao Relacionamento (Relationship):
+
 $$a_{Relationship} = \frac{1}{4}(a_{13} + a_{14} + a_{15} + a_{16})$$
 
 IPC: Os itens 3 e 5 são subtraídos de 7 (a pontuação máxima da escala) porque eles indicam maior satisfação quando a nota do LLM é menor (são perguntas formuladas de forma negativa, como "Você sentiu que perdeu prestígio?").
