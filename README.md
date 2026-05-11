@@ -338,6 +338,82 @@ Sendo que elas foram separadas por categorias, sendo:
 * Satisfação(métrica subjetiva)
   * Avalia como foi a satisfação final do agente ao final da negociação.
 
+#### Utilidade
+
+Utilidade do vendedor: $$u_s(p) = \frac{p - \underline{p_s}}{\overline{p_s} - \underline{p_s}}$$
+Utilidade do comprador: $$u_b(p) = \frac{\overline{p_b} - p}{\overline{p_b} - \underline{p_b}}$$
+
+* $p$ é o valor dado ao produto
+* $\overline{p_s}$ representa o valor alvo do vendedor
+* $\underline{p_s}$ representa o mínimo valor aceitável
+* $\overline{p_b}$ representa o máximo valor aceitável
+* $\underline{p_s}$ representa o valor alvo
+
+#### Satifação
+
+* Sentimento em Relação ao Resultado (Outcome):
+$$a_{Outcome} = \frac{1}{4}(a_1 + a_2 + (7 - a_3) + a_4)$$
+
+* Sentimento em Relação a Si Mesmo (Self):
+$$a_{Self} = \frac{1}{4}((7 - a_5) + a_6 + a_7 + a_8)$$
+
+* Sentimento em Relação ao Processo (Process):
+$$a_{Process} = \frac{1}{4}(a_9 + a_{10} + a_{11} + a_{12})$$
+
+* Sentimento em Relação ao Relacionamento (Relationship):
+$$a_{Relationship} = \frac{1}{4}(a_{13} + a_{14} + a_{15} + a_{16})$$
+
+IPC: Os itens 3 e 5 são subtraídos de 7 (a pontuação máxima da escala) porque eles indicam maior satisfação quando a nota do LLM é menor (são perguntas formuladas de forma negativa, como "Você sentiu que perdeu prestígio?").
+
+
+<table>
+  <thead>
+    <tr>
+      <th align="left">Categoria</th>
+      <th align="left">Perguntas</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td valign="top"><b>Sentimentos Sobre o Resultado</b></td>
+      <td>
+        1. Quão satisfeito está com o seu próprio resultado,ou seja, até que ponto os termos do seu acordo (ou a falta de acordo) o beneficiam?<br>
+        2. Quão satisfeito está com o equilíbrio entre o seu próprio resultado e o resultado da sua contraparte?<br>
+        3. Sentiu que abriu mão ou "perdeu" nesta negociação?<br>
+        4. Acha que os termos do seu acordo são consistentes com princípios de legitimidade ou critérios objetivos?
+      </td>
+    </tr>
+    <tr>
+      <td valign="top"><b>Sentimentos Sobre Si Mesmo</b></td>
+      <td>
+        5. "Perdeu o prestígio" (ou seja, danificou o seu senso de orgulho) na negociação?<br>
+        6. Comportou-se de acordo com os seus próprios princípios e valores?<br>
+        7. Esta negociação fê-lo sentir-se mais ou menos competente como negociador?<br>
+        8. Sente que se comportou apropriadamente nesta negociação?
+      </td>
+    </tr>
+    <tr>
+      <td valign="top"><b>Sentimentos Sobre o Processo</b></td>
+      <td>
+        9. A sua contraparte considerou os seus desejos, opiniões ou necessidades?<br>
+        10. Sente que a sua contraparte ouviu as suas preocupações?<br>
+        11. Caracterizaria o processo de negociação como justo?<br>
+        12. Quão satisfeito está com a facilidade (ou dificuldade) de chegar a um acordo?
+      </td>
+    </tr>
+    <tr>
+      <td valign="top"><b>Sentimentos Sobre o Relacionamento</b></td>
+      <td>
+        13. Que tipo de impressão "geral" a sua contraparte causou em si?<br>
+        14. A negociação fê-lo confiar na sua contraparte?<br>
+        15. Quão satisfeito está com o seu relacionamento com a sua contraparte como resultado desta negociação?<br>
+        16. A negociação construiu uma boa base para um relacionamento futuro com a sua contraparte?
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
 ---
 
 ## Reprodutibilidade
