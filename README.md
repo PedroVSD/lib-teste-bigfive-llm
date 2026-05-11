@@ -345,6 +345,7 @@ Utilidade do vendedor:
 $$u_s(p) = \frac{p - \underline{p_s}}{\overline{p_s} - \underline{p_s}}$$
 
 Utilidade do comprador:
+
 $$u_b(p) = \frac{\overline{p_b} - p}{\overline{p_b} - \underline{p_b}}$$
 
 
