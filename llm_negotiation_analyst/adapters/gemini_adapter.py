@@ -63,11 +63,17 @@ class GeminiAdapter(LLMAdapter):
             # Se o motor terminou o histórico com 'model', passamos a bola de volta
             contents.append(types.Content(role="user", parts=[types.Part.from_text(text="Continue a negociação e faça sua jogada.")]))
 
+        GEMINI_PARAMS_VALIDOS = {
+            "top_p", "top_k", "candidate_count", "stop_sequences",
+            "presence_penalty", "frequency_penalty", "response_mime_type",
+        }
+        extra_filtrado = {k: v for k, v in self.config.extra.items() if k in GEMINI_PARAMS_VALIDOS}
+
         # 3. Configurando os parâmetros
         config_args = {
             "temperature": self.config.temperature,
             "max_output_tokens": self.config.max_tokens,
-            **self.config.extra
+            **extra_filtrado
         }
         if system_instruction:
             config_args["system_instruction"] = system_instruction
