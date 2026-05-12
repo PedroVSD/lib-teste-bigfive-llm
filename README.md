@@ -439,6 +439,9 @@ config_det = AdapterConfig(
 )
 ```
 
+É um número que fixa o ponto de partida do gerador de números aleatórios do modelo.
+O 42 é só uma referência a *"o guia dos mochileiros da galáxia"*
+
 ---
 
 ## Referências
