@@ -4,7 +4,7 @@ import yaml
 from dotenv import load_dotenv
 
 from llm_negotiation_analyst import run_negotiation
-from llm_negotiation_analyst.adapters import ollama_adapter
+from llm_negotiation_analyst.adapters.deepseek_adapter import DeepSeekAdapter
 from llm_negotiation_analyst.adapters.gemini_adapter import GeminiAdapter
 from llm_negotiation_analyst.adapters.openai_adapter import OpenAIAdapter
 from llm_negotiation_analyst.adapters.lmstudio_adapter import LMStudioAdapter
@@ -37,7 +37,8 @@ def create_adapter(config_dict: dict):
     model_name = config_dict["name"]
 
     temp = config_dict.get("temperature", 0.5)
-    config_obj = AdapterConfig(temperature=temp)
+    max_tokens = config_dict.get("max_tokens", 1024)
+    config_obj = AdapterConfig(temperature=temp, max_tokens=max_tokens)
 
     if provider == "gemini":
         return GeminiAdapter(model=model_name, config=config_obj)
@@ -50,6 +51,9 @@ def create_adapter(config_dict: dict):
     elif provider == "ollama":
         url = config_dict.get("base_url")
         return OllamaAdapter(model=model_name, base_url=url, config=config_obj)
+    elif provider == "deepseek":
+        url = config_dict.get("base_url")
+        return DeepSeekAdapter(model=model_name, base_url=url, config=config_obj)
     raise ValueError(f"Provedor desconhecido: {provider}")
 
 def parse_persona(agent_config: dict) -> Big5Persona | None:
@@ -163,6 +167,7 @@ if __name__ == "__main__":
         personas=personas_dict,
         context=macro_context,
         output_dir="results/",
+        use_system_reminder=config["experiment"].get("use_system_reminder", False),
     )
 
     print("Simulação concluída com sucesso! Verifique a pasta 'results/'.")

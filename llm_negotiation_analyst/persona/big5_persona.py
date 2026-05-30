@@ -67,91 +67,72 @@ def _level_label(score: int) -> str:
 _GUIDANCE: dict[str, dict[str, str]] = {
     "openness": {
         "high": (
-            "Propose creative reframings of the negotiation. "
-            "Introduce non-obvious trade-offs and package deals. "
-            "Be intellectually curious about the other party's constraints "
-            "and explore unconventional solutions willingly."
+            "open to experience"
+            "closed to experience"
         ),
         "neutral": (
-            "Consider both standard and creative solutions. "
-            "Be open to reframing when presented with new information, "
-            "but default to conventional approaches."
+            "open to experience"
+            "closed to experience"
         ),
         "low": (
-            "Stick to the stated agenda. Resist attempts to expand or "
-            "reframe the negotiation scope. Prefer concrete, well-defined "
-            "terms over abstract or novel arrangements."
+            "open to experience"
+            "closed to experience"
         ),
     },
     "conscientiousness": {
         "high": (
-            "Be precise and structured in every proposal. "
-            "Reference prior agreements and track concessions explicitly. "
-            "Quantify all offers. Propose formal commitment mechanisms "
-            "and avoid vague language."
+            "conscientious"
+            "unconscientious"
         ),
         "neutral": (
-            "Maintain reasonable consistency across your proposals. "
-            "Support key points with justification when convenient, "
-            "but don't over-engineer the structure."
+            "conscientious"
+            "unconscientious"
         ),
         "low": (
-            "Be flexible and informal in your proposals. "
-            "You may revise or contradict earlier positions. "
-            "Prioritize momentum over precision."
+            "conscientious"
+            "unconscientious"
         ),
     },
     "extraversion": {
         "high": (
-            "Take initiative and control the conversational frame. "
-            "Make assertive, direct statements. Set the agenda proactively. "
-            "Use confident language: 'I need', 'We will', 'My position is'."
+            "extroverted"
+            "introverted"
         ),
         "neutral": (
-            "Alternate between leading and following the conversation. "
-            "Be neither passive nor domineering."
+            "extroverted"
+            "introverted"
         ),
         "low": (
-            "Be reserved and reactive. Give short, measured responses. "
-            "Let the other party drive the agenda. "
-            "Avoid volunteering information or making unsolicited proposals."
+            "extroverted"
+            "introverted"
         ),
     },
     "agreeableness": {
         "high": (
-            "Prioritize the relationship and mutual benefit. "
-            "Use inclusive language ('we', 'together', 'our solution'). "
-            "Acknowledge the other party's constraints explicitly. "
-            "Volunteer concessions when it helps build trust. "
-            "Seek win-win outcomes actively."
+            "agreeable"
+            "antagonistic"
         ),
         "neutral": (
-            "Balance your own interests with the relationship. "
-            "Make concessions when strategically useful, "
-            "but don't compromise your core objectives."
+            "agreeable"
+            "antagonistic"
         ),
         "low": (
-            "Prioritize your own goals over the relationship. "
-            "Be direct and firm. Do not volunteer concessions. "
-            "Challenge the other party's proposals critically "
-            "rather than accommodating them."
+            "agreeable"
+            "antagonistic"
         ),
     },
     "neuroticism": {
         "high": (
-            "Your emotional state fluctuates during the negotiation. "
-            "Under pressure, you may make larger-than-expected concessions "
-            "or become more assertive/hostile. "
-            "Express frustration openly when the negotiation stalls."
+            "neurotic"
+            "emotionally stable"
         ),
         "neutral": (
-            "Maintain a generally stable tone throughout the negotiation, "
-            "with occasional mild reactions to pressure or setbacks."
+            "neurotic"
+            "emotionally stable"
         ),
         "low": (
-            "Remain calm and composed regardless of pressure or provocation. "
-            "Make concessions deliberately and gradually. "
-            "Never let frustration show in your language or tone."
+            "neurotic"
+            "emotionally stable"
         ),
     },
 }

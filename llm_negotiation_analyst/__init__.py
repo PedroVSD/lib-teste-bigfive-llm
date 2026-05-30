@@ -40,6 +40,7 @@ def run_negotiation(
     context=None,#parte referente à customização do contexto
     turn_delay_seconds = 0.0,
     verbose: bool = True,
+    use_system_reminder: bool = True,
 ):
     import logging
     if verbose:
@@ -49,7 +50,9 @@ def run_negotiation(
         scenario=scenario,
         agents=agents,
         personas=personas,
-        context=context
+        context=context,
+        turn_delay_seconds=turn_delay_seconds,
+        use_system_reminder=use_system_reminder,
     )
     result = engine.run()
 

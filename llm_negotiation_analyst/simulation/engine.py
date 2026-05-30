@@ -168,6 +168,7 @@ class SimulationEngine:
         context: Optional[SituationalContext] = None,
         benchmark_turns: Optional[list[str]] = None,
         turn_delay_seconds: float = 0.0,
+        use_system_reminder: bool = True,
     ):
         self.scenario = scenario
         self.raw_agents = agents
@@ -175,6 +176,7 @@ class SimulationEngine:
         self.context = context
         self.benchmark_turns = benchmark_turns
         self.turn_delay_seconds = turn_delay_seconds
+        self.use_system_reminder = use_system_reminder
 
     def run(self) -> NegotiationResult:
         if self.benchmark_turns is not None:
@@ -234,8 +236,17 @@ class SimulationEngine:
                     continue
 
                 agent = agents[role]
+                if self.use_system_reminder:
+                    system_reminder = (
+                        "\n\n[SYSTEM REMINDER: Se um acordo definitivo acabou de ser alcançado, "
+                        "você DEVE OBRIGATORIAMENTE terminar sua resposta com o código exato: [ACORDO_FECHADO]. "
+                        "Não prolongue a conversa com gentilezas.]"
+                    )
+                    current_hint = scenario.shared_context + system_reminder if turn_index <= 1 else system_reminder
+                else:
+                    current_hint = scenario.shared_context if turn_index <= 1 else ""
                 content, latency = agent.speak(
-                    context_hint=scenario.shared_context if turn_index <= 1 else ""
+                    context_hint=current_hint
                 )
 
                 turn = Turn(

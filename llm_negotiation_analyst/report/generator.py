@@ -24,6 +24,26 @@ from ..simulation.engine import NegotiationResult
 from ..scoring import Big5Profile, ALL_METRICS_META, resolve_metric
 
 
+def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
+    """
+    Verifica o transcript em busca de linguagem de acordo,
+    para corrigir casos onde o engine não detectou a keyword.
+    """
+    indicators = [
+        "confirmo os termos",
+        "iniciar a implementação", "parceria firmada",
+        "muito feliz que conseguimos",
+        "SIMULACAO_CONCLUIDA",
+    ]
+    # Verifica os últimos 4 turnos — acordo geralmente aparece no final
+    last_turns = result.transcript[-4:] if len(result.transcript) >= 4 else result.transcript
+    for turn in last_turns:
+        content_lower = turn.content.lower()
+        if any(ind.lower() in content_lower for ind in indicators):
+            return True
+    return False
+
+
 def generate_report(
     result: NegotiationResult,
     profiles: dict[str, Big5Profile],
@@ -32,6 +52,7 @@ def generate_report(
     lines: list[str] = []
     a = lines.append
     e = lines.extend
+    settled = result.settled or _detect_settlement_retroactively(result)
 
     personas_meta: dict           = result.metadata.get("personas", {})
     context_meta:  Optional[dict] = result.metadata.get("context")
@@ -43,9 +64,12 @@ def generate_report(
     a(f"> **ID da Execução:** `{result.run_id}`  ")
     a(f"> **Gerado em:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}  ")
     a(f"> **Duração:** {result.duration_seconds:.1f}s | "
-      f"**Turnos:** {result.total_turns} | "
-      f"**Acordo Fechado:** {'✅ Sim' if result.settled else '❌ Não'}")
+      f"**Turnos:** {result.total_turns} | ")
+    a(f"> **Acordo Fechado:** {'✅ Sim' if settled else '❌ Não'}")
     a("")
+    # Detecção retroativa de acordo pelo transcript
+
+
 
     # ── 1. CONFIGURAÇÃO DO EXPERIMENTO (SETUP) ────────────────────────
     e(["## 1. Configuração do Experimento (Setup)", ""])
@@ -232,7 +256,6 @@ def generate_report(
 
     # ── 6. NOTAS DE METODOLOGIA ───────────────────────────────────────
     e(["## 6. Notas de Metodologia", ""])
-    e(["## Notas de Metodologia", ""])
     a("- **Scoring:** LLM-as-judge with structured JSON rubrics, one call per dimension per turn.")
     a("- **Aggregation:** Arithmetic mean of valid per-turn scores (confidence > 0).")
     a("- **Observability:** Some psychological metrics are less reliable in text. Treat with caution.")

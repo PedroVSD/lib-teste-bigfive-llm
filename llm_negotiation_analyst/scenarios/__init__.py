@@ -62,6 +62,8 @@ SALARY_NEGOTIATION = NegotiationScenario(
         "compensation with the HR recruiter. The discussion covers base salary, "
         "signing bonus, and remote work policy. "
         "Both parties want to reach an agreement."
+        "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
+        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "candidate": (
@@ -87,6 +89,9 @@ SALARY_NEGOTIATION = NegotiationScenario(
         "I'd like to discuss the details of our offer and see if we can make this work for both of us."
     ),
     max_turns=8,
+    settlement_keywords=[
+        "SIMULACAO_CONCLUIDA"
+    ],
     metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium"},
 )
 
@@ -120,12 +125,8 @@ PROCUREMENT_NEGOTIATION = NegotiationScenario(
     opening_role="buyer",
     max_turns=10,
     settlement_keywords=[
-            "negócio fechado",
-            "proposta aceita",
-            "contrato aprovado",
-            "we have a deal",
-            "proposal accepted"
-        ],
+        "[I AM BATMAN]"
+    ],
     #settlement_keywords=[],
     metadata={"domain": "B2B SaaS", "currency": "BRL", "difficulty": "hard"},
 )
@@ -158,6 +159,11 @@ HOSTAGE_CRISIS_DEBRIEF = NegotiationScenario(
     opening_role="negotiator",
     opening_prompt="Hello, my name is Officer Santos. I'm here to listen. Can we talk?",
     max_turns=12,
+    settlement_keywords=[
+        "SIMULACAO_CONCLUIDA",
+        "formalizar o acordo", "iniciar a implementação", "assinar o contrato",
+        "confirmo os termos", "parceria firmada","we have a deal"
+    ],
     metadata={"domain": "crisis", "difficulty": "hard", "note": "training only"},
 )
 
