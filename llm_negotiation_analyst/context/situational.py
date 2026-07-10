@@ -274,8 +274,8 @@ class SituationalContext:
     interest_rates      : InterestRateLevel enum or None.
     government          : GovernmentOrientation enum or None.
     crises              : List of active CrisisType (can be multiple simultaneous).
-    gdp_growth          : Free-text GDP growth description (e.g., "GDP contracted 2%").
-    unemployment        : Free-text unemployment description.
+    gdp_growth          : Free-text GDP growth description é o PIB (e.g., "GDP contracted 2%").
+    unemployment        : Free-text unemployment description(Nível de desemprego).
     custom_conditions   : List of free-text strings for any condition not covered above.
     year                : Optional year string for temporal grounding (e.g., "2025").
     country             : Optional country/region (e.g., "Brazil").

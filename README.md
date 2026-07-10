@@ -276,11 +276,11 @@ Como mencionado antes, a avaliação da negociação é feita por uma ou duas LL
 Abaixo segue como é feita a avaliação realizada pelo juiz.
 
 1. Avaliação Granular (Frase por Frase)
-O motor não envia a transcrição inteira para o juiz. A função evaluate_turn isola uma única fala (utterance) de um agente de cada vez. Se um agente falou 5 vezes durante a simulação, o juiz avaliará esse agente 5 vezes separadas. Além disso, a avaliação é isolada por métrica: para uma mesma frase, o juiz é consultado individualmente para cada dimensão exigida (ex: uma consulta para Ancoragem, outra para Amabilidade, etc).
+O motor não envia a transcrição inteira para o juiz. A função evaluate_turn isola uma única fala (utterance) de um agente de cada vez. Se um agente falou 5 vezes durante a simulação, o juiz avaliará esse agente 5 vezes separadas. Além disso, a avaliação é isolada por métrica: para uma mesma frase, o juiz é consultado individualmente para cada dimensão exigida (ex: uma consulta para ancoragem, outra para amabilidade, etc).
 
 2. O "Gabarito" de Correção (Behavioral Anchors)
 Para que o juiz (que é um LLM) não use seus próprios critérios subjetivos, o sistema injeta um "gabarito" estrito no prompt. Esse gabarito vem dos dicionários BIG5_META e NEGOTIATION_META.
-Quando o juiz vai avaliar a "Firmeza na Oferta Inicial" (Anchoring), por exemplo, o código extrai as Âncoras Comportamentais (Behavioral Anchors) específicas daquela métrica e envia para o modelo, explicando exatamente o que significa tirar nota 1, nota 3 e nota 5.
+Quando o juiz vai avaliar a "Firmeza na Oferta Inicial" (Anchoring), por exemplo, o código extrai as âncoras Comportamentais (Behavioral Anchors) específicas daquela métrica e envia para o modelo, explicando exatamente o que significa tirar nota 1, nota 3 e nota 5.
 
 3. A Construção do Prompt (_JUDGE_USER)
 Para cada frase avaliada, a função _score_one monta um prompt contextualizado. O juiz recebe:

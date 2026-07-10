@@ -26,15 +26,15 @@ models:
   # Primeira role
   agent_1:
     provider: "lmstudio"
-    name: "nemotron-3-super:cloud"
+    name: "google/gemma-4-e2b"
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: 3
+      #agreeableness: 3
       #neuroticism: 0
       #extraversion: 0
-      #openness: 0
-      #conscientiousness: 0
+      openness: 3
+      #conscientiousness: 3
       extra_instructions: "Sua empresa (varejo) está sofrendo muito com a recessão. Você TEM que conseguir um desconto agressivo no software ou o projeto será cancelado. Jogue duro e não aceite a primeira oferta."
     tatics:
       #anchoring: 5
@@ -50,15 +50,15 @@ models:
   # Segunda role
   agent_2:
     provider: "lmstudio"
-    name: "gemma4:31b-cloud"
+    name: "google/gemma-4-e2b"
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: 3
+      #agreeableness: 3
       #neuroticism: 0
       #extraversion: 0
-      #openness: 0
-      #conscientiousness: 0
+      #openness: 3
+      #conscientiousness: 3
       extra_instructions: "Você precisa bater sua meta de vendas do trimestre. Seja empático, tente construir relacionamento, mas use concessões condicionais: só diminua o preço se o cliente abrir mão de algo."
     tatics:
       #anchoring: 2
