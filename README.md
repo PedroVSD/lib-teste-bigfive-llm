@@ -185,7 +185,9 @@ CURRENCY_CRISIS = "currency_crisis"
 ```
 As crises podem receber múltiplos valores.
 
-Os valores de inflação e interesse, são definidos logo abaixo da declaração do enum, no dict correspondente a cada um.
+Os valores de inflação e taxa de juros, são definidos logo abaixo da declaração do enum, no dict correspondente a cada um.
+
+Os valores de gdp_growth(PIB), unemployment(Taxa de desemprego), custom_conditions(Condições customizadas que podem ser inseridas na simulação), year(ano) e country(país) são opcionais.
 
 É possível adicionar um método próprio que define a situação da simulação, basta passar os parâmetros:
 ```python
