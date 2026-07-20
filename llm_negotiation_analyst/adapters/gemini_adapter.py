@@ -31,10 +31,12 @@ class GeminiAdapter(LLMAdapter):
         system_instruction = None
         contents = []
 
-        # 1. Mapeando e limpando o histórico para o formato estrito do Gemini
+        # -------------------------------------------------------------------------
+        # Converte mensagens para o formato do Gemini
+        # -------------------------------------------------------------------------
         for msg in messages:
+
             if msg["role"] == "system":
-                # Se o motor enviar múltiplos system prompts, nós os concatenamos
                 if system_instruction:
                     system_instruction += f"\n\n{msg['content']}"
                 else:
@@ -43,8 +45,6 @@ class GeminiAdapter(LLMAdapter):
 
             role = "user" if msg["role"] == "user" else "model"
 
-            # O Gemini NÃO aceita duas mensagens seguidas com o mesmo papel.
-            # Se o papel atual for igual ao anterior, concatenamos o texto na mesma mensagem.
             if contents and contents[-1].role == role:
                 contents[-1].parts[0].text += f"\n\n{msg['content']}"
             else:
@@ -55,52 +55,166 @@ class GeminiAdapter(LLMAdapter):
                     )
                 )
 
-        # 2. A Regra de Ouro: A última mensagem DEVE ser do 'user'.
         if not contents:
-            # Se a lista está vazia (só tinha system prompt), forçamos o início
-            contents.append(types.Content(role="user", parts=[types.Part.from_text(text="Inicie a negociação.")]))
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text="Inicie a negociação.")]
+                )
+            )
+
         elif contents[-1].role == "model":
-            # Se o motor terminou o histórico com 'model', passamos a bola de volta
-            contents.append(types.Content(role="user", parts=[types.Part.from_text(text="Continue a negociação e faça sua jogada.")]))
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(
+                        text="Continue a negociação e faça sua jogada."
+                    )]
+                )
+            )
 
+        # -------------------------------------------------------------------------
+        # Configuração
+        # -------------------------------------------------------------------------
         GEMINI_PARAMS_VALIDOS = {
-            "top_p", "top_k", "candidate_count", "stop_sequences",
-            "presence_penalty", "frequency_penalty", "response_mime_type",
+            "top_p",
+            "top_k",
+            "candidate_count",
+            "stop_sequences",
+            "presence_penalty",
+            "frequency_penalty",
+            "response_mime_type",
         }
-        extra_filtrado = {k: v for k, v in self.config.extra.items() if k in GEMINI_PARAMS_VALIDOS}
 
-        # 3. Configurando os parâmetros
+        extra_filtrado = {
+            k: v
+            for k, v in self.config.extra.items()
+            if k in GEMINI_PARAMS_VALIDOS
+        }
+
         config_args = {
             "temperature": self.config.temperature,
             "max_output_tokens": self.config.max_tokens,
-            **extra_filtrado
+            **extra_filtrado,
         }
+
         if system_instruction:
             config_args["system_instruction"] = system_instruction
 
         generation_config = types.GenerateContentConfig(**config_args)
 
-        # 4. Chamada da API com Resiliência
+        # -------------------------------------------------------------------------
+        # Logs
+        # -------------------------------------------------------------------------
+        self._debug_request(
+            messages,
+            Provider="Google Gemini",
+        )
+
+        # -------------------------------------------------------------------------
+        # Requisição
+        # -------------------------------------------------------------------------
         max_attempts = 4
+
         for attempt in range(max_attempts):
+
+            inicio = time.perf_counter()
+
             try:
+
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=contents,
-                    config=generation_config
+                    config=generation_config,
                 )
+
+                tempo = time.perf_counter() - inicio
+
+                print(f"Latência    : {tempo:.2f}s")
+                print("Resposta recebida com sucesso.")
+                print("=" * 80)
+
                 return response.text
 
             except Exception as e:
-                error_str = str(e)
-                # Verifica tanto limite de requisições (429) quanto servidor ocupado (503)
-                if ("429" in error_str or "503" in error_str) and attempt < max_attempts - 1:
-                    wait = 40 * (attempt + 1)  # Espera 40s, 80s, 120s
-                    print(f"\n[GeminiAdapter] Rate limit ou sobrecarga (tentativa {attempt + 1}/{max_attempts}). Aguardando {wait}s...\n")
-                    time.sleep(wait)
-                else:
-                    print(f"\n[GeminiAdapter Error] Falha fatal ao comunicar com a API: {e}\n")
-                    raise
+
+                tempo = time.perf_counter() - inicio
+                error = str(e)
+
+                # -----------------------------------------------------------------
+                # Rate limit
+                # -----------------------------------------------------------------
+                if "429" in error:
+
+                    print("=" * 80)
+                    print("ERRO: Rate Limit (429)")
+                    print(f"Tempo gasto : {tempo:.2f}s")
+                    print("=" * 80)
+
+                    if attempt < max_attempts - 1:
+
+                        wait = 40 * (attempt + 1)
+
+                        print(
+                            f"[GeminiAdapter] Nova tentativa em "
+                            f"{wait}s ({attempt + 1}/{max_attempts})"
+                        )
+
+                        time.sleep(wait)
+                        continue
+
+                # -----------------------------------------------------------------
+                # Sobrecarga
+                # -----------------------------------------------------------------
+                if "503" in error:
+
+                    print("=" * 80)
+                    print("ERRO: Serviço indisponível (503)")
+                    print(f"Tempo gasto : {tempo:.2f}s")
+                    print("=" * 80)
+
+                    if attempt < max_attempts - 1:
+
+                        wait = 40 * (attempt + 1)
+
+                        print(
+                            f"[GeminiAdapter] Nova tentativa em "
+                            f"{wait}s ({attempt + 1}/{max_attempts})"
+                        )
+
+                        time.sleep(wait)
+                        continue
+
+                # -----------------------------------------------------------------
+                # Timeout
+                # -----------------------------------------------------------------
+                if "timeout" in error.lower():
+
+                    print("=" * 80)
+                    print("ERRO: Timeout")
+                    print(f"Tempo gasto : {tempo:.2f}s")
+                    print("=" * 80)
+
+                    raise RuntimeError(
+                        f"O modelo '{self.model}' excedeu "
+                        f"o tempo limite configurado."
+                    ) from e
+
+                # -----------------------------------------------------------------
+                # Outros erros
+                # -----------------------------------------------------------------
+                print("=" * 80)
+                print("ERRO INESPERADO")
+                print(error)
+                print("=" * 80)
+
+                raise RuntimeError(
+                    f"Erro ao comunicar com a API Gemini: {error}"
+                ) from e
+
+        raise RuntimeError(
+            f"Falha após {max_attempts} tentativas."
+        )
 
     @property
     def identifier(self) -> str:

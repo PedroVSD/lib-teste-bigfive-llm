@@ -271,7 +271,7 @@ class SituationalContext:
     ------
     enabled             : Master switch. False = no injection at all.
     inflation           : InflationLevel enum or None.
-    interest_rates      : InterestRateLevel enum or None.
+    interest_rates      : InterestRateLevel enum or None Taxa de juros.
     government          : GovernmentOrientation enum or None.
     crises              : List of active CrisisType (can be multiple simultaneous).
     gdp_growth          : Free-text GDP growth description é o PIB (e.g., "GDP contracted 2%").

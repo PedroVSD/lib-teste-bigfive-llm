@@ -1,7 +1,7 @@
 experiment:
-  name: "teste_agreeableness"
+  name: "teste_modelos_todas_as_variaveis"
   scenario: "salary_negotiation"
-  turn_delay_seconds: 2
+  turn_delay_seconds: 10
   max_turns: 5
   use_system_reminder: true
 
@@ -25,51 +25,51 @@ context:
 models:
   # Primeira role
   agent_1:
-    provider: "lmstudio"
-    name: "google/gemma-4-e2b"
+    provider: "ollama"
+    name: "gemma4:31b-cloud"
     temperature: 0.5
     max_tokens: 2048
     persona:
-      #agreeableness: 3
-      #neuroticism: 0
-      #extraversion: 0
+      agreeableness: 3
+      neuroticism: 2
+      extraversion: 3
       openness: 3
-      #conscientiousness: 3
+      conscientiousness: 3
       extra_instructions: "Sua empresa (varejo) está sofrendo muito com a recessão. Você TEM que conseguir um desconto agressivo no software ou o projeto será cancelado. Jogue duro e não aceite a primeira oferta."
     tatics:
-      #anchoring: 5
-      #conditional_concession: 3
-      #value_creation: 2
-      #rapport: 5
-      #resilience: 4
-      #clarity: 4
-      #anchor_susceptibility: 3
-      #loss_aversion: 1
-      #fact_justification: 5
+      anchoring: 5
+      conditional_concession: 3
+      value_creation: 2
+      rapport: 5
+      resilience: 4
+      clarity: 4
+      anchor_susceptibility: 3
+      loss_aversion: 1
+      fact_justification: 5
 
   # Segunda role
   agent_2:
-    provider: "lmstudio"
-    name: "google/gemma-4-e2b"
+    provider: "gemini"
+    name: "gemini-3.5-flash"
     temperature: 0.5
     max_tokens: 2048
     persona:
-      #agreeableness: 3
-      #neuroticism: 0
-      #extraversion: 0
-      #openness: 3
-      #conscientiousness: 3
+      agreeableness: 3
+      neuroticism: 4
+      extraversion: 5
+      openness: 3
+      conscientiousness: 3
       extra_instructions: "Você precisa bater sua meta de vendas do trimestre. Seja empático, tente construir relacionamento, mas use concessões condicionais: só diminua o preço se o cliente abrir mão de algo."
     tatics:
-      #anchoring: 2
-      #conditional_concession: 4
-      #value_creation: 5
-      #rapport: 5
-      #resilience: 4
-      #clarity: 4
-      #anchor_susceptibility: 3
-      #loss_aversion: 3
-      #fact_justification: 5
+      anchoring: 2
+      conditional_concession: 4
+      value_creation: 5
+      rapport: 5
+      resilience: 4
+      clarity: 4
+      anchor_susceptibility: 3
+      loss_aversion: 3
+      fact_justification: 5
 
   judge:
     provider: "ollama"
@@ -91,3 +91,5 @@ models:
       - "loss_aversion"
       - "fact_justification"
 #deepseek-v4-pro:cloud
+#provider: "lmstudio"
+#name: "google/gemma-4-e2b"

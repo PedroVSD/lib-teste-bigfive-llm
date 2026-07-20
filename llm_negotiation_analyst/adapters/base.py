@@ -1,15 +1,16 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional
+import json
 
 
 @dataclass
 class AdapterConfig:
-    """Configuration shared across all adapters."""
     temperature: float = 0.0
     max_tokens: int = 1024
-    timeout: float = 60.0
+    timeout: float = 300.0
     extra: dict = field(default_factory=dict)
+
 
 
 class LLMAdapter(ABC):
@@ -42,3 +43,15 @@ class LLMAdapter(ABC):
 
     def __repr__(self) -> str:
         return f"<{self.identifier}>"
+
+    def _debug_request(self, messages: list[dict], **extra) -> None:
+        print("=" * 80)
+        print(f"Adapter     : {self.__class__.__name__}")
+        print(f"Modelo      : {self.model}")
+        print(f"Mensagens   : {len(messages)}")
+        print(f"Caracteres  : {len(json.dumps(messages, ensure_ascii=False))}")
+        print(f"Timeout     : {self.config.timeout}s")
+        for chave, valor in extra.items():
+                print(f"{chave:<12}: {valor}")
+
+        print("=" * 80)

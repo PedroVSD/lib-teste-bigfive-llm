@@ -113,6 +113,12 @@ results/
 ## Adaptadores
 A pasta de adaptadores contém todos os adaptadores os agentes. É nessa pasta que é possível adicionar novos modelos às simulações, sejam eles locais ou de APIs.
 
+Para a utilização dos modelos basta selecionar no arquivo .yaml. Como por exemplo:
+Providers:
+LMstudio -> lmstudio -> Exemplo: google/gemma-4-e2b
+Ollama -> ollama -> Exemplo: gpt-oss:120b-cloud
+Gemini -> gemini -> Exemplo: gemini-2.5-flash
+
 #### IPC:
 Um ponto importante é que para o caso do ollama, como o mesmo possui suporte para rodar localmente e via API. Optei por ter adaptadores individuais. Por padrão o ollama se utiliza de URLs bases diferentes para o uso local ou API. Abaixo estão ambas.
 
@@ -450,20 +456,3 @@ config_det = AdapterConfig(
 O 42 é só uma referência a *"o guia dos mochileiros da galáxia"*
 
 ---
-
-## Referências
-
-- Yin Jou Huang and Rafk Hadf (2024). *How Personality Traits Infuence Negotiation Outcomes? A Simulation based on Large Language Models.*
-- Yoshiki Takenami ,Yin Jou Huang, Yugo Murawaki, Chenhui Chu (2025). *How Does Cognitive Bias Affect Large Language Models? A Case Study on the Anchoring Effect in Price Negotiation Simulations.*
-- Minjun Ren, Wentao Xu (2025). *The Impact of Big Five Personality Traits on AI Agent Decision-Making in Public Spaces: A Social Simulation Study.*
-- Aleksandra Sorokovikova, Natalia Fedorova, Sharwin Rezagholi, Ivan P. Yamshchikov (2024). *LLMs Simulate Big Five Personality Traits: Further Evidence.*
-- Junhyuk Choi, Hyeonchu Park , Haemin Lee, Hyebeen Shin, Hyun Joung Jin, Bugeun Kim (2025).*Pay What LLM Wants: Can LLM Simulate Economics Experiment with 522 Real-human Persona?.*
-- TVERSKY, A.; KAHNEMAN, D. *Judgment under Uncertainty: Heuristics and Biases. Science, v. 185, n. 4157, p. 1124-1131, 1974.*
-- KAHNEMAN, D.; TVERSKY, A. *Prospect Theory: An Analysis of Decision under Risk. Econometrica, v. 47, n. 2, p. 263-291, 1979.*
-- FISHER, R.; URY, W.; *PATTON, B. Getting to Yes: Negotiating Agreement Without Giving In. 2. ed*
-- WALTON, R. E.; MCKERSIE, R. B. *A Behavioral Theory of Labor Negotiations: An Analysis of a Social Interaction System. Nova York: McGraw-Hill, 1965.*
-- CIALDINI, R. B. *Influence: The Psychology of Persuasion. Nova York: Harper Business, 1984.*
-- GOULDNER, A. W. *The Norm of Reciprocity: A Preliminary Statement. American Sociological Review, v. 25, n. 2, p. 161-178, 1960.*
-- BARRY, B.; OLIVER, R. L. *Affect in Negotiation: A Model and Propositions. Organizational Behavior and Human Decision Processes, v. 67, n. 2, p. 127-143, 1996.*
-- ALTER, A. L.; OPPENHEIMER, D. M. *Uniting the Tribes of Fluency to Form a Metacognitive Nation. Personality and Social Psychology Review, v. 13, n. 3, p. 219-235, 2009.*
-- GRICE, H. P. Logic and conversation. In: COLE, P.; MORGAN, J. L. (Eds.). *Syntax and semantics: Vol. 3. Speech acts. Nova York: Academic Press, 1975. p. 41-58.*
