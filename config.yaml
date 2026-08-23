@@ -18,10 +18,9 @@ context:
   year: "2025"
   custom_conditions:
 
-# Dá para adicionar o efeito âncora pela extra_instuctions acima
-# E também dá para adicionar instruções separadas para cada agente
-# As condições de necessidade, devem existir para ambos que negociam. inclusive podem ser distintas
-# digo pode ter condição global para ambos
+# Big Five: use apenas 'positive' ou 'negative' (não use números).
+# Exemplo: agreeableness: positive | neuroticism: negative
+# Tactics: use 1 a 5 (1-2 → âncora 1, 3 → âncora 3, 4-5 → âncora 5)
 models:
   # Primeira role
   agent_1:
@@ -30,20 +29,20 @@ models:
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: 3
-      neuroticism: 2
-      extraversion: 3
-      openness: 3
-      conscientiousness: 3
+      agreeableness: positive
+      neuroticism: positive
+      extraversion: positive
+      openness: positive
+      conscientiousness: positive
       extra_instructions: "Sua empresa (varejo) está sofrendo muito com a recessão. Você TEM que conseguir um desconto agressivo no software ou o projeto será cancelado. Jogue duro e não aceite a primeira oferta."
     tactics:
       anchoring: 5
-      conditional_concession: 3
-      value_creation: 2
+      conditional_concession: 2
+      value_creation: 4
       rapport: 5
       resilience: 4
       clarity: 4
-      anchor_susceptibility: 3
+      anchor_susceptibility: 2
       loss_aversion: 1
       fact_justification: 5
 
@@ -54,11 +53,11 @@ models:
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: 3
-      neuroticism: 4
-      extraversion: 5
-      openness: 3
-      conscientiousness: 3
+      agreeableness: positive
+      neuroticism: positive
+      extraversion: positive
+      openness: positive
+      conscientiousness: positive
       extra_instructions: "Você precisa bater sua meta de vendas do trimestre. Seja empático, tente construir relacionamento, mas use concessões condicionais: só diminua o preço se o cliente abrir mão de algo."
     tactics:
       anchoring: 2
@@ -67,8 +66,8 @@ models:
       rapport: 5
       resilience: 4
       clarity: 4
-      anchor_susceptibility: 3
-      loss_aversion: 3
+      anchor_susceptibility: 2
+      loss_aversion: 2
       fact_justification: 5
 
   judge:

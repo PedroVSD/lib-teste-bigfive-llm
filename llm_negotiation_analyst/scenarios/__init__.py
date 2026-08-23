@@ -125,9 +125,12 @@ PROCUREMENT_NEGOTIATION = NegotiationScenario(
     opening_role="buyer",
     max_turns=10,
     settlement_keywords=[
-        "[I AM BATMAN]"
+        "SIMULACAO_CONCLUIDA",
+        "we have a deal",
+        "acordo fechado",
+        "fechado",
+        "aceito",
     ],
-    #settlement_keywords=[],
     metadata={"domain": "B2B SaaS", "currency": "BRL", "difficulty": "hard"},
 )
 

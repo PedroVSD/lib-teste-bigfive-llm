@@ -30,24 +30,21 @@ class OpenAIAdapter(LLMAdapter):
         self.client = openai.OpenAI(api_key=key)
 
     def complete(self, messages: list[dict], **kwargs) -> str:
-        """
-        Envia as mensagens para a API de Chat Completions da OpenAI.
-        """
+        import time
+        inicio = time.perf_counter()
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
-                # Repassa qualquer parâmetro extra (como 'seed', 'top_p', etc)
                 **self.config.extra
             )
-
-            # Retorna apenas o texto gerado pela IA
+            tempo = time.perf_counter() - inicio
+            print(f"[{self.model}] OK | {tempo:.2f}s")
             return response.choices[0].message.content
-
         except Exception as e:
-            print(f"[OpenAIAdapter Error] Falha ao comunicar com a API: {e}")
+            print(f"[{self.model}] ERRO: {e}")
             raise
 
     @property

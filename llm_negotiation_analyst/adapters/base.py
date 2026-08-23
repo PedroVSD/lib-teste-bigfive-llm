@@ -7,7 +7,7 @@ import json
 @dataclass
 class AdapterConfig:
     temperature: float = 0.0
-    max_tokens: int = 1024
+    max_tokens: int = 4096  # aumentado para evitar respostas cortadas (era 1024)
     timeout: float = 300.0
     extra: dict = field(default_factory=dict)
 
@@ -45,13 +45,6 @@ class LLMAdapter(ABC):
         return f"<{self.identifier}>"
 
     def _debug_request(self, messages: list[dict], **extra) -> None:
-        print("=" * 80)
-        print(f"Adapter     : {self.__class__.__name__}")
-        print(f"Modelo      : {self.model}")
-        print(f"Mensagens   : {len(messages)}")
-        print(f"Caracteres  : {len(json.dumps(messages, ensure_ascii=False))}")
-        print(f"Timeout     : {self.config.timeout}s")
-        for chave, valor in extra.items():
-                print(f"{chave:<12}: {valor}")
-
-        print("=" * 80)
+        # Log minimalista — detalhado apenas se necessário via logging DEBUG
+        # Mantido como no-op para não poluir o terminal (engine já loga turno/mensagem)
+        pass

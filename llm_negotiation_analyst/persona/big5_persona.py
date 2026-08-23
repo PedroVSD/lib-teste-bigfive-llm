@@ -1,169 +1,202 @@
 """
 persona/big5_persona.py
 =======================
-Define e gera instruções de personalidade Big Five para injeção no system
-prompt de agentes negociadores.
 
-Propósito
----------
-Hoje a biblioteca apenas AVALIA traços Big Five após a negociação.
-Este módulo permite INDUZIR traços antes dela começar, adicionando uma
-seção de persona ao system prompt do agente.
+Define e gera instruções de personalidade Big Five para injeção
+no system prompt de agentes negociadores.
 
-Isso habilita dois tipos de experimento:
-  1. Persona fixa   — testar como um modelo se comporta quando instruído
-                      a agir como altamente Agreeable vs. altamente Neurotic.
-  2. Persona livre  — não injetar persona e observar o traço natural do modelo
-                      (o comportamento padrão já existente na biblioteca).
+A persona utiliza APENAS dois polos comportamentais:
 
-Design
-------
-- Big5Persona é um dataclass com scores 1–5 por dimensão (None = omitir).
-- PersonaPromptBuilder transforma os scores em texto instrucional em inglês.
-- O texto gerado é ANEXADO ao system prompt do cenário, não o substitui.
-- Scores None são ignorados — você pode especificar só as dimensões que
-  interessam ao seu estudo.
+    positive -> polo positivo (comportamento alto)
+    negative -> polo negativo (comportamento baixo)
+    none     -> desativa o traço (não injeta instrução)
 
-Exemplo de output gerado
-------------------------
---- Personality Profile ---
-You have a very high level of Openness to Experience.
-  Behavioral guidance: Propose creative reframings of the negotiation.
-  Introduce non-obvious trade-offs and package deals. Be intellectually
-  curious about the other party's constraints and explore unconventional
-  solutions willingly.
+No YAML a configuração é feita com strings:
 
-You have a low level of Agreeableness.
-  Behavioral guidance: Prioritize your own goals over the relationship.
-  Be direct and firm. Do not volunteer concessions. Challenge the other
-  party's proposals critically rather than accommodating them.
----------------------------
+    persona:
+      agreeableness: positive
+      neuroticism: negative
+      openness: none          # desativa — trait omitido
+
+Valores aceitos: 'positive', 'negative', 'none' (case-insensitive).
+Também aceita null/~ do YAML (vira None). 'none' é equivalente a
+omitir a chave ou deixar em branco.
+
+Não há escala numérica 1-5 para Big Five. As demais métricas
+(tactics) continuam usando 1-5 normalmente.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from typing import Optional
 
 
 # ---------------------------------------------------------------------------
-# Score-to-label mapping
+# Polarity helpers
 # ---------------------------------------------------------------------------
 
-def _level_label(score: int) -> str:
-    """Convert a 1–5 score to a natural language intensity label."""
+_VALID_POLARITIES = {"positive", "negative"}
+_NONE_VALUES = {"none", "null", "nil", ""}
+
+
+def _normalize_polarity(value) -> str | None:
+    """
+    Converte valor do YAML para 'positive', 'negative' ou None (desativado).
+
+    - 'positive'/'negative' -> polo respectivo
+    - 'none'/'null'/'nil'/''/None -> None (traço desativado, não injetado)
+    - int -> erro orientando usar strings
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in _NONE_VALUES:
+            return None
+        if v in _VALID_POLARITIES:
+            return v
+        raise ValueError(
+            f"Big Five polarity must be 'positive', 'negative' or 'none'. Got {value!r}."
+        )
+
+    # Suporte legacy numérico removido por requisito — orientar migração
+    if isinstance(value, int):
+        raise ValueError(
+            f"Big Five polarity must be 'positive', 'negative' or 'none' (not numeric). "
+            f"Got {value!r}. Use 'positive'/'negative' for poles or 'none' to disable."
+        )
+
+    raise ValueError(
+        f"Big Five polarity must be 'positive', 'negative' or 'none'. Got {value!r}."
+    )
+
+
+def _level_label(polarity: str) -> str:
+    """Convert polarity into a natural language intensity label."""
     return {
-        1: "a very low level of",
-        2: "a low level of",
-        3: "a moderate level of",
-        4: "a high level of",
-        5: "a very high level of",
-    }[score]
+        "positive": "a high level of",
+        "negative": "a low level of",
+    }[polarity]
 
 
 # ---------------------------------------------------------------------------
-# Per-dimension behavioral guidance by score band
+# Behavioral guidance — two poles only
 # ---------------------------------------------------------------------------
 
 _GUIDANCE: dict[str, dict[str, str]] = {
+
     "openness": {
-        "high": (
-            "open to experience"
-            "closed to experience"
+        "positive": (
+            "Have a vivid imagination."
+            "Need a creative outlet."
+            "Have a very good imagination."
+            "Am an original thinker."
+            "Make insightful remarks."
         ),
-        "neutral": (
-            "open to experience"
-            "closed to experience"
-        ),
-        "low": (
-            "open to experience"
-            "closed to experience"
+        "negative": (
+            "Have difficulty understanding abstract ideas."
+            "Do not have a good imagination."
+            "Often have illogical thoughts."
+            "Am poorly informed."
+            "Have a poor vocabulary."
         ),
     },
+
     "conscientiousness": {
-        "high": (
-            "conscientious"
-            "unconscientious"
+        "positive": (
+            "Take precautions."
+            "Have an eye for detail."
+            "Am careful to avoid making mistakes."
+            "Make careful choices."
+            "Behave properly."
         ),
-        "neutral": (
-            "conscientious"
-            "unconscientious"
-        ),
-        "low": (
-            "conscientious"
-            "unconscientious"
+        "negative": (
+            "Come up with unworkable plans."
+            "Make careless mistakes."
+            "Do improper things."
+            "Mess things up."
+            "Make mistakes."
         ),
     },
+
     "extraversion": {
-        "high": (
-            "extroverted"
-            "introverted"
+        "positive": (
+            "Like taking risks."
+            "Am an energetic person."
+            "Speak rapidly."
+            "Take deviant positions."
+            "Take risks."
         ),
-        "neutral": (
-            "extroverted"
-            "introverted"
-        ),
-        "low": (
-            "extroverted"
-            "introverted"
+        "negative": (
+            "Seek quiet."
+            "Retreat from others."
+            "Avoid eye contact."
+            "Ammore of a loner than most people."
+            "Rarely overindulge."
         ),
     },
+
     "agreeableness": {
-        "high": (
-            "agreeable"
-            "antagonistic"
+        "positive": (
+            "Reassure others."
+            "Sense others' wishes."
+            "Show my gratitude."
+            "Care about others."
+            "Like to help others."
         ),
-        "neutral": (
-            "agreeable"
-            "antagonistic"
-        ),
-        "low": (
-            "agreeable"
-            "antagonistic"
+        "negative": (
+            "Distrust people."
+            "Try not to do favors for others."
+            "Am upset by the misfortunes of strangers."
+            "Try not to think about the needy."
+            "Tend to give others a hard time."
         ),
     },
+
     "neuroticism": {
-        "high": (
-            "neurotic"
-            "emotionally stable"
+        "positive": (
+            "Act without ulterior motives."
+            "Overlook things."
+            "Feel hollow, empty, or bored."
+            "Act as if some laws do not apply to me."
+            "Chatter away aimlessly."
         ),
-        "neutral": (
-            "neurotic"
-            "emotionally stable"
-        ),
-        "low": (
-            "neurotic"
-            "emotionally stable"
+        "negative": (
+            "Become anxious in new situations."
+            "Notice my emotions."
+            "Worry about being embarrassed."
+            "Worry about things."
+            "Have difficulty feeling happy. "
         ),
     },
 }
 
 
-def _band(score: int) -> str:
-    """Map score to guidance band."""
-    if score >= 4:
-        return "high"
-    if score <= 2:
-        return "low"
-    return "neutral"
-
-
 # ---------------------------------------------------------------------------
-# Dimension display names
+# Dimension names
 # ---------------------------------------------------------------------------
 
 _DIM_NAMES: dict[str, str] = {
-    "openness":          "Openness to Experience",
+    "openness": "Openness to Experience",
     "conscientiousness": "Conscientiousness",
-    "extraversion":      "Extraversion",
-    "agreeableness":     "Agreeableness",
-    "neuroticism":       "Neuroticism",
+    "extraversion": "Extraversion",
+    "agreeableness": "Agreeableness",
+    "neuroticism": "Neuroticism",
 }
 
-_DIM_ORDER = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]
+_DIM_ORDER = [
+    "openness",
+    "conscientiousness",
+    "extraversion",
+    "agreeableness",
+    "neuroticism",
+]
 
 
 # ---------------------------------------------------------------------------
-# Big5Persona dataclass
+# Big5Persona
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -171,43 +204,41 @@ class Big5Persona:
     """
     Defines a Big Five personality profile for a negotiation agent.
 
-    Each dimension accepts:
-      - An integer 1–5  (1 = very low, 5 = very high)
-      - None            (dimension is not specified / not injected)
+    Polarity (único formato aceito):
 
-    You can specify any subset of dimensions. Unspecified ones are omitted
-    from the generated prompt, leaving the model's default behavior intact
-    for those traits.
+        positive -> polo positivo (alto)
+        negative -> polo negativo (baixo)
+        none     -> desativa o traço (trait omitido, sem instrução)
 
-    Examples:
-        # Highly agreeable, low neuroticism — cooperative and stable
-        Big5Persona(agreeableness=5, neuroticism=1)
+    Exemplo YAML:
 
-        # Full profile
-        Big5Persona(openness=4, conscientiousness=5, extraversion=2,
-                    agreeableness=1, neuroticism=4)
+        persona:
+          agreeableness: positive
+          neuroticism: negative
+          openness: none         # desativa
+          extra_instructions: "..."
 
-        # Only control Openness
-        Big5Persona(openness=1)
+        # ou omitir a chave / usar null / ~ também desativa
     """
-    openness:          Optional[int] = None
-    conscientiousness: Optional[int] = None
-    extraversion:      Optional[int] = None
-    agreeableness:     Optional[int] = None
-    neuroticism:       Optional[int] = None
 
-    # Optional free-text additions appended after the generated instructions.
-    # Use this for persona details that don't fit the 1–5 scale, e.g.:
-    # extra_instructions="You tend to use sports metaphors when negotiating."
+    openness: Optional[str] = None
+    conscientiousness: Optional[str] = None
+    extraversion: Optional[str] = None
+    agreeableness: Optional[str] = None
+    neuroticism: Optional[str] = None
+
     extra_instructions: Optional[str] = None
 
     def __post_init__(self):
         for dim in _DIM_ORDER:
-            val = getattr(self, dim)
-            if val is not None and not (1 <= val <= 5):
-                raise ValueError(
-                    f"Big5Persona.{dim} must be between 1 and 5, got {val}."
-                )
+            value = getattr(self, dim)
+
+            if value is None:
+                continue
+
+            normalized = _normalize_polarity(value)
+            # None = desativado (mantém None), senão armazena polo normalizado
+            object.__setattr__(self, dim, normalized)
 
     def to_dict(self) -> dict:
         """Serializable representation for storage/logging."""
@@ -218,13 +249,23 @@ class Big5Persona:
         }
 
     def specified_dimensions(self) -> list[str]:
-        """Return list of dimension names that have a score set."""
-        return [dim for dim in _DIM_ORDER if getattr(self, dim) is not None]
+        """Return dimensions that have a score specified."""
+        return [
+            dim
+            for dim in _DIM_ORDER
+            if getattr(self, dim) is not None
+        ]
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Big5Persona":
-        """Reconstruct from a dict (e.g., loaded from JSONL)."""
-        return cls(**{k: v for k, v in d.items() if k in _DIM_ORDER})
+    def from_dict(cls, data: dict) -> "Big5Persona":
+        """Reconstruct a persona from a dictionary."""
+        return cls(
+            **{
+                key: value
+                for key, value in data.items()
+                if key in _DIM_ORDER or key == "extra_instructions"
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -233,13 +274,7 @@ class Big5Persona:
 
 class PersonaPromptBuilder:
     """
-    Converts a Big5Persona into a natural language instruction block
-    suitable for injection into an LLM system prompt.
-
-    Usage:
-        builder = PersonaPromptBuilder()
-        block = builder.build(persona)
-        full_system_prompt = scenario_system_prompt + "\\n\\n" + block
+    Converts Big5Persona into an instruction block for an LLM system prompt.
     """
 
     HEADER = "--- Personality Profile ---"
@@ -249,42 +284,57 @@ class PersonaPromptBuilder:
         """
         Generate the personality instruction block.
 
-        Returns an empty string if no dimensions are specified,
-        so it's safe to always call this and concatenate.
+        Only positive and negative behavioral poles are generated.
         """
+
         dims = persona.specified_dimensions()
+
         if not dims and not persona.extra_instructions:
             return ""
 
-        lines = [self.HEADER, ""]
+        lines = [
+            self.HEADER,
+            "",
+        ]
 
         for dim in dims:
-            score = getattr(persona, dim)
-            name  = _DIM_NAMES[dim]
-            label = _level_label(score)
-            band  = _band(score)
-            guidance = _GUIDANCE[dim][band]
+            polarity = getattr(persona, dim)  # already normalized
+
+            name = _DIM_NAMES[dim]
+            label = _level_label(polarity)
+            guidance = _GUIDANCE[dim][polarity]
 
             lines.append(f"You have {label} {name}.")
-            lines.append(f"  Behavioral guidance: {guidance}")
+
+            lines.append(f"Behavioral pole: {polarity.upper()}")
+
+            lines.append(f"Behavioral guidance: {guidance}")
+
             lines.append("")
 
         if persona.extra_instructions:
             lines.append("Additional behavioral instructions:")
+
             lines.append(f"  {persona.extra_instructions}")
+
             lines.append("")
 
         lines.append(self.FOOTER)
+
         return "\n".join(lines)
 
-    def inject(self, system_prompt: str, persona: Big5Persona) -> str:
+    def inject(
+        self,
+        system_prompt: str,
+        persona: Big5Persona,
+    ) -> str:
         """
         Append the persona block to an existing system prompt.
-
-        If the persona has no specified dimensions, returns the original
-        system prompt unchanged — no side effects.
         """
+
         block = self.build(persona)
+
         if not block:
             return system_prompt
+
         return f"{system_prompt}\n\n{block}"

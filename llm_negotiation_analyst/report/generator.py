@@ -28,22 +28,53 @@ from ..scoring.report_sections import render_utility_section, render_satisfactio
 
 def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
     """
-    Verifica os últimos turnos em busca de linguagem de acordo,
-    para corrigir casos onde o engine não detectou a keyword.
+    Verifica todo o transcript em busca de linguagem de acordo,
+    para corrigir casos onde o engine não detectou a keyword
+    (ex: modelo escreveu acordo sem o código exato).
     """
     indicators = [
+        "SIMULACAO_CONCLUIDA",
         "confirmo os termos",
         "iniciar a implementação",
         "parceria firmada",
         "muito feliz que conseguimos",
-        "SIMULACAO_CONCLUIDA",
+        "we have a deal",
+        "acordo fechado",
+        "aceito os termos",
+        "fechado",
+        "deal",
     ]
-    last_turns = result.transcript[-4:] if len(result.transcript) >= 4 else result.transcript
-    for turn in last_turns:
+    # Também considera settlement_keywords do cenário se estiver no metadata
+    try:
+        extra = result.metadata.get("settlement_keywords", [])
+        if extra:
+            indicators.extend(extra)
+    except Exception:
+        pass
+    for turn in result.transcript:
         content_lower = turn.content.lower()
         if any(ind.lower() in content_lower for ind in indicators):
             return True
     return False
+
+
+# Mapeamento para diff numérico quando persona usa positive/negative
+_POLARITY_NUMERIC = {"positive": 5.0, "negative": 1.0, "none": None}
+
+def _induced_to_numeric(val):
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        v = val.strip().lower()
+        if v in _POLARITY_NUMERIC:
+            return _POLARITY_NUMERIC[v]
+        try:
+            return float(v)
+        except ValueError:
+            return None
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -99,19 +130,33 @@ def generate_report(
     if personas_meta:
         a("_Instruções de personalidade injetadas no System Prompt (Comportamento Alvo)._")
         a("")
+        has_any = False
         for role, scores in personas_meta.items():
             if not scores:
                 continue
+            has_any = True
             a(f"**Papel: {role}**")
             a("| Dimensão | Valor Induzido (Target) |")
             a("|-----------|-------------------------|")
             for dim_key, score in scores.items():
+                # 'none' significa desativado — não exibe na tabela
+                if isinstance(score, str) and score.lower() == "none":
+                    continue
+                if score is None:
+                    continue
                 try:
                     metric = resolve_metric(dim_key)
                     meta   = ALL_METRICS_META[metric]
-                    a(f"| {meta.name} | **{score}**/5 |")
+                    if isinstance(score, str) and score.lower() in ("positive", "negative"):
+                        disp = f"**{score.upper()}**"
+                    else:
+                        disp = f"**{score}**/5"
+                    a(f"| {meta.name} | {disp} |")
                 except ValueError:
-                    pass
+                    a(f"| {dim_key} | **{score}** |")
+            a("")
+        if not has_any:
+            a("_Personas configuradas mas todas desativadas (none)._")
             a("")
     else:
         a("_Nenhuma persona induzida. Modelos agiram com comportamento padrão._")
@@ -173,14 +218,24 @@ def generate_report(
             meta    = ALL_METRICS_META[dim]
             ind_val = induced.get(dim.value)
             obs_val = profile.scores.get(dim)
-            ind_str = f"{ind_val}" if ind_val else "—"
-            obs_str = f"**{obs_val:.2f}**" if obs_val else "—"
+            # display: positive/negative/none ou numérico
+            if isinstance(ind_val, str):
+                ind_str = f"**{ind_val.upper()}**" if ind_val.lower() in ("positive","negative") else f"{ind_val}"
+            elif ind_val is not None:
+                ind_str = f"{ind_val}"
+            else:
+                ind_str = "—"
+            obs_str = f"**{obs_val:.2f}**" if obs_val is not None else "—"
             status  = "—"
-            if ind_val and obs_val:
-                diff = abs(obs_val - ind_val)
-                if diff <= 0.6:   status = "✅ Ótimo"
-                elif diff <= 1.5: status = "⚠️ Desvio"
-                else:             status = "❌ Falhou"
+            if ind_val is not None and obs_val is not None:
+                ind_num = _induced_to_numeric(ind_val)
+                if ind_num is not None:
+                    diff = abs(obs_val - ind_num)
+                    if diff <= 0.6:   status = "✅ Ótimo"
+                    elif diff <= 1.5: status = "⚠️ Desvio"
+                    else:             status = "❌ Falhou"
+                else:
+                    status = "—"
             a(f"| {meta.name} | {ind_str} | {obs_str} | {status} |")
         a("")
 

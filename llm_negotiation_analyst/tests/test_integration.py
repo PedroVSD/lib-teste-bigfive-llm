@@ -8,6 +8,7 @@ from llm_negotiation_analyst.persona import Big5Persona
 from llm_negotiation_analyst.context import SituationalContext, InflationLevel
 from llm_negotiation_analyst.scoring.evaluator import EvaluatorConfig
 from llm_negotiation_analyst.scoring.big5 import Dimension
+from llm_negotiation_analyst.scoring.negotiation_metrics import NegotiationMetric
 
 class MockAdapter(LLMAdapter):
     def __init__(self, model="mock-model", response_text="Concordo com a proposta."):
@@ -32,11 +33,11 @@ def test_full_pipeline_integration():
         mock_agent = MockAdapter()
         mock_judge = MockAdapter()
 
-        persona_candidate = Big5Persona(agreeableness=5, extraversion=4)
+        persona_candidate = Big5Persona(agreeableness="positive", extraversion="positive")
         ctx = SituationalContext(inflation=InflationLevel.HIGH, country="Brasil")
 
         config_teste = EvaluatorConfig(
-            dimensions=[Dimension.ANCHORING, Dimension.VALUE_CREATION]
+            dimensions=[NegotiationMetric.ANCHORING, NegotiationMetric.VALUE_CREATION]
         )
 
         result, profiles, report_md = run_negotiation(
@@ -69,7 +70,7 @@ def test_full_pipeline_integration():
         assert any("recruiter" in key for key in profiles.keys())
 
         # 2. Verifica se os relatórios finais em Markdown foram gerados
-        assert "Negotiation Analysis Report" in report_md
+        assert "Negotiation Analysis Report" in report_md or "Relatório de Análise" in report_md
 
         # 3. Verifica se o StorageManager salvou os arquivos no disco
         saved_files = os.listdir(tmp_dir)

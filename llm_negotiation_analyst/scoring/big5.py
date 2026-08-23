@@ -14,6 +14,40 @@ text-based negotiation. Observability ranking (high → low):
   3. Neuroticism        — visible: emotional stability, concession volatility
   4. Extraversion       — partially visible: assertiveness, verbosity
   5. Openness           — least visible: creative proposals, flexibility
+
+# ---------------------------------------------------------------------------
+# Goldberg (1992) mapping
+# ---------------------------------------------------------------------------
+#
+# Goldberg's original factor labels:
+#
+#   I.   Surgency
+#   II.  Agreeableness
+#   III. Conscientiousness
+#   IV.  Emotional Stability
+#   V.   Intellect
+#
+# Library representation:
+#
+#   Surgency             -> Extraversion
+#   Agreeableness        -> Agreeableness
+#   Conscientiousness    -> Conscientiousness
+#   Emotional Stability  -> Neuroticism (REVERSED POLARITY)
+#   Intellect             -> Openness
+#
+# Important:
+# Factor IV is represented as Neuroticism in the library.
+# Therefore:
+#
+#   Goldberg IV+ (Emotional Stability)
+#       -> Neuroticism 1–2
+#
+#   Goldberg IV− (Neuroticism / emotional instability)
+#       -> Neuroticism 4–5
+#
+# The other four dimensions retain the same positive/negative direction.
+# ---------------------------------------------------------------------------
+
 """
 
 from dataclasses import dataclass, field

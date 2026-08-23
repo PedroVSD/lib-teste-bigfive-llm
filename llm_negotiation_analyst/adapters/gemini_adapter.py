@@ -104,14 +104,6 @@ class GeminiAdapter(LLMAdapter):
         generation_config = types.GenerateContentConfig(**config_args)
 
         # -------------------------------------------------------------------------
-        # Logs
-        # -------------------------------------------------------------------------
-        self._debug_request(
-            messages,
-            Provider="Google Gemini",
-        )
-
-        # -------------------------------------------------------------------------
         # Requisição
         # -------------------------------------------------------------------------
         max_attempts = 4
@@ -129,88 +121,42 @@ class GeminiAdapter(LLMAdapter):
                 )
 
                 tempo = time.perf_counter() - inicio
-
-                print(f"Latência    : {tempo:.2f}s")
-                print("Resposta recebida com sucesso.")
-                print("=" * 80)
-
-                return response.text
+                print(f"[{self.model}] OK | {tempo:.2f}s")
+                # response.text pode ser None em caso de bloqueio/safety filter
+                text = getattr(response, "text", None)
+                if text is None:
+                    # Tenta extrair de candidates
+                    try:
+                        if response.candidates and response.candidates[0].content.parts:
+                            text = "".join(p.text or "" for p in response.candidates[0].content.parts)
+                    except Exception:
+                        text = None
+                if text is None:
+                    text = ""
+                return text
 
             except Exception as e:
 
                 tempo = time.perf_counter() - inicio
                 error = str(e)
 
-                # -----------------------------------------------------------------
-                # Rate limit
-                # -----------------------------------------------------------------
                 if "429" in error:
-
-                    print("=" * 80)
-                    print("ERRO: Rate Limit (429)")
-                    print(f"Tempo gasto : {tempo:.2f}s")
-                    print("=" * 80)
-
+                    print(f"[{self.model}] 429 Rate Limit ({tempo:.2f}s)")
                     if attempt < max_attempts - 1:
-
                         wait = 40 * (attempt + 1)
-
-                        print(
-                            f"[GeminiAdapter] Nova tentativa em "
-                            f"{wait}s ({attempt + 1}/{max_attempts})"
-                        )
-
+                        print(f"[{self.model}] Retry {attempt+1}/{max_attempts} em {wait}s")
                         time.sleep(wait)
                         continue
-
-                # -----------------------------------------------------------------
-                # Sobrecarga
-                # -----------------------------------------------------------------
                 if "503" in error:
-
-                    print("=" * 80)
-                    print("ERRO: Serviço indisponível (503)")
-                    print(f"Tempo gasto : {tempo:.2f}s")
-                    print("=" * 80)
-
+                    print(f"[{self.model}] 503 Indisponível ({tempo:.2f}s)")
                     if attempt < max_attempts - 1:
-
                         wait = 40 * (attempt + 1)
-
-                        print(
-                            f"[GeminiAdapter] Nova tentativa em "
-                            f"{wait}s ({attempt + 1}/{max_attempts})"
-                        )
-
+                        print(f"[{self.model}] Retry {attempt+1}/{max_attempts} em {wait}s")
                         time.sleep(wait)
                         continue
-
-                # -----------------------------------------------------------------
-                # Timeout
-                # -----------------------------------------------------------------
                 if "timeout" in error.lower():
-
-                    print("=" * 80)
-                    print("ERRO: Timeout")
-                    print(f"Tempo gasto : {tempo:.2f}s")
-                    print("=" * 80)
-
-                    raise RuntimeError(
-                        f"O modelo '{self.model}' excedeu "
-                        f"o tempo limite configurado."
-                    ) from e
-
-                # -----------------------------------------------------------------
-                # Outros erros
-                # -----------------------------------------------------------------
-                print("=" * 80)
-                print("ERRO INESPERADO")
-                print(error)
-                print("=" * 80)
-
-                raise RuntimeError(
-                    f"Erro ao comunicar com a API Gemini: {error}"
-                ) from e
+                    raise RuntimeError(f"O modelo '{self.model}' excedeu o tempo limite.") from e
+                raise RuntimeError(f"Erro Gemini: {error}") from e
 
         raise RuntimeError(
             f"Falha após {max_attempts} tentativas."

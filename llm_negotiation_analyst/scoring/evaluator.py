@@ -330,8 +330,23 @@ class Evaluator:
 
     @staticmethod
     def _parse_json(raw: str) -> dict:
+        # Remove markdown fences and extra whitespace, then extract first JSON object
         clean = re.sub(r"```(?:json)?|```", "", raw).strip()
-        return json.loads(clean)
+        # Find first '{' — judge sometimes adds preamble/extra data after JSON
+        start = clean.find("{")
+        if start == -1:
+            raise ValueError(f"No JSON object found in judge response: {raw[:300]}")
+        # Use raw_decode to tolerate trailing extra data (e.g. two JSONs concatenated)
+        decoder = json.JSONDecoder()
+        try:
+            obj, _ = decoder.raw_decode(clean[start:])
+            return obj
+        except json.JSONDecodeError:
+            # Fallback: slice to last '}' and try
+            end = clean.rfind("}")
+            if end != -1 and end > start:
+                return json.loads(clean[start:end + 1])
+            raise
 
     @staticmethod
     def _irr(score1: float, score2: float) -> float:

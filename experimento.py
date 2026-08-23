@@ -64,7 +64,14 @@ def parse_persona(agent_config: dict) -> Big5Persona | None:
         return None
 
     chaves_big5 = {"openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"}
-    filtered_persona = {k: v for k, v in persona_dict.items() if k in chaves_big5 and v is not None}
+    # 'none'/'null'/'nil' (string) também desativa; None já filtra mas deixamos
+    # passar para que Big5Persona normalize para None (trait omitido)
+    filtered_persona = {}
+    for k, v in persona_dict.items():
+        if k not in chaves_big5:
+            continue
+        # mantém 'none' como string para normalização -> None; None real já é desativado
+        filtered_persona[k] = v
 
     instrucoes_originais = persona_dict.get("extra_instructions", "")
     builder      = TacticsPromptBuilder()

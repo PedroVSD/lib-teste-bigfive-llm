@@ -40,6 +40,10 @@ from ..context import SituationalContext, ContextPromptBuilder
 
 logger = logging.getLogger(__name__)
 
+# Silencia logs verbosos de libs HTTP (httpx, httpcore, genai) que poluem o terminal
+for _n in ("httpx", "httpcore", "google_genai", "genai"):
+    logging.getLogger(_n).setLevel(logging.WARNING)
+
 _persona_builder = PersonaPromptBuilder()
 _context_builder = ContextPromptBuilder()
 
@@ -138,6 +142,16 @@ class NegotiationAgent:
         start = time.time()
         content = self.adapter.complete(messages)
         latency_ms = (time.time() - start) * 1000
+
+        # Normaliza None / não-string (Gemini pode retornar None em bloqueio)
+        if content is None:
+            logger.warning("Agente '%s' (%s) retornou conteúdo vazio (None) — possível filtro.", self.agent_id, self.adapter.model)
+            content = ""
+        elif not isinstance(content, str):
+            content = str(content)
+
+        if not content.strip():
+            logger.warning("Agente '%s' retornou resposta vazia no turno.", self.agent_id)
 
         self._history.append({"role": "assistant", "content": content})
         return content, latency_ms
@@ -257,7 +271,15 @@ class SimulationEngine:
                     latency_ms=latency,
                 )
                 transcript.append(turn)
-                logger.info("[Turn %d | %s] %s", turn_index, role, content[:120])
+
+                # Formato solicitado: bloco separado por linha com INFO + Resp
+                # Usa print para controle exato do layout (sem prefixo INFO extra)
+                sep = "-" * 60
+                print(f"\n{sep}")
+                print(f"Agente: {role} ({agent.adapter.model})")
+                print(f"INFO: Turno {turn_index} | Latência {latency:.0f}ms | Status OK")
+                print(f"Resp: {content if content.strip() else '[VAZIO — sem conteúdo]'}")
+                print(sep)
 
                 if self.turn_delay_seconds > 0:
                     logger.info("Aguardando %.1fs antes do próximo turno...", self.turn_delay_seconds)
@@ -267,9 +289,12 @@ class SimulationEngine:
                     if other_role != role:
                         other_agent.receive(role, content)
 
-                if any(kw.lower() in content.lower() for kw in scenario.settlement_keywords):
+                # Proteção contra content None/vazio (já normalizado para str)
+                if content and any(kw.lower() in content.lower() for kw in scenario.settlement_keywords):
                     settled = True
-                    logger.info("Settlement detected at turn %d.", turn_index)
+                    kw_hit = next((kw for kw in scenario.settlement_keywords if kw.lower() in content.lower()), "")
+                    print(f"✅ Acordo detectado no turno {turn_index} (keyword: {kw_hit})")
+                    logger.info("Acordo detectado no turno %d", turn_index)
                     break
 
                 turn_index += 1
@@ -296,7 +321,8 @@ class SimulationEngine:
             total_turns=len(transcript),
             started_at=started_at,
             ended_at=time.time(),
-            metadata={**scenario.metadata, "personas": personas_meta, "context": context_meta},
+            metadata={**scenario.metadata, "personas": personas_meta, "context": context_meta,
+                      "settlement_keywords": scenario.settlement_keywords},
         )
 
     # ------------------------------------------------------------------
@@ -339,7 +365,12 @@ class SimulationEngine:
                 content=content,
                 latency_ms=latency,
             ))
-            logger.info("[Benchmark turn %d] %s", i, content[:120])
+            sep = "-" * 60
+            print(f"\n{sep}")
+            print(f"Agente: {role} ({agent.adapter.model}) [Benchmark {i}]")
+            print(f"INFO: Latência {latency:.0f}ms | Status OK")
+            print(f"Resp: {content if content.strip() else '[VAZIO]'}")
+            print(sep)
 
         personas_meta = {
             r: p.to_dict() for r, p in self.personas.items()

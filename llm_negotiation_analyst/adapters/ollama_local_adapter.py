@@ -23,6 +23,7 @@ class OllamaLocalAdapter(LLMAdapter):
             raise ImportError("Instale a biblioteca httpx: pip install httpx")
 
     def complete(self, messages: list[dict], **kwargs) -> str:
+        import time
         payload = {
             "model": self.model,
             "messages": messages,
@@ -33,15 +34,17 @@ class OllamaLocalAdapter(LLMAdapter):
                 **self.config.extra,
             },
         }
-
-        # Requisição direta, sem headers de autorização
+        inicio = time.perf_counter()
         response = self._httpx.post(
             f"{self.base_url}/api/chat",
             json=payload,
             timeout=self.config.timeout,
         )
+        tempo = time.perf_counter() - inicio
+        print(f"[{self.model}] Status {response.status_code} | {tempo:.2f}s")
         response.raise_for_status()
-        return response.json()["message"]["content"]
+        content = response.json().get("message", {}).get("content")
+        return content if content is not None else ""
 
     @property
     def identifier(self) -> str:

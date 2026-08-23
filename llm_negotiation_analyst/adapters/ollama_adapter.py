@@ -48,12 +48,6 @@ class OllamaAdapter(LLMAdapter):
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        self._debug_request(
-            messages,
-            URL=self.base_url,
-            Auth="Bearer" if self.api_key else "Nenhuma",
-        )
-
         inicio = time.perf_counter()
 
         try:
@@ -66,45 +60,29 @@ class OllamaAdapter(LLMAdapter):
 
             tempo = time.perf_counter() - inicio
 
-            print(f"Status      : {response.status_code}")
-            print(f"Latência    : {tempo:.2f}s")
+            # Log minimalista: status + modelo + latência (engine loga turno/mensagem)
+            print(f"[{self.model}] Status {response.status_code} | {tempo:.2f}s")
 
             response.raise_for_status()
 
-            print("Resposta recebida com sucesso.")
-            print("=" * 80)
-
-            return response.json()["message"]["content"]
+            content = response.json().get("message", {}).get("content")
+            return content if content is not None else ""
 
         except httpx.ReadTimeout as e:
             tempo = time.perf_counter() - inicio
-
-            print("=" * 80)
-            print("ERRO: Timeout")
-            print(f"Modelo      : {self.model}")
-            print(f"Tempo gasto : {tempo:.2f}s")
-            print(f"Timeout cfg : {self.config.timeout}s")
-            print("=" * 80)
-
+            print(f"[{self.model}] TIMEOUT após {tempo:.2f}s (limite {self.config.timeout}s)")
             raise RuntimeError(
                 f"O modelo '{self.model}' excedeu o tempo limite "
                 f"de {self.config.timeout}s."
             ) from e
 
         except httpx.HTTPStatusError as e:
-            print("=" * 80)
-            print("ERRO HTTP")
-            print(f"Status      : {e.response.status_code}")
-            print(f"Resposta    : {e.response.text}")
-            print("=" * 80)
+            print(f"[{self.model}] HTTP {e.response.status_code}: {e.response.text[:500]}")
             raise
 
         except Exception:
-            print("=" * 80)
-            print("ERRO INESPERADO")
             import traceback
             traceback.print_exc()
-            print("=" * 80)
             raise
 
     @property

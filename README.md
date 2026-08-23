@@ -254,6 +254,15 @@ SCENARIO_REGISTRY: dict[str, NegotiationScenario] = {
 
 ## persona/big5_persona.py
 
+| Goldberg (1992)             | Sua biblioteca      | Correspondência            | Observação                                                            |
+| --------------------------- | ------------------- | -------------------------- | --------------------------------------------------------------------- |
+| **I. Surgency**             | `extraversion`      | **Extraversion**           | Correspondência direta                                                |
+| **II. Agreeableness**       | `agreeableness`     | **Agreeableness**          | Correspondência direta                                                |
+| **III. Conscientiousness**  | `conscientiousness` | **Conscientiousness**      | Correspondência direta                                                |
+| **IV. Emotional Stability** | `neuroticism`       | **Neuroticism**            | **Mesma dimensão, mas com polaridade invertida**                      |
+| **V. Intellect**            | `openness`          | **Openness to Experience** | Correspondência funcional, mas o nome/conceito enfatizado é diferente |
+
+
 Onde ocorre toda a configuração de injeção de traços de personalidade das LLMs.
 
 O modelo big5 se baseia em cindo traços dde personalidade, sendo eles:
