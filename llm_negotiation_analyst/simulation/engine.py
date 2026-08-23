@@ -183,10 +183,12 @@ class SimulationEngine:
         benchmark_turns: Optional[list[str]] = None,
         turn_delay_seconds: float = 0.0,
         use_system_reminder: bool = True,
+        tactics: Optional[dict[str, dict]] = None,
     ):
         self.scenario = scenario
         self.raw_agents = agents
         self.personas = personas or {}
+        self.tactics = tactics or {}
         self.context = context
         self.benchmark_turns = benchmark_turns
         self.turn_delay_seconds = turn_delay_seconds
@@ -228,6 +230,7 @@ class SimulationEngine:
             role_order = [scenario.opening_role] + [r for r in role_order if r != scenario.opening_role]
 
         turn_index = 0
+        confirmed_roles: set[str] = set()  # para exigir confirmação de AMBOS
 
         if scenario.opening_prompt:
             opening_role = scenario.opening_role
@@ -252,8 +255,9 @@ class SimulationEngine:
                 agent = agents[role]
                 if self.use_system_reminder:
                     system_reminder = (
-                        "\n\n[SYSTEM REMINDER: Se um acordo definitivo acabou de ser alcançado, "
-                        "você DEVE OBRIGATORIAMENTE terminar sua resposta com o código exato: [ACORDO_FECHADO]. "
+                        "\n\n[SYSTEM REMINDER: Se um acordo definitivo acabou de ser alcançado por AMBAS as partes, "
+                        "você DEVE OBRIGATORIAMENTE terminar sua resposta com o código exato: [ACORDO_FECHADO] "
+                        "ou SIMULACAO_CONCLUIDA. A simulação só encerra quando os dois confirmarem. "
                         "Não prolongue a conversa com gentilezas.]"
                     )
                     current_hint = scenario.shared_context + system_reminder if turn_index <= 1 else system_reminder
@@ -289,24 +293,42 @@ class SimulationEngine:
                     if other_role != role:
                         other_agent.receive(role, content)
 
-                # Proteção contra content None/vazio (já normalizado para str)
+                # Acordo só quando AMBOS confirmarem (evita parar no primeiro "aceito")
                 if content and any(kw.lower() in content.lower() for kw in scenario.settlement_keywords):
-                    settled = True
+                    confirmed_roles.add(role)
                     kw_hit = next((kw for kw in scenario.settlement_keywords if kw.lower() in content.lower()), "")
-                    print(f"✅ Acordo detectado no turno {turn_index} (keyword: {kw_hit})")
-                    logger.info("Acordo detectado no turno %d", turn_index)
-                    break
-
+                    logger.info("Confirmação de acordo por '%s' no turno %d (keyword: %s) [%d/%d]",
+                                role, turn_index, kw_hit, len(confirmed_roles), len(agents))
+                    print(f"📝 Confirmação de {role} ({len(confirmed_roles)}/{len(agents)}) — keyword: {kw_hit}")
+                    if len(confirmed_roles) >= len(agents):
+                        settled = True
+                        print(f"✅ Acordo confirmado por AMBOS no turno {turn_index}")
+                        logger.info("Acordo confirmado por ambos no turno %d", turn_index)
+                        break
+                    # não encerra ainda — aguarda confirmação do outro lado
                 turn_index += 1
 
             if settled:
                 break
 
-        # Serialize personas for metadata
-        personas_meta = {
-            role: persona.to_dict()
-            for role, persona in self.personas.items()
-        }
+        # Serialize personas + tactics for metadata (para relatório exibir Induzido)
+        personas_meta = {}
+        all_roles = set(self.personas.keys()) | set(self.tactics.keys())
+        for role in all_roles:
+            persona = self.personas.get(role)
+            base = persona.to_dict() if persona and hasattr(persona, "to_dict") else {}
+            tact = self.tactics.get(role) or {}
+            for k, v in tact.items():
+                if v is None:
+                    continue
+                if isinstance(v, str) and v.strip().lower() in ("none","null","nil"):
+                    continue
+                try:
+                    base[k] = int(v)
+                except Exception:
+                    base[k] = v
+            if base:
+                personas_meta[role] = base
         context_meta = self.context.to_dict() if self.context else None
 
         return NegotiationResult(

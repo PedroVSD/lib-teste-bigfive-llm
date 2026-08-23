@@ -171,12 +171,17 @@ if __name__ == "__main__":
 
     agents_dict  = {}
     personas_dict = {}
+    tactics_dict = {}
 
     print("-" * 40)
     for i, role_name in enumerate(papeis_do_cenario):
         chave = chaves_agentes_yaml[i]
         agents_dict[role_name]  = create_adapter(config["models"][chave])
         personas_dict[role_name] = parse_persona(config["models"][chave])
+        # Guarda tactics separadamente para relatório (mesmo que persona seja None)
+        raw_tactics = config["models"][chave].get("tactics") or {}
+        # Filtra none/null/nil e normaliza
+        tactics_dict[role_name] = {k: v for k, v in raw_tactics.items() if v is not None and str(v).lower() not in ("none","null","nil")}
         print(f"Papel '{role_name.upper()}' → '{chave}'")
     print("-" * 40)
 
@@ -195,6 +200,7 @@ if __name__ == "__main__":
         evaluator_config=config_juiz,
         turn_delay_seconds=exp.get("turn_delay_seconds", 0.0),
         personas=personas_dict,
+        tactics=tactics_dict,
         context=macro_context,
         output_dir="results/",
         use_system_reminder=exp.get("use_system_reminder", False),

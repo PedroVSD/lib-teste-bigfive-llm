@@ -90,7 +90,9 @@ SALARY_NEGOTIATION = NegotiationScenario(
     ),
     max_turns=8,
     settlement_keywords=[
-        "SIMULACAO_CONCLUIDA"
+        "SIMULACAO_CONCLUIDA",
+        "ACORDO_FECHADO",
+        "[ACORDO_FECHADO]",
     ],
     metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium"},
 )

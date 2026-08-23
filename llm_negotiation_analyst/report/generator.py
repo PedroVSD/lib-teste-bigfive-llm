@@ -28,12 +28,13 @@ from ..scoring.report_sections import render_utility_section, render_satisfactio
 
 def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
     """
-    Verifica todo o transcript em busca de linguagem de acordo,
-    para corrigir casos onde o engine não detectou a keyword
-    (ex: modelo escreveu acordo sem o código exato).
+    Verifica se AMBOS os papéis confirmaram acordo.
+    Exige pelo menos 2 roles distintos com keyword, para espelhar a lógica do engine.
     """
     indicators = [
         "SIMULACAO_CONCLUIDA",
+        "ACORDO_FECHADO",
+        "[ACORDO_FECHADO]",
         "confirmo os termos",
         "iniciar a implementação",
         "parceria firmada",
@@ -44,22 +45,35 @@ def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
         "fechado",
         "deal",
     ]
-    # Também considera settlement_keywords do cenário se estiver no metadata
     try:
         extra = result.metadata.get("settlement_keywords", [])
         if extra:
             indicators.extend(extra)
     except Exception:
         pass
+    confirmed_roles: set[str] = set()
     for turn in result.transcript:
+        if not turn.content:
+            continue
         content_lower = turn.content.lower()
         if any(ind.lower() in content_lower for ind in indicators):
-            return True
-    return False
+            confirmed_roles.add(turn.role)
+    # Para cenários com 2 agentes, exige 2 confirmações; para 1, exige 1
+    required = len(result.agent_roles) if result.agent_roles else 2
+    # Fallback: se só há 1 role distinta no transcript (ex: teste mock), 1 basta
+    distinct_roles_in_transcript = len({t.role for t in result.transcript})
+    if distinct_roles_in_transcript <= 1:
+        return len(confirmed_roles) >= 1
+    return len(confirmed_roles) >= min(2, required)
 
 
-# Mapeamento para diff numérico quando persona usa positive/negative
-_POLARITY_NUMERIC = {"positive": 5.0, "negative": 1.0, "none": None}
+# Mapeamento induzido → numérico para cálculo de alinhamento
+# positive = "a high level of" → 4.0, negative = "a low level of" → 2.0
+# (não 5/1 "very high/low" porque a indução bipolar é high/low, não very).
+# Isso também faz as médias finais ficarem numa escala interpretável:
+# observado 4.6 vs induzido 4.0 diff 0.6 → ótimo, não punido por não ser 5.0.
+_POLARITY_NUMERIC = {"positive": 4.0, "negative": 2.0, "none": None}
+_POLARITY_THRESHOLD = 3.0  # ≥3.0 → POSITIVE, <3.0 → NEGATIVE (bipolar puro, sem neutro)
 
 def _induced_to_numeric(val):
     if val is None:
@@ -75,6 +89,10 @@ def _induced_to_numeric(val):
         except ValueError:
             return None
     return None
+
+def _score_to_polarity(score: float) -> str:
+    """Converte score 1-5 do juiz para polo bipolar para exibição."""
+    return "POSITIVE" if score >= _POLARITY_THRESHOLD else "NEGATIVE"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -199,6 +217,20 @@ def generate_report(
     for profile in profiles.values():
         evaluated_dims.update(profile.scores.keys())
 
+    # Ordem desejada: Big Five primeiro na ordem OCEAN (conforme _DIM_ORDER), depois táticas
+    from ..scoring.big5 import Dimension as _Big5Dimension
+    from ..scoring.negotiation_metrics import NegotiationMetric as _NegotiationMetric
+    _BIG5_ORDER = [_Big5Dimension.OPENNESS, _Big5Dimension.CONSCIENTIOUSNESS,
+                   _Big5Dimension.EXTRAVERSION, _Big5Dimension.AGREEABLENESS, _Big5Dimension.NEUROTICISM]
+    def _dim_sort_key(d):
+        if isinstance(d, _Big5Dimension):
+            try:
+                return (0, _BIG5_ORDER.index(d))
+            except ValueError:
+                return (0, 99)
+        # NegotiationMetric ou outros — depois dos Big Five, por valor
+        return (1, d.value)
+
     for agent_id, profile in profiles.items():
         role    = result.agent_roles.get(agent_id, "")
         induced = personas_meta.get(role, {})
@@ -211,21 +243,33 @@ def generate_report(
         a("|-------------------|-----------------|------------------|-------------|")
 
         dims_to_show = sorted(
-            list(set(list(evaluated_dims) + [resolve_metric(d) for d in induced.keys()]))
+            list(set(list(evaluated_dims) + [resolve_metric(d) for d in induced.keys()])),
+            key=_dim_sort_key
         )
 
         for dim in dims_to_show:
             meta    = ALL_METRICS_META[dim]
             ind_val = induced.get(dim.value)
             obs_val = profile.scores.get(dim)
-            # display: positive/negative/none ou numérico
+            # Induzido: POSITIVE/NEGATIVE (bipolar) ou numérico 1-5 (táticas)
             if isinstance(ind_val, str):
                 ind_str = f"**{ind_val.upper()}**" if ind_val.lower() in ("positive","negative") else f"{ind_val}"
             elif ind_val is not None:
-                ind_str = f"{ind_val}"
+                ind_str = f"**{ind_val}**/5"
             else:
                 ind_str = "—"
-            obs_str = f"**{obs_val:.2f}**" if obs_val is not None else "—"
+            # Observado: para Big Five mostra também o polo bipolar (POSITIVE/NEGATIVE)
+            # para que a comparação induzido↔observado fique na mesma escala.
+            if obs_val is None:
+                obs_str = "—"
+            else:
+                # Import local para checar se é Big Five
+                from ..scoring.big5 import Dimension as _ObsDim
+                if isinstance(dim, _ObsDim):
+                    pol = _score_to_polarity(obs_val)
+                    obs_str = f"**{obs_val:.2f}** ({pol})"
+                else:
+                    obs_str = f"**{obs_val:.2f}**"
             status  = "—"
             if ind_val is not None and obs_val is not None:
                 ind_num = _induced_to_numeric(ind_val)
@@ -239,7 +283,7 @@ def generate_report(
             a(f"| {meta.name} | {ind_str} | {obs_str} | {status} |")
         a("")
 
-        # Observações comportamentais
+        # Observações comportamentais — Big Five primeiro
         a("#### Observações Comportamentais")
         a("")
         scored = [d for d in evaluated_dims if profile.scores.get(d) is not None]
@@ -247,11 +291,14 @@ def generate_report(
             a("_Nenhuma dimensão pontuada com sucesso._")
             a("")
         else:
-            for dim in sorted(scored, key=lambda d: d.value):
+            for dim in sorted(scored, key=_dim_sort_key):
                 meta  = ALL_METRICS_META[dim]
                 score = profile.scores[dim]
                 pole  = meta.high_pole if score >= 3 else meta.low_pole
                 warn  = " _(⚠ baixa observabilidade)_" if meta.observability <= 2 else ""
+                # Para Big Five adiciona polo bipolar (POSITIVE/NEGATIVE) ao lado do numérico
+                from ..scoring.big5 import Dimension as _ObsDim2
+                bipolar = f" [{_score_to_polarity(score)}]" if isinstance(dim, _ObsDim2) else ""
                 justifications = [
                     s.justification
                     for s in profile.per_turn_scores
@@ -260,7 +307,7 @@ def generate_report(
                     and not s.justification.startswith("[Eval")
                     and s.confidence > 0
                 ]
-                a(f"**{meta.name}** — `{score:.2f}/5` — *{pole}*{warn}")
+                a(f"**{meta.name}** — `{score:.2f}/5{bipolar}` — *{pole}*{warn}")
                 if justifications:
                     a(f"> {max(justifications, key=len)}")
                 else:
@@ -274,12 +321,17 @@ def generate_report(
     agent_ids = list(profiles.keys())
     a("| Dimensão |" + "".join(f" {aid} |" for aid in agent_ids))
     a("|-----------|" + "".join("-----------|" for _ in agent_ids))
-    for dim in sorted(list(evaluated_dims), key=lambda d: d.value):
+    for dim in sorted(list(evaluated_dims), key=_dim_sort_key):
         meta = ALL_METRICS_META[dim]
         row  = f"| {meta.name} |"
         for aid in agent_ids:
             score = profiles[aid].scores.get(dim)
-            row  += f" {f'`{score:.2f}`' if score is not None else '—'} |"
+            if score is None:
+                row  += " — |"
+            else:
+                from ..scoring.big5 import Dimension as _CmpDim
+                extra = f" {_score_to_polarity(score)}" if isinstance(dim, _CmpDim) else ""
+                row  += f" `{score:.2f}{extra}` |"
         a(row)
     a("")
 
@@ -318,8 +370,9 @@ def generate_report(
 
     # ── 8. NOTAS DE METODOLOGIA ───────────────────────────────────────
     e(["## 8. Notas de Metodologia", ""])
-    a("- **Scoring:** LLM-as-judge com rubricas JSON estruturadas, uma chamada por dimensão por turno.")
-    a("- **Aggregation:** Média aritmética dos scores válidos por turno (confidence > 0).")
+    a("- **Scoring:** LLM-as-judge com rubricas JSON estruturadas, uma chamada por dimensão por turno. Score 1-5 para todas as dimensões.")
+    a("- **Big Five bipolar:** Induzido é `positive`/`negative`/`none`; observado é 1-5 convertido para bipolar para comparação (`≥3.0→POSITIVE`, `<3.0→NEGATIVE`). Mapeamento relatório: `positive→4.0`, `negative→2.0` (high/low, não 5/1 very).")
+    a("- **Aggregation:** Média aritmética dos scores válidos por turno (confidence > 0). A média final também é bipolar: `≥3.0` indica POSITIVE, `<3.0` NEGATIVE, permitindo comparar induzido vs média na mesma escala.")
     a("- **Persona injection:** Instruções comportamentais prepended ao system prompt. Modelos podem desviar da disposição induzida.")
     a("- **Situational context:** Injetado igualmente em todos os agentes. Efeito não medido diretamente.")
     a("- **Judge independence:** Juiz separado dos agentes negociadores para evitar viés de auto-avaliação.")

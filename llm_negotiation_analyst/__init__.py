@@ -41,6 +41,7 @@ def run_negotiation(
     turn_delay_seconds = 0.0,
     verbose: bool = True,
     use_system_reminder: bool = True,
+    tactics=None,
 ):
     import logging
     if verbose:
@@ -53,6 +54,7 @@ def run_negotiation(
         context=context,
         turn_delay_seconds=turn_delay_seconds,
         use_system_reminder=use_system_reminder,
+        tactics=tactics,
     )
     result = engine.run()
 
