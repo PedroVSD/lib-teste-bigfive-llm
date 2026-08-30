@@ -1,12 +1,22 @@
 experiment:
   name: "teste_modelos_todas_as_variaveis"
+  # Cenários disponíveis (scenarios/__init__.py:52):
+  #  - salary_negotiation          → Negociação salarial: candidate vs recruiter (R$12k vs R$16k + bônus/férias). Âncora, utilidade, concessões. [HR, 8 turnos]
+  #  - company_acquisition         → Aquisição de empresa: seller vs buyer (R$8M vs R$5-7M, earn-out, IP). Risco, informação assimétrica. [M&A, 10 turnos]
+  #  - strategic_supplier_contract → Contrato fornecedor: buyer vs supplier (R$1.200 vs R$950, volume/prazo/garantias). Trade-offs e criação de valor. [Supply Chain, 10 turnos]
+  #  - property_boundary_dispute    → Disputa propriedade: owner_a vs owner_b (12m², R$80k). Justiça percebida, rapport, resiliência. [Property, 10 turnos]
+  #  Para criar um novo, veja CONFIGURACAO_YAML.md §5 e scenarios/__init__.py:228
   scenario: "salary_negotiation"
   turn_delay_seconds: 10
   max_turns: 5
   use_system_reminder: true
 
 # Define a pressão do mundo externo
+# Use `preset:` para selecionar um dos 10 contextos prontos (ver situational.py:ContextPresets)
+# ou preencha manualmente os campos abaixo. Se `preset` for usado, os campos manuais
+# complementam/sobrescrevem o preset.
 context:
+  # preset: "crescimento_forte"   # descomente para usar preset
   enabled: true
   inflation: "HIGH"
   interest_rates: "VERY_HIGH"
@@ -14,9 +24,10 @@ context:
   crises:
     - "ECONOMIC_RECESSION"
     - "POLITICAL_INSTABILITY"
-  country: "Brazil"
-  year: "2025"
+  gdp_growth: "Queda acentuada no último semestre."
+  unemployment: "Taxas estáveis, mas em mercado informal."
   custom_conditions:
+    - "O fornecedor principal ameaçou cancelar contratos anteriores. Só há orçamento aprovado para pagamentos parcelados."
 
 # Big Five: use apenas 'positive' ou 'negative' (não use números).
 # Exemplo: agreeableness: positive | neuroticism: negative

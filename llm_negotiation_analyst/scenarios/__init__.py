@@ -50,43 +50,43 @@ class NegotiationScenario:
 
 
 # ---------------------------------------------------------------------------
-# Built-in scenarios
+# Built-in scenarios — 4 cenários atualizados
 # ---------------------------------------------------------------------------
-#Abaixo é como controla os cenários dos experimento. É possível criar cada cenário
+
+# 1. Negociação salarial
 SALARY_NEGOTIATION = NegotiationScenario(
     name="salary_negotiation",
-    description="Job offer salary negotiation between a candidate and an HR recruiter.",
+    description="Cenário de negociação entre um profissional de tecnologia experiente e uma empresa após uma oferta de emprego. Avalia âncora salarial, justificativa, concessões, criação de valor e fatores subjetivos.",
     shared_context=(
-        "A technology company is hiring a mid-level data engineer. "
-        "The candidate has received a formal job offer and is now negotiating "
-        "compensation with the HR recruiter. The discussion covers base salary, "
-        "signing bonus, and remote work policy. "
-        "Both parties want to reach an agreement."
+        "Um engenheiro de software experiente recebeu uma oferta de emprego de uma empresa de tecnologia. "
+        "A empresa ofereceu inicialmente R$ 12.000 mensais. O candidato acredita que sua experiência e suas "
+        "alternativas no mercado justificam uma remuneração próxima de R$ 16.000. Ambos possuem interesse em "
+        "chegar a um acordo, mas nenhum conhece completamente o limite de negociação do outro. Além do salário, "
+        "podem ser negociados bônus, trabalho remoto, férias, benefícios, horário de trabalho e outros componentes "
+        "da remuneração. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "candidate": (
-            "You are a data engineer candidate negotiating your job offer. "
-            "Your target salary is R$18,000/month. The current offer is R$14,000/month. "
-            "Your BATNA is a competing offer of R$15,500/month with no signing bonus. "
-            "You also want at least 3 days of remote work per week. "
-            "Negotiate assertively but professionally. Do not reveal your BATNA unless strategically useful."
+            "Você é um engenheiro de software experiente negociando uma nova oportunidade. Você possui um emprego "
+            "estável e não precisa aceitar a oferta. Você acredita inicialmente que R$ 16.000 seja uma remuneração "
+            "justa, embora esteja disposto a aceitar menos dependendo das condições oferecidas. Você valoriza remuneração, "
+            "crescimento profissional, flexibilidade, reconhecimento e estabilidade, mas atribui pesos diferentes a cada um "
+            "desses fatores. Não revele seu limite mínimo de aceitação sem necessidade estratégica. Negocie de forma "
+            "assertiva e profissional."
         ),
         "recruiter": (
-            "You are an HR recruiter for a tech company. "
-            "The approved budget for this role is up to R$16,500/month. "
-            "You can offer a one-time signing bonus of up to R$5,000. "
-            "Remote work policy allows up to 2 days/week for mid-level roles, "
-            "with exceptions requiring VP approval. "
-            "Your goal is to close the hire within budget while keeping the candidate motivated."
+            "Você é o responsável pela contratação. A oferta inicial é de R$ 12.000 mensais. Existe alguma flexibilidade "
+            "no orçamento, mas aumentos precisam ser justificados. Você considera remuneração, equidade salarial interna, "
+            "retenção do funcionário e custo de contratar outro profissional. Você possui um limite máximo de orçamento, "
+            "mas não deve revelá-lo diretamente. Negocie de forma profissional buscando fechar a contratação dentro do possível."
         ),
     },
     opening_role="recruiter",
     opening_prompt=(
-        "Thank you for taking the time to speak with us today. "
-        "We're very excited about the possibility of you joining our team. "
-        "I'd like to discuss the details of our offer and see if we can make this work for both of us."
+        "Olá! Temos o prazer de oferecer R$ 12.000 mensais mais os benefícios padrão da empresa. "
+        "Gostaríamos de saber como essa proposta se alinha às suas expectativas e o que poderíamos ajustar para chegarmos a um acordo."
     ),
     max_turns=8,
     settlement_keywords=[
@@ -94,87 +94,138 @@ SALARY_NEGOTIATION = NegotiationScenario(
         "ACORDO_FECHADO",
         "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium"},
+    metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium", "label_pt": "Negociação salarial",
+              "aspects": "âncora, suscetibilidade, utilidade, valorização subjetiva, concessões condicionais, aversão à perda, criação de valor, rapport"},
 )
 
-PROCUREMENT_NEGOTIATION = NegotiationScenario(
-    name="procurement_b2b",
-    description="B2B procurement negotiation for a software license contract.",
+# 2. Aquisição de empresa
+COMPANY_ACQUISITION = NegotiationScenario(
+    name="company_acquisition",
+    description="Negociação entre o fundador de uma pequena empresa de tecnologia e uma empresa maior interessada em adquiri-la. Explora âncoras financeiras, informação assimétrica, risco, utilidade e criação de valor via estrutura do acordo.",
     shared_context=(
-        "A mid-sized retail company (buyer) is negotiating a 2-year enterprise software "
-        "license with a SaaS vendor (seller). The contract covers pricing, support SLA, "
-        "and implementation timeline. Both parties have negotiated before and share "
-        "a basic level of trust."
+        "O fundador de uma pequena empresa de tecnologia está negociando sua venda com uma empresa maior do mesmo setor. "
+        "O vendedor acredita que sua empresa vale aproximadamente R$ 8 milhões. O comprador estima internamente que o negócio "
+        "tenha um valor entre R$ 5 milhões e R$ 7 milhões, dependendo de seu desempenho futuro. A empresa possui propriedade "
+        "intelectual valiosa e clientes importantes, mas existe incerteza sobre seu crescimento futuro. Além do preço, podem ser "
+        "negociados pagamento inicial, pagamentos condicionados ao desempenho futuro (earn-out), permanência do fundador, "
+        "participação na gestão e direitos sobre a propriedade intelectual. "
+        "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
+        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
-        "buyer": (
-            "You are the procurement manager for a retail chain. "
-            "Your budget for this contract is R$150,000/year. "
-            "The vendor's listed price is R$180,000/year. "
-            "You need a 99.5% uptime SLA and implementation within 60 days. "
-            "Your BATNA is a competing vendor offering R$130,000/year with a weaker SLA. "
-            "Push for the best deal without sacrificing SLA quality."
-        ),
         "seller": (
-            "You are an enterprise account executive at a SaaS company. "
-            "Your floor price for this deal is R$114,000/year (below this you need VP approval). "
-            "You can offer 99.9% uptime SLA. Standard implementation is 90 days; "
-            "expedited (60 days) costs an additional R$15,000. "
-            "Your goal is to close a 2-year contract at or above R$150,000/year. "
-            "You can offer free onboarding training as a sweetener."
+            "Você é o fundador da empresa. Sua âncora inicial é R$ 8 milhões. Você valoriza receber uma grande parte do "
+            "dinheiro imediatamente e gostaria de manter alguma influência sobre o futuro da empresa. Você acredita que o potencial "
+            "tecnológico da empresa é maior do que seus resultados financeiros atuais demonstram. Você possui um valor mínimo aceitável, "
+            "mas não deve revelá-lo. Negocie defendendo seu valuation mas demonstrando flexibilidade na estrutura do acordo."
+        ),
+        "buyer": (
+            "Você representa uma empresa maior interessada na aquisição. Sua avaliação interna está entre R$ 5 milhões e R$ 7 milhões. "
+            "Você está preocupado com integração, retenção de clientes e desempenho futuro. Possui maior flexibilidade para negociar a "
+            "estrutura do acordo do que para aumentar o pagamento inicial. Pode utilizar bônus de desempenho, earn-outs ou contratos de "
+            "permanência para aumentar o valor total da transação. Negocie buscando reduzir risco e justificar seu valuation."
         ),
     },
-    opening_role="buyer",
+    opening_role="seller",
+    opening_prompt=(
+        "Considerando a tecnologia, os clientes e o potencial de crescimento da empresa, estou pedindo R$ 8 milhões pela venda. "
+        "Acredito que esse valor reflete o potencial tecnológico que ainda não aparece totalmente nos resultados financeiros."
+    ),
     max_turns=10,
     settlement_keywords=[
         "SIMULACAO_CONCLUIDA",
-        "we have a deal",
-        "acordo fechado",
-        "fechado",
-        "aceito",
+        "ACORDO_FECHADO",
+        "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "B2B SaaS", "currency": "BRL", "difficulty": "hard"},
+    metadata={"domain": "M&A", "currency": "BRL", "difficulty": "hard", "label_pt": "Aquisição de empresa",
+              "aspects": "âncora, suscetibilidade, utilidade, criação de valor, concessões condicionais, aversão à perda, risco, informação assimétrica"},
 )
 
-HOSTAGE_CRISIS_DEBRIEF = NegotiationScenario(
-    name="crisis_negotiation_training",
-    description=(
-        "Training scenario: a crisis negotiator attempts to de-escalate a "
-        "barricade situation. Designed to stress-test Agreeableness and Neuroticism."
-    ),
+# 3. Contrato com fornecedor
+STRATEGIC_SUPPLIER_CONTRACT = NegotiationScenario(
+    name="strategic_supplier_contract",
+    description="Negociação comercial entre empresa industrial e fornecedor estratégico. Cenário com múltiplas variáveis negociáveis para testar criação de valor, concessões condicionais e diferentes funções de utilidade.",
     shared_context=(
-        "A distressed individual has locked themselves in an office building after "
-        "a workplace conflict. A trained crisis negotiator is attempting to establish "
-        "communication and achieve a peaceful resolution. This is a training simulation."
+        "Uma empresa industrial precisa negociar um contrato anual com um fornecedor estratégico de matéria-prima. "
+        "O fornecedor propôs inicialmente R$ 1.200 por unidade. O comprador considera que um preço competitivo estaria próximo de "
+        "R$ 950. Entretanto, preço não é o único elemento importante. As partes podem negociar volume mínimo de compra, prazo de pagamento, "
+        "prazo de entrega, qualidade, duração do contrato, garantias e penalidades por atraso. "
+        "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
+        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
-        "negotiator": (
-            "You are a trained police crisis negotiator. "
-            "Your primary goal is the safe resolution of the situation without harm. "
-            "Use active listening, empathy, and de-escalation techniques. "
-            "Do not make promises you cannot keep. Build rapport gradually."
+        "buyer": (
+            "Você representa o departamento de compras. Seu principal objetivo é reduzir o custo total de aquisição, mas a "
+            "confiabilidade do fornecimento é extremamente importante. Você prefere pagar um pouco mais por um fornecedor confiável "
+            "a correr o risco de interrupções na produção. Existem fornecedores alternativos, mas trocar de fornecedor geraria custos "
+            "operacionais relevantes. Negocie buscando melhor preço sem sacrificar confiabilidade."
         ),
-        "subject": (
-            "You are a distressed employee who feels wronged by your company. "
-            "You are emotionally volatile but not violent. "
-            "You want to be heard and to have your grievances acknowledged. "
-            "You are suspicious of authority but respond to genuine empathy."
+        "supplier": (
+            "Você representa o fornecedor. Sua proposta inicial é de R$ 1.200 por unidade. Você deseja um contrato de longo prazo e "
+            "demanda previsível. Está disposto a reduzir o preço se receber maior volume mínimo ou pagamentos mais rápidos. Você considera "
+            "penalidades contratuais particularmente arriscadas e prefere evitá-las. Negocie defendendo seu preço mas oferecendo trade-offs."
         ),
     },
-    opening_role="negotiator",
-    opening_prompt="Hello, my name is Officer Santos. I'm here to listen. Can we talk?",
-    max_turns=12,
+    opening_role="supplier",
+    opening_prompt=(
+        "Apresentamos R$ 1.200 por unidade como nossa proposta inicial, afirmando que esse é nosso preço mais competitivo diante "
+        "dos custos atuais de produção e logística. Estamos abertos a discutir condições para encontrar um equilíbrio."
+    ),
+    max_turns=10,
     settlement_keywords=[
         "SIMULACAO_CONCLUIDA",
-        "formalizar o acordo", "iniciar a implementação", "assinar o contrato",
-        "confirmo os termos", "parceria firmada","we have a deal"
+        "ACORDO_FECHADO",
+        "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "crisis", "difficulty": "hard", "note": "training only"},
+    metadata={"domain": "Supply Chain", "currency": "BRL", "difficulty": "hard", "label_pt": "Contrato com fornecedor",
+              "aspects": "âncora, suscetibilidade, utilidade, criação de valor, trade-offs, concessões condicionais, aversão à perda, clareza"},
+)
+
+# 4. Disputa de propriedade
+PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
+    name="property_boundary_dispute",
+    description="Negociação entre dois proprietários vizinhos em disputa sobre limites de terreno. Reduz importância financeira pura e aumenta justiça percebida, emoções, relacionamento e valorização subjetiva.",
+    shared_context=(
+        "Dois proprietários vizinhos discordam sobre o limite entre suas propriedades. Um deles afirma que um muro recentemente "
+        "construído ocupa aproximadamente 12 metros quadrados de seu terreno. O outro acredita que o muro foi construído corretamente. "
+        "Um processo judicial seria caro e poderia levar meses, portanto ambos possuem interesse em encontrar uma solução privada. As "
+        "alternativas incluem mover o muro, pagar uma compensação financeira, trocar uma pequena área de terreno, dividir os custos "
+        "jurídicos ou estabelecer um acordo permanente de uso da área. "
+        "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
+        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
+    ),
+    roles={
+        "owner_a": (
+            "Você é o Proprietário A. Você acredita que aproximadamente 12 metros quadrados de seu terreno foram ocupados pelo muro "
+            "do vizinho. Sua demanda inicial é de R$ 80.000. Você valoriza fortemente a percepção de justiça e considera que o vizinho "
+            "agiu de maneira desrespeitosa. Entretanto, estaria disposto a aceitar uma compensação menor caso o vizinho reconheça o problema "
+            "e aceite uma solução que considere justa. Negocie buscando justiça e reconhecimento."
+        ),
+        "owner_b": (
+            "Você é o Proprietário B. Você acredita que o muro está corretamente localizado e rejeita a acusação de ter ocupado "
+            "deliberadamente o terreno do vizinho. Você não deseja mover o muro porque isso seria caro e causaria transtornos. Está disposto "
+            "a discutir compensação financeira ou outras alternativas caso elas evitem a reconstrução do muro e reduzam o risco de uma disputa "
+            "judicial prolongada. Negocie buscando evitar custos e litígio."
+        ),
+    },
+    opening_role="owner_a",
+    opening_prompt=(
+        "Considerando o valor da área envolvida, exijo R$ 80.000 para resolver a disputa sobre os 12 metros quadrados ocupados pelo muro. "
+        "Acredito que essa compensação reflete o valor da área e o desrespeito demonstrado."
+    ),
+    max_turns=10,
+    settlement_keywords=[
+        "SIMULACAO_CONCLUIDA",
+        "ACORDO_FECHADO",
+        "[ACORDO_FECHADO]",
+    ],
+    metadata={"domain": "Property", "currency": "BRL", "difficulty": "hard", "label_pt": "Disputa de propriedade",
+              "aspects": "âncora, suscetibilidade, utilidade, valorização subjetiva, justiça percebida, aversão à perda, rapport, resiliência"},
 )
 
 # Registry for easy lookup
 SCENARIO_REGISTRY: dict[str, NegotiationScenario] = {
     s.name: s for s in [
-        SALARY_NEGOTIATION, PROCUREMENT_NEGOTIATION, HOSTAGE_CRISIS_DEBRIEF
+        SALARY_NEGOTIATION, COMPANY_ACQUISITION, STRATEGIC_SUPPLIER_CONTRACT, PROPERTY_BOUNDARY_DISPUTE
     ]
 }

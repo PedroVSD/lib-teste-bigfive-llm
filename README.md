@@ -131,6 +131,8 @@ Um ponto importante é que para o caso do ollama, como o mesmo possui suporte pa
 ## context/situational.py
 
 Define o contexto e situação da simulação. Pode ser ativado e desativado no config.yaml.
+
+**Uso manual (campos livres):**
 ```yaml
 context:
   enabled: true
@@ -142,12 +144,37 @@ context:
     - "political_instability"
   gdp_growth: "Queda acentuada no último semestre."
   unemployment: "Taxas estáveis, mas em mercado informal."
-  year: "2023"
-  country: "Argentina"
   custom_conditions:
     - "O fornecedor principal ameaçou cancelar contratos anteriores."
     - "Só há orçamento aprovado para pagamentos parcelados."
 ```
+
+**Uso via preset (10 cenários prontos — `situational.py:461` `ContextPresets`):**
+```yaml
+context:
+  preset: "estagflacao"   # ou crescimento_forte, recessao, boom_inflacionario, crise_financeira,
+                          # crise_politica, governo_intervencionista, governo_liberal,
+                          # crise_desemprego, anarcho_capitalist
+  # campos manuais complementam/sobrescrevem o preset:
+  country: "Argentina"
+  custom_conditions:
+    - "Condição extra específica do experimento"
+```
+
+| Preset | `inflation` | `interest_rates` | `government` | `crises` | Destaque |
+|---|---|---|---|---|---|
+| `crescimento_forte` | `LOW` | `LOW` | `MARKET_FRIENDLY` | — | PIB alto, desemprego baixo, mercado aquecido — trabalhador com poder |
+| `recessao` | `LOW` | `HIGH` | `CONSERVATIVE` | `ECONOMIC_RECESSION` | PIB negativo, desemprego alto — empregador com poder |
+| `estagflacao` | `VERY_HIGH` | `HIGH` | `INTERVENTIONIST` | `ECONOMIC_RECESSION` | 12%/18%/-1.5%/10% — conflito custo de vida vs queda de demanda |
+| `boom_inflacionario` | `HIGH` | `HIGH` | `MARKET_FRIENDLY` | — | Alta inflação + crescimento — reajuste necessário |
+| `crise_financeira` | `MODERATE` | `VERY_HIGH` | `INTERVENTIONIST` | `FINANCIAL_CRISIS` | Crédito restrito — patrimônio ≠ liquidez |
+| `crise_politica` | `HIGH` | `HIGH` | `TRANSITIONAL` | `POLITICAL_INSTABILITY` | 40% reforma tributária — negociação sob risco futuro |
+| `governo_intervencionista` | `MODERATE` | `MODERATE` | `INTERVENTIONIST` | — | Regulação/impostos altos |
+| `governo_liberal` | `LOW` | `MODERATE` | `LIBERAL_ON_MARKET` | — | Regulação baixa, competição alta |
+| `crise_desemprego` | `LOW` | `LOW` | `TECHNOCRATIC` | `ECONOMIC_RECESSION` | 16% desemprego — oferta de mão de obra alta |
+| `anarcho_capitalist` | `LOW` | `LOW` | `ANCAP` | — | Sem banco central, tributação muito baixa, arbitragem privada |
+
+> Rode com arquivo dedicado: `uv run python experimento.py configs/estagflacao.yaml` → `experiment.name` vira `estagflacao` (nome do arquivo) automaticamente (`experimento.py:16` `Path(stem)`).
 Todos esses campos são opcionais. Se não quiser definir a inflação, por exemplo, basta não colocar a linha inflation: no seu YAML que o sistema a ignorará.
 
 **Toda situação pode ser alterado ou criada em situational.py**. Dentro de situational.py há alguns configurações que vou destacar abaixo.
@@ -194,12 +221,10 @@ As crises podem receber múltiplos valores.
 
 Os valores de inflação e taxa de juros, são definidos logo abaixo da declaração do enum, no dict correspondente a cada um.
 
-Os valores de das variáveis abaixo são opcionais e descritos por texto:
+Os valores das variáveis abaixo são opcionais e descritos por texto:
 * gdp_growth(PIB)
 * unemployment(Taxa de desemprego)
 * custom_conditions(Condições customizadas que podem ser inseridas na simulação)
-* year(ano)
-* country(país) são opcionais.
 
 É possível adicionar um método próprio que define a situação da simulação, basta passar os parâmetros:
 ```python
@@ -211,7 +236,6 @@ class ContextPresets:
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.VERY_HIGH,
             government=GovernmentOrientation.MARKET_FRIENDLY,
-            country="Brasil",
             custom_conditions=[
                 "O mercado de venture capital está em baixa.",
                 "A parte vendedora precisa demonstrar tração imediata aos investidores."
@@ -244,9 +268,10 @@ metadata={"domain": "Tech Freelance", "currency": "BRL", "difficulty": "medium"}
 ```python
 SCENARIO_REGISTRY: dict[str, NegotiationScenario] = {
     s.name: s for s in [
-        SALARY_NEGOTIATION, 
-        PROCUREMENT_NEGOTIATION, 
-        HOSTAGE_CRISIS_DEBRIEF,
+        SALARY_NEGOTIATION,
+        COMPANY_ACQUISITION,
+        STRATEGIC_SUPPLIER_CONTRACT,
+        PROPERTY_BOUNDARY_DISPUTE,
         CENARIO_PERSONALIZADO  # <- Seu cenário personalizado
     ]
 }

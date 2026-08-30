@@ -14,7 +14,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
-from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION, PROCUREMENT_NEGOTIATION, SCENARIO_REGISTRY
+from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION, SCENARIO_REGISTRY
 from llm_negotiation_analyst.simulation.engine import SimulationEngine, NegotiationResult
 from llm_negotiation_analyst.scoring.big5 import Dimension, BIG5_META
 from llm_negotiation_analyst.scoring.evaluator import Evaluator, EvaluatorConfig
@@ -87,7 +87,9 @@ class TestScenarios:
 
     def test_scenario_registry(self):
         assert "salary_negotiation" in SCENARIO_REGISTRY
-        assert "procurement_b2b" in SCENARIO_REGISTRY
+        assert "company_acquisition" in SCENARIO_REGISTRY
+        assert "strategic_supplier_contract" in SCENARIO_REGISTRY
+        assert "property_boundary_dispute" in SCENARIO_REGISTRY
 
     def test_all_scenarios_valid(self):
         for name, scenario in SCENARIO_REGISTRY.items():

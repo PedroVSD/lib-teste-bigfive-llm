@@ -31,7 +31,22 @@ load_dotenv()
 
 def load_config(filepath: str):
     with open(filepath, "r", encoding="utf-8") as file:
-        return yaml.safe_load(file)
+        data = yaml.safe_load(file)
+    # Nome do experimento = nome do arquivo YAML (sem extensão)
+    # Ex: `estagflacao.yaml` → experiment.name = "estagflacao" (sempre sobrescreve o YAML)
+    try:
+        from pathlib import Path
+        file_stem = Path(filepath).stem
+        exp = data.get("experiment") or {}
+        yaml_name = exp.get("name")
+        exp["name"] = file_stem
+        if yaml_name and yaml_name != file_stem:
+            exp["yaml_name"] = yaml_name  # guarda original para rastreabilidade
+        exp["config_file"] = filepath
+        data["experiment"] = exp
+    except Exception:
+        pass
+    return data
 
 
 def create_adapter(config_dict: dict):
@@ -88,14 +103,65 @@ def parse_context(context_dict: dict) -> SituationalContext:
     if not context_dict or not context_dict.get("enabled", True):
         return SituationalContext.disabled()
 
+    # Suporte a `preset:` — carrega um dos 10 contextos prontos e permite sobrescrever campos
+    from llm_negotiation_analyst.context import ContextPresets
+    import unicodedata
+    def _norm(s: str) -> str:
+        s = unicodedata.normalize("NFD", str(s)).encode("ascii", "ignore").decode()
+        return s.lower().replace("-", "_").replace(" ", "_")
+    _PRESET_MAP = {
+        "crescimento_forte": ContextPresets.crescimento_forte,
+        "crescimento_economico_forte": ContextPresets.crescimento_forte,
+        "expansao": ContextPresets.crescimento_forte,
+        "recessao": ContextPresets.recessao,
+        "recessao_economica": ContextPresets.recessao,
+        "estagflacao": ContextPresets.estagflacao,
+        "boom_inflacionario": ContextPresets.boom_inflacionario,
+        "crise_financeira": ContextPresets.crise_financeira,
+        "crise_politica": ContextPresets.crise_politica,
+        "governo_intervencionista": ContextPresets.governo_intervencionista,
+        "intervencionista": ContextPresets.governo_intervencionista,
+        "governo_liberal": ContextPresets.governo_liberal,
+        "liberal": ContextPresets.governo_liberal,
+        "governo_liberal_pro_mercado": ContextPresets.governo_liberal,
+        "crise_desemprego": ContextPresets.crise_desemprego,
+        "crise_emprego": ContextPresets.crise_desemprego,
+        "anarcho_capitalist": ContextPresets.anarcho_capitalist,
+        "anarco_capitalista": ContextPresets.anarcho_capitalist,
+        "anarchocapitalist": ContextPresets.anarcho_capitalist,
+    }
+    preset_name = context_dict.get("preset")
+    if preset_name:
+        key = _norm(preset_name)
+        factory = _PRESET_MAP.get(key)
+        if not factory:
+            raise ValueError(f"Preset de contexto desconhecido: '{preset_name}'. Opções: {list(_PRESET_MAP.keys())}")
+        base = factory()
+        # Sobrescreve com campos manuais se fornecidos
+        if context_dict.get("inflation"):
+            base.inflation = getattr(InflationLevel, context_dict["inflation"])
+        if context_dict.get("interest_rates"):
+            base.interest_rates = getattr(InterestRateLevel, context_dict["interest_rates"])
+        if context_dict.get("government"):
+            base.government = getattr(GovernmentOrientation, context_dict["government"])
+        if context_dict.get("crises") is not None:
+            base.crises = [getattr(CrisisType, c) for c in context_dict.get("crises", []) if c]
+        if context_dict.get("gdp_growth") is not None:
+            base.gdp_growth = context_dict.get("gdp_growth")
+        if context_dict.get("unemployment") is not None:
+            base.unemployment = context_dict.get("unemployment")
+        if context_dict.get("custom_conditions") is not None:
+            extra = [c for c in context_dict.get("custom_conditions") or [] if c]
+            # Se preset já tem custom_conditions, anexa
+            base.custom_conditions = list(base.custom_conditions) + extra
+        return base
+
     return SituationalContext(
         enabled=True,
         inflation=getattr(InflationLevel, context_dict["inflation"]) if context_dict.get("inflation") else None,
         interest_rates=getattr(InterestRateLevel, context_dict["interest_rates"]) if context_dict.get("interest_rates") else None,
         government=getattr(GovernmentOrientation, context_dict["government"]) if context_dict.get("government") else None,
         crises=[getattr(CrisisType, c) for c in context_dict.get("crises", []) if c],
-        country=context_dict.get("country"),
-        year=str(context_dict["year"]) if context_dict.get("year") else None,
         gdp_growth=context_dict.get("gdp_growth"),
         unemployment=context_dict.get("unemployment"),
         custom_conditions=[c for c in context_dict.get("custom_conditions") or [] if c],
@@ -145,7 +211,9 @@ def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: l
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    config = load_config("config.yaml")
+    import sys
+    config_path = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    config = load_config(config_path)
     exp    = config["experiment"]
     print(f"Iniciando experimento: {exp['name']}...")
 

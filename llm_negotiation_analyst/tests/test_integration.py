@@ -34,7 +34,7 @@ def test_full_pipeline_integration():
         mock_judge = MockAdapter()
 
         persona_candidate = Big5Persona(agreeableness="positive", extraversion="positive")
-        ctx = SituationalContext(inflation=InflationLevel.HIGH, country="Brasil")
+        ctx = SituationalContext(inflation=InflationLevel.HIGH)
 
         config_teste = EvaluatorConfig(
             dimensions=[NegotiationMetric.ANCHORING, NegotiationMetric.VALUE_CREATION]

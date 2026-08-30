@@ -1,0 +1,55 @@
+experiment:
+  name: anarcho_capitalist
+  scenario: salary_negotiation
+  max_turns: 8
+  use_system_reminder: true
+context:
+  preset: anarcho_capitalist
+models:
+  agent_1:
+    provider: ollama
+    name: gemma4:31b-cloud
+    temperature: 0.5
+    max_tokens: 2048
+    persona:
+      agreeableness: positive
+      neuroticism: positive
+      extraversion: positive
+      openness: positive
+      conscientiousness: positive
+    tactics:
+      anchoring: 3
+      clarity: 3
+  agent_2:
+    provider: gemini
+    name: gemma-4-26b-a4b-it
+    temperature: 0.5
+    max_tokens: 2048
+    persona:
+      agreeableness: positive
+      neuroticism: negative
+    tactics:
+      anchoring: 3
+  judge:
+    provider: ollama
+    name: gpt-oss:120b-cloud
+    temperature: 0.0
+    metrics:
+    - agreeableness
+    - neuroticism
+    - extraversion
+    - openness
+    - conscientiousness
+utility:
+  agent_1:
+    role_type: buyer
+    p_target: 18000
+    p_floor: 15500
+    currency: R\$
+    unit: /mês
+  agent_2:
+    role_type: seller
+    p_target: 14000
+    p_floor: 16500
+    currency: R\$
+    unit: /mês

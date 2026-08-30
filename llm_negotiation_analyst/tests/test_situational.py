@@ -60,12 +60,10 @@ class TestSituationalContext:
         ctx = SituationalContext(
             inflation=InflationLevel.HIGH,
             crises=[CrisisType.ECONOMIC_RECESSION],
-            year="2025",
         )
         d = ctx.to_dict()
         assert d["inflation"] == "high"
         assert d["crises"] == ["economic_recession"]
-        assert d["year"] == "2025"
         assert d["enabled"] is True
 
     def test_to_dict_none_vira_none(self):
@@ -79,8 +77,6 @@ class TestSituationalContext:
             interest_rates=InterestRateLevel.HIGH,
             government=GovernmentOrientation.POPULIST,
             crises=[CrisisType.CURRENCY_CRISIS, CrisisType.POLITICAL_INSTABILITY],
-            country="Brazil",
-            year="2015",
             custom_conditions=["Some custom note."],
         )
         restored = SituationalContext.from_dict(ctx.to_dict())
@@ -89,8 +85,6 @@ class TestSituationalContext:
         assert restored.government == GovernmentOrientation.POPULIST
         assert CrisisType.CURRENCY_CRISIS in restored.crises
         assert CrisisType.POLITICAL_INSTABILITY in restored.crises
-        assert restored.country == "Brazil"
-        assert restored.year == "2015"
         assert "Some custom note." in restored.custom_conditions
 
     def test_multiplas_crises(self):
@@ -157,16 +151,6 @@ class TestContextPromptBuilder:
         assert "The company just went through a merger." in block
         assert "There is a hiring freeze in effect." in block
 
-    def test_grounding_com_pais_e_ano(self):
-        ctx = SituationalContext(
-            inflation=InflationLevel.HIGH,
-            country="Brazil",
-            year="2015",
-        )
-        block = self.builder.build(ctx)
-        assert "Brazil" in block
-        assert "2015" in block
-
     def test_grounding_sem_pais_e_ano(self):
         ctx = SituationalContext(inflation=InflationLevel.LOW)
         block = self.builder.build(ctx)
@@ -218,8 +202,6 @@ class TestContextPresets:
     def test_brazil_2015_e_ativo(self):
         ctx = ContextPresets.brazil_2015_crisis()
         assert ctx.is_active()
-        assert ctx.country == "Brazil"
-        assert ctx.year == "2015"
         assert CrisisType.ECONOMIC_RECESSION in ctx.crises
         assert CrisisType.POLITICAL_INSTABILITY in ctx.crises
 
