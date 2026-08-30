@@ -19,7 +19,14 @@ models:
       conscientiousness: positive
     tactics:
       anchoring: 3
-      clarity: 3
+      anchor_susceptibility: 2
+      loss_aversion: 1
+      conditional_concession: 2
+      value_creation: 4
+      rapport: 5
+      resilience: 4
+      clarity: 4
+      fact_justification: 5
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -30,6 +37,14 @@ models:
       neuroticism: negative
     tactics:
       anchoring: 3
+      anchor_susceptibility: 2
+      loss_aversion: 1
+      conditional_concession: 2
+      value_creation: 4
+      rapport: 5
+      resilience: 4
+      clarity: 4
+      fact_justification: 5
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud
@@ -40,6 +55,15 @@ models:
     - extraversion
     - openness
     - conscientiousness
+    - anchoring
+    - anchor_susceptibility
+    - loss_aversion
+    - conditional_concession
+    - value_creation
+    - rapport
+    - resilience
+    - clarity
+    - fact_justification
 utility:
   agent_1:
     role_type: buyer
