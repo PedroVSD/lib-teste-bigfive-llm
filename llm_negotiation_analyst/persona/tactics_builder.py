@@ -68,15 +68,15 @@ class TacticsPromptBuilder:
             if raw_val is None:
                 continue
 
-            # Primeiro testa enabled/disabled (string ou bool)
+            # Primeiro testa enabled/disabled (string ou bool) — binário puro
             enabled = _is_enabled(raw_val)
             if enabled is not None:
                 if not enabled:
-                    continue  # disabled = não injeta
-                # enabled = âncora 5 (polo positivo)
-                anchor_key = 5
+                    continue  # disabled = não injeta (métrica ausente)
+                # enabled = usa âncora "enabled"
+                anchor_key = "enabled"
             else:
-                # Fallback legado: tenta int 1-5
+                # Fallback legado: tenta int 1-5 (compatibilidade)
                 try:
                     score = int(raw_val)
                 except (TypeError, ValueError):
@@ -88,12 +88,15 @@ class TacticsPromptBuilder:
                     raise ValueError(
                         f"Tactic '{key}' score must be between 1 and 5. Got {score}."
                     )
-                if score <= 2:
-                    anchor_key = 1
-                elif score == 3:
-                    anchor_key = 3
+                # Legado 1-5 mapeado para binário: 1-2→disabled (não injeta), 3→disabled, 4-5→enabled
+                if score >= 4:
+                    anchor_key = "enabled"
                 else:
-                    anchor_key = 5
+                    continue  # 1-3 = não injeta no modo binário
+                # Para compatibilidade total, se quiser manter granular, descomente:
+                # if score <= 2: anchor_key = "disabled"
+                # elif score == 3: anchor_key = "disabled"
+                # else: anchor_key = "enabled"
 
             try:
                 metric = NegotiationMetric(key)
@@ -102,7 +105,13 @@ class TacticsPromptBuilder:
                 continue
 
             meta = NEGOTIATION_META[metric]
-            guidance = meta.behavioral_anchors[anchor_key]
+            # Binário: apenas "enabled"/"disabled"
+            guidance = meta.behavioral_anchors.get(anchor_key)
+            if guidance is None:
+                # Fallback para chaves numéricas antigas (1/5)
+                guidance = meta.behavioral_anchors.get(5 if anchor_key == "enabled" else 1)
+            if guidance is None:
+                continue
 
             lines.append(f"[{meta.name}]")
             lines.append(f"Guidance: {guidance}")

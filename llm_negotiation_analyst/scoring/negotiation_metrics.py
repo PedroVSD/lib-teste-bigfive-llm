@@ -1,7 +1,7 @@
 """
 negotiation_metrics.py
 ======================
-Métricas de comportamento negocial além do Big Five.
+Métricas de comportamento negocial além do Big Five — agora BINÁRIAS.
 
 Organização em três categorias:
 
@@ -22,8 +22,8 @@ Organização em três categorias:
     anchor_susceptibility  Suscetibilidade à âncora do oponente
     loss_aversion          Aversão à perda de itens já considerados garantidos
 
-Cada métrica segue a mesma estrutura DimensionMeta do big5.py,
-com rubricas de pontuação 1–5 adaptadas ao contexto de negociação.
+Cada métrica é BINÁRIA: ou está presente (enabled) ou não está (disabled).
+Não há nível intermediário — as âncoras são apenas enabled/disabled.
 
 Referências:
   - Bazerman & Neale (1992) Negotiating Rationally
@@ -40,7 +40,7 @@ from .big5 import DimensionMeta
 # ---------------------------------------------------------------------------
 
 class NegotiationMetric(str, Enum):
-    """Métricas de comportamento e tática negocial (não Big Five)."""
+    """Métricas de comportamento e tática negocial (não Big Five) — binárias."""
 
     # Táticas
     ANCHORING              = "anchoring"
@@ -61,7 +61,7 @@ class NegotiationMetric(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Metadata e rubricas
+# Metadata e rubricas — BINÁRIAS: apenas enabled / disabled
 # ---------------------------------------------------------------------------
 
 NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
@@ -76,15 +76,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=5,
         category="tactics",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Faz uma oferta inicial fraca, ancorando contra si mesmo, "
                 "ou cede imediatamente seu valor ao primeiro sinal de resistência."
             ),
-            3: (
-                "Faz uma oferta razoável e tenta defendê-la brevemente, "
-                "mas cede rapidamente se o oponente insistir."
-            ),
-            5: (
+            "enabled": (
                 "Faz uma oferta extrema a seu favor (ancoragem forte) "
                 "e defende o valor com argumentos sólidos antes de fazer qualquer concessão."
             ),
@@ -99,15 +95,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=5,
         category="tactics",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Faz concessões de forma unilateral, reduzindo seu preço ou cedendo "
                 "benefícios sem pedir absolutamente nada em troca."
             ),
-            3: (
-                "Às vezes pede contrapartidas, mas em outros momentos cede apenas "
-                "para fazer a negociação avançar."
-            ),
-            5: (
+            "enabled": (
                 "Toda concessão é estritamente vinculada a um ganho explícito: "
                 "'Se eu aceitar X, você DEVE me dar Y em troca.'"
             ),
@@ -122,15 +114,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=3,
         category="tactics",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Foca exclusivamente em brigar por uma única métrica (ex: apenas o salário), "
                 "tratando a negociação como um cabo de guerra."
             ),
-            3: (
-                "Aceita discutir outras variáveis se o oponente propor, "
-                "mas não tenta ativamente expandir as opções."
-            ),
-            5: (
+            "enabled": (
                 "Proativamente adiciona novas variáveis à mesa (bônus, dias de folga, prazos) "
                 "para criar um pacote que beneficie ambos os lados."
             ),
@@ -147,15 +135,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=5,
         category="emotional",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Tom frio, robótico ou puramente transacional. "
                 "Ignora o lado humano e as necessidades do oponente."
             ),
-            3: (
-                "Mantém educação e cordialidade padrão, "
-                "mas sem esforço ativo para criar conexão."
-            ),
-            5: (
+            "enabled": (
                 "Valida ativamente as emoções do oponente, usa tom colaborativo "
                 "e foca explicitamente em construir uma parceria de longo prazo."
             ),
@@ -170,15 +154,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=3,
         category="emotional",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Cede instantaneamente a ultimatos, demonstra desespero "
                 "ou reage com agressividade desproporcional quando pressionado."
             ),
-            3: (
-                "Sente o impacto da pressão e recua um pouco, "
-                "mas tenta manter a negociação viva."
-            ),
-            5: (
+            "enabled": (
                 "Totalmente inabalável diante de ameaças de cancelamento ou exigências duras. "
                 "Redireciona o foco para os fatos com calma e segurança."
             ),
@@ -195,15 +175,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=5,
         category="argumentation",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Faz exigências baseadas apenas em desejo pessoal ou necessidades subjetivas, "
                 "sem nenhuma justificativa de mercado ou dado concreto."
             ),
-            3: (
-                "Dá justificativas genéricas (ex: 'tenho muita experiência') "
-                "mas sem citar dados concretos ou fontes verificáveis."
-            ),
-            5: (
+            "enabled": (
                 "Apoia cada oferta em dados sólidos: cenário macroeconômico, inflação, "
                 "média de mercado, métricas de ROI ou benchmarks da indústria."
             ),
@@ -218,15 +194,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=5,
         category="argumentation",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Mistura propostas, apresenta valores matematicamente conflitantes "
                 "ou se expressa de forma vaga e difícil de acompanhar."
             ),
-            3: (
-                "Comunicação funcional: a proposta é compreensível "
-                "mas apresentada em bloco de texto sem destaque claro."
-            ),
-            5: (
+            "enabled": (
                 "Altamente estruturado. Separa propostas por tópicos, "
                 "resume os valores claramente e apresenta aritmética impecável."
             ),
@@ -243,15 +215,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=1,
         category="cognitive_bias",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Totalmente imune. Ignora valores extremos jogados pelo oponente "
                 "e contrapropõe seu valor original planejado sem ajustes."
             ),
-            3: (
-                "Ajusta um pouco a sua proposta para encontrar um meio-termo "
-                "com a âncora do oponente."
-            ),
-            5: (
+            "enabled": (
                 "Abandona sua estratégia original e passa a orbitar quase inteiramente "
                 "o valor absurdo que o oponente propôs."
             ),
@@ -266,15 +234,11 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         observability=1,
         category="cognitive_bias",
         behavioral_anchors={
-            1: (
+            "disabled": (
                 "Foca no valor total do pacote de forma racional, não se importando "
                 "se um benefício específico foi retirado desde que compensado em outra área."
             ),
-            3: (
-                "Demonstra leve incômodo ao perder algo, "
-                "mas aceita seguir em frente com outras compensações."
-            ),
-            5: (
+            "enabled": (
                 "Luta desesperadamente contra a retirada de qualquer item "
                 "já considerado garantido, mesmo que receba o dobro de valor em outro lugar."
             ),

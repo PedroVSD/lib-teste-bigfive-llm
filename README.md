@@ -370,10 +370,10 @@ Para cada frase avaliada, a função _score_one monta um prompt contextualizado.
 Após avaliar todos os turnos da conversa, o método evaluate_transcript é executado para a nota. Ele pega todas as notas que um agente tirou ao longo do tempo para uma métrica específica e calcula a média aritmética (sum(dim_scores) / len(dim_scores)).
 Exemplo: Se o candidato tirou as notas 1, 3 e 5 em "Criação de Valor" durante os três turnos que falou, a nota final dele no relatório (o Big5Profile.scores) será 3.00.
 
-> **Big Five induzido vs observado (bipolar):** a indução usa `positive`/`negative`/`none`, mas o juiz sempre pontua `1-5`. Para comparação na mesma escala:
-> * **Induzido:** `positive` → `4.0` (`a high level of`), `negative` → `2.0` (`a low level of`) — não `5/1 very` porque a indução bipolar é `high/low`. `none` omite a linha em `1.3` e exibe `—` em `3. Perfis`.
-> * **Observado:** score `1-5` do juiz é exibido como `**4.60** (POSITIVE)` se `≥3.0` ou `**1.20** (NEGATIVE)` se `<3.0` — assim `4.60 (POSITIVE)` vs `POSITIVE` fica comparável, e a média final (`ex: 3.2 → POSITIVE`) também faz sentido na escala bipolar. As demais seções (`Observações`, `Comparação`) seguem o mesmo bipolar.
-> * **Alinhamento:** `diff = |observado - induzido_num|` com `positive→4.0`/`negative→2.0` → ✅ Ótimo `≤0.6`, ⚠️ Desvio `≤1.5`, ❌ Falhou `>1.5`. Big Five sempre aparece primeiro nas tabelas (ordem O-C-E-A-N: `openness, conscientiousness, extraversion, agreeableness, neuroticism`).
+> **Induzido vs observado (mesma base):**
+> * **Big Five:** induzido `positive`/`negative`/`none`; observado `1-5` → `≥3.0→POSITIVE` / `<3.0→NEGATIVE` exibido como `**4.60** (POSITIVE)`. Média `3.2→POSITIVE` também bipolar.
+> * **Táticas (9):** induzido `enabled`/`disabled` (`enabled`→âncora 5, `disabled` omite); observado `1-5` → `≥3.0→ENABLED` / `<3.0→DISABLED` exibido como `**ENABLED** (4.2)`. Legado `1-5` ainda funciona (`1-2→DISABLED`, `4-5→ENABLED`).
+> * **Alinhamento:** `✅ Compatível` se mesma categoria (`POSITIVE=POSITIVE` ou `ENABLED=ENABLED`), `❌ Não compatível` se oposta. Big Five sempre primeiro nas tabelas (O-C-E-A-N).
 
 6. Opcional: Duplo Juiz
 É possível instanciar a classe Evaluator passando um second_judge (um segundo modelo LLM), o sistema fará com que os dois juízes avaliem a mesma frase independentemente. O código então calcula o IRR (Confiabilidade Interavaliadores), substituindo a métrica de "confiança" padrão por um cálculo matemático que reflete o quanto os dois modelos concordaram entre si (1.0 - abs(score1 - score2) / 4.0).

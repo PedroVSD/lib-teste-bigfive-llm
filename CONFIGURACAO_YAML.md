@@ -106,16 +106,16 @@ models:
       openness: none           # desativa
       conscientiousness: positive
       extra_instructions: "Texto livre adicional"
-    tactics:                   # 1-5 gradual (1-2→1, 3→3, 4-5→5)
-      anchoring: 5
-      conditional_concession: 2
-      value_creation: 4
-      rapport: 5
-      resilience: 4
-      clarity: 4
-      anchor_susceptibility: 2
-      loss_aversion: 1
-      fact_justification: 5
+    tactics:                   # binário enabled/disabled (legado 1-5 ainda ok)
+      anchoring: enabled
+      anchor_susceptibility: enabled
+      loss_aversion: enabled
+      conditional_concession: enabled
+      value_creation: enabled
+      rapport: enabled
+      resilience: enabled
+      clarity: enabled
+      fact_justification: enabled
 
   agent_2:   # → 2º role (ex: recruiter)
     provider: "gemini"
@@ -172,27 +172,27 @@ models:
 
 Guias em `_GUIDANCE:76`; nomes em `_DIM_NAMES`. `none`/`null`/`nil`/`~`/omitir = não injeta.
 
-### 3.3 `tactics` — 1 a 5 (`persona/tactics_builder.py:16`)
+### 3.3 `tactics` — `enabled`/`disabled` (`persona/tactics_builder.py:16`)
 
-| Métrica | 1 (âncora 1) | 5 (âncora 5) |
+| Métrica | `disabled` | `enabled` (âncora 5) |
 |---|---|---|
-| `anchoring` | Cede rapidamente | Âncora forte |
-| `conditional_concession` | Concessão unilateral | Trocas estritas |
-| `value_creation` | Soma-zero | Integrativo/criativo |
-| `rapport` | Frio/transacional | Altamente empático |
-| `resilience` | Impulsivo | Calmo/inabalável |
-| `clarity` | Confuso | Estruturado/matemático |
-| `anchor_susceptibility` | Imune | Facilmente influenciado |
-| `loss_aversion` | Focado no ganho | Reativo à perda |
-| `fact_justification` | Argumentos vazios | Altamente embasado |
+| `anchoring` | não injeta | Âncora forte |
+| `conditional_concession` | não injeta | Trocas estritas |
+| `value_creation` | não injeta | Integrativo/criativo |
+| `rapport` | não injeta | Altamente empático |
+| `resilience` | não injeta | Calmo/inabalável |
+| `clarity` | não injeta | Estruturado/matemático |
+| `anchor_susceptibility` | não injeta | Facilmente influenciado |
+| `loss_aversion` | não injeta | Focado no ganho → Reativo à perda* |
+| `fact_justification` | não injeta | Altamente embasado |
 
-**Configuração:** `tactics:` agora `enabled`/`disabled` (binário, `persona/tactics_builder.py:16`). `enabled` injeta âncora 5, `disabled`/`none` não injeta. Legado `1-5` ainda funciona (`1-2→1`, `3→3`, `4-5→5`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 9 métricas `enabled` em ambos agentes e `judge.metrics` com as 14 dimensões, e `experimento.py:272` avalia **utilidade** (`utility`) e **satisfação** (IPC) para todos.
+*`loss_aversion`/`anchor_susceptibility` baixo = `DISABLED` (imune). Legado `1-5` ainda funciona (`1-2→1`, `3→3`, `4-5→5`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 9 métricas `enabled` em ambos agentes e `judge.metrics` com as 14 dimensões, e `experimento.py:272` avalia **utilidade** (`utility`) e **satisfação** (IPC) para todos.
 
-**Observação:** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:294`) recebe `anchor_1/3/5` + utterance e retorna `score 1-5` por turno (`per_turn_scores`), média em `Big5Profile.scores` (`evaluator.py:266`). `clarity`/`rapport` etc são observáveis só pelo texto.
+**Observação (mesma base):** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:294`) recebe `anchor_1/3/5` + utterance e retorna `score 1-5` por turno, convertido para `ENABLED` se `≥3.0` senão `DISABLED` para comparar com `enabled/disabled` induzido. `Induzido ENABLED` vs `Observado ENABLED (4.2)` → `✅ Compatível`, `ENABLED` vs `DISABLED (2.1)` → `❌ Não compatível` (`report/generator.py:250`). Big Five análogo `POSITIVE`/`NEGATIVE` (`≥3.0`).
 
 ### 3.4 `judge.metrics`
 
-Lista livre de Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:42`). Se omitido, avalia só Big Five. Bipolar observado: `positive→4.0`/`negative→2.0`, `≥3.0→POSITIVE` no relatório.
+Lista livre de Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:42`). Se omitido, avalia só Big Five. Observado convertido para mesma base do induzido: Big Five `≥3.0→POSITIVE` else `NEGATIVE`; táticas `≥3.0→ENABLED` else `DISABLED` — alinhamento `Compatível` se igual.
 
 ---
 

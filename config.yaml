@@ -34,7 +34,10 @@ models:
     max_tokens: 2048
     persona:
       agreeableness: positive
-      neuroticism: negative
+      neuroticism: positive
+      extraversion: positive
+      openness: positive
+      conscientiousness: positive
     tactics:
       anchoring: enabled
       anchor_susceptibility: enabled

@@ -67,29 +67,61 @@ def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
     return len(confirmed_roles) >= min(2, required)
 
 
-# Mapeamento induzido → numérico para cálculo de alinhamento
-# Big Five: positive→4.0 (high), negative→2.0 (low); táticas: enabled→5.0
-_POLARITY_NUMERIC = {"positive": 4.0, "negative": 2.0, "enabled": 5.0, "none": None}
-_POLARITY_THRESHOLD = 3.0  # ≥3.0 → POSITIVE, <3.0 → NEGATIVE (bipolar puro, sem neutro)
-
-def _induced_to_numeric(val):
-    if val is None:
-        return None
-    if isinstance(val, (int, float)):
-        return float(val)
-    if isinstance(val, str):
-        v = val.strip().lower()
-        if v in _POLARITY_NUMERIC:
-            return _POLARITY_NUMERIC[v]
-        try:
-            return float(v)
-        except ValueError:
-            return None
-    return None
+# Mapeamento induzido → categoria e observado → categoria (mesma base)
+_POLARITY_THRESHOLD = 3.0  # ≥3.0 → POSITIVE/ENABLED, <3.0 → NEGATIVE/DISABLED (bipolar puro)
+_ENABLED_THRESHOLD = 3.0
 
 def _score_to_polarity(score: float) -> str:
-    """Converte score 1-5 do juiz para polo bipolar para exibição."""
+    """Big Five: 1-5 → POSITIVE/NEGATIVE."""
     return "POSITIVE" if score >= _POLARITY_THRESHOLD else "NEGATIVE"
+
+def _score_to_enabled(score: float) -> str:
+    """Táticas: 1-5 → ENABLED/DISABLED."""
+    return "ENABLED" if score >= _ENABLED_THRESHOLD else "DISABLED"
+
+def _induced_category(dim, val) -> str | None:
+    """Normaliza valor induzido para categoria comparável."""
+    if val is None:
+        return None
+    from ..scoring.big5 import Dimension as _D
+    is_big5 = isinstance(dim, _D)
+    if isinstance(val, str):
+        v = val.strip().lower()
+        if v in ("none","null","nil"):
+            return None
+        if is_big5:
+            if v in ("positive","negative"):
+                return v
+            # legado numérico como string
+            try:
+                num = float(v)
+                return "positive" if num >= 3.0 else "negative"
+            except:
+                return None
+        else:
+            if v in ("enabled","disabled"):
+                return v
+            if v in ("positive","negative"):
+                return "enabled" if v == "positive" else "disabled"
+            try:
+                num = float(v)
+                return "enabled" if num >= 3.0 else "disabled"
+            except:
+                return None
+    if isinstance(val, (int,float)):
+        if is_big5:
+            return "positive" if float(val) >= 3.0 else "negative"
+        else:
+            return "enabled" if float(val) >= 3.0 else "disabled"
+    return None
+
+def _observed_category(dim, score: float) -> str:
+    """Converte score observado para mesma categoria do induzido."""
+    from ..scoring.big5 import Dimension as _D
+    if isinstance(dim, _D):
+        return _score_to_polarity(score).lower()
+    else:
+        return _score_to_enabled(score).lower()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -251,36 +283,34 @@ def generate_report(
             meta    = ALL_METRICS_META[dim]
             ind_val = induced.get(dim.value)
             obs_val = profile.scores.get(dim)
-            # Induzido: POSITIVE/NEGATIVE/ENABLED ou numérico 1-5
+            # Induzido na mesma base do observado (bipolar/binário)
             if isinstance(ind_val, str):
-                if ind_val.lower() in ("positive","negative","enabled"):
+                if ind_val.lower() in ("positive","negative","enabled","disabled"):
                     ind_str = f"**{ind_val.upper()}**"
                 else:
                     ind_str = f"{ind_val}"
             elif ind_val is not None:
-                ind_str = f"**{ind_val}**/5"
+                # legado numérico 1-5 → converte para categoria para exibição
+                cat = _induced_category(dim, ind_val)
+                ind_str = f"**{cat.upper()}**" if cat else f"**{ind_val}**/5"
             else:
                 ind_str = "—"
-            # Observado: para Big Five mostra também o polo bipolar (POSITIVE/NEGATIVE)
-            # para que a comparação induzido↔observado fique na mesma escala.
+            # Observado na mesma base do induzido
             if obs_val is None:
                 obs_str = "—"
+                obs_cat = None
             else:
-                # Import local para checar se é Big Five
-                from ..scoring.big5 import Dimension as _ObsDim
-                if isinstance(dim, _ObsDim):
-                    pol = _score_to_polarity(obs_val)
-                    obs_str = f"**{obs_val:.2f}** ({pol})"
-                else:
-                    obs_str = f"**{obs_val:.2f}**"
+                obs_cat = _observed_category(dim, obs_val)
+                obs_str = f"**{obs_cat.upper()}** ({obs_val:.2f})"
+            # Alinhamento binário: Compatível se mesma categoria, Não compatível se diferente
             status  = "—"
             if ind_val is not None and obs_val is not None:
-                ind_num = _induced_to_numeric(ind_val)
-                if ind_num is not None:
-                    diff = abs(obs_val - ind_num)
-                    if diff <= 0.6:   status = "✅ Ótimo"
-                    elif diff <= 1.5: status = "⚠️ Desvio"
-                    else:             status = "❌ Falhou"
+                ind_cat = _induced_category(dim, ind_val)
+                if ind_cat is not None and obs_cat is not None:
+                    if ind_cat.lower() == obs_cat.lower():
+                        status = "✅ Compatível"
+                    else:
+                        status = "❌ Não compatível"
                 else:
                     status = "—"
             a(f"| {meta.name} | {ind_str} | {obs_str} | {status} |")
@@ -374,14 +404,14 @@ def generate_report(
     # ── 8. NOTAS DE METODOLOGIA ───────────────────────────────────────
     e(["## 8. Notas de Metodologia", ""])
     a("- **Scoring:** LLM-as-judge com rubricas JSON estruturadas, uma chamada por dimensão por turno. Score 1-5 para todas as dimensões.")
-    a("- **Big Five bipolar:** Induzido é `positive`/`negative`/`none`; observado é 1-5 convertido para bipolar para comparação (`≥3.0→POSITIVE`, `<3.0→NEGATIVE`). Mapeamento relatório: `positive→4.0`, `negative→2.0` (high/low, não 5/1 very).")
-    a("- **Aggregation:** Média aritmética dos scores válidos por turno (confidence > 0). A média final também é bipolar: `≥3.0` indica POSITIVE, `<3.0` NEGATIVE, permitindo comparar induzido vs média na mesma escala.")
+    a("- **Big Five bipolar:** Induzido `positive`/`negative`/`none`; observado `1-5→POSITIVE≥3.0/NEGATIVE<3.0`. Táticas `enabled`/`disabled` (legado `1-5`); observado `≥3.0→ENABLED/<3.0→DISABLED`. Mesma base para comparação.")
+    a("- **Aggregation:** Média aritmética dos scores válidos por turno (confidence > 0). A média final também é convertida para bipolar/binário na mesma base do induzido.")
     a("- **Persona injection:** Instruções comportamentais prepended ao system prompt. Modelos podem desviar da disposição induzida.")
     a("- **Situational context:** Injetado igualmente em todos os agentes. Efeito não medido diretamente.")
     a("- **Judge independence:** Juiz separado dos agentes negociadores para evitar viés de auto-avaliação.")
     a("- **Reproducibility:** Use `temperature=0` e `seed` (Ollama/LMStudio) para resultados determinísticos.")
     a("- **IRR:** Quando `second_judge` é usado, `confidence` reflete IRR normalizado por turno. Valores abaixo de 0.75 indicam desacordo significativo.")
-    a("- **Alinhamento:** ✅ Ótimo (desvio ≤ 0.6), ⚠️ Desvio (≤ 1.5), ❌ Falhou (> 1.5).")
+    a("- **Alinhamento:** ✅ Compatível (mesma categoria: `POSITIVE`=`POSITIVE` ou `ENABLED`=`ENABLED`), ❌ Não compatível (categoria oposta).")
     a("- **Utilidade:** Escala 0–1 onde 0 = obteve o mínimo aceitável e 1 = obteve o valor alvo. Pode ser negativa (abaixo do piso) ou > 1 (superou o alvo).")
     a("- **IPC:** Índice de Satisfação Pós-negociação. Escala 1–7. Itens a3 e a5 invertidos (7 − valor) por formulação negativa. Referência: Barry & Friedman (1998).")
     a("")

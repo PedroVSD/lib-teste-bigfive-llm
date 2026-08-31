@@ -82,7 +82,7 @@ You will be given:
   - The negotiation context (scenario description)
   - The role of the speaker (e.g., buyer, seller, employer, candidate)
   - The metric name and its high/low poles
-  - Behavioral anchors for scores 1, 3 and 5
+  - Behavioral anchors (either 1/3/5 scale or DISABLED/ENABLED binary)
   - The utterance to evaluate
 
 You must respond ONLY with a valid JSON object. Do not include markdown fences, \
@@ -107,6 +107,25 @@ _JUDGE_USER = """## Negotiation Context
 1 — {anchor_1}
 3 — {anchor_3}
 5 — {anchor_5}
+
+## Utterance to Evaluate (Turn {turn_index})
+\"\"\"{utterance}\"\"\"
+
+Evaluate this utterance on the metric "{metric_name}". Respond with JSON only."""
+
+_JUDGE_USER_BINARY = """## Negotiation Context
+{scenario_context}
+
+## Speaker Role
+{role}
+
+## Metric: {metric_name} ({high_pole} ↔ {low_pole})
+
+### Behavioral States
+DISABLED — {anchor_disabled}
+ENABLED — {anchor_enabled}
+
+Scoring: score 1-2 = DISABLED (trait absent), 4-5 = ENABLED (trait present). Use 1 for clearly disabled, 5 for clearly enabled.
 
 ## Utterance to Evaluate (Turn {turn_index})
 \"\"\"{utterance}\"\"\"
@@ -292,18 +311,32 @@ class Evaluator:
         judge: LLMAdapter,
     ) -> DimensionScore:
         meta = ALL_METRICS_META[metric]
-        prompt = _JUDGE_USER.format(
-            scenario_context=scenario_context,
-            role=role,
-            metric_name=meta.name,
-            high_pole=meta.high_pole,
-            low_pole=meta.low_pole,
-            anchor_1=meta.behavioral_anchors[1],
-            anchor_3=meta.behavioral_anchors[3],
-            anchor_5=meta.behavioral_anchors[5],
-            turn_index=turn_index,
-            utterance=utterance,
-        )
+        # Binário (táticas): behavioral_anchors = {"disabled":..., "enabled":...}
+        if "enabled" in meta.behavioral_anchors:
+            prompt = _JUDGE_USER_BINARY.format(
+                scenario_context=scenario_context,
+                role=role,
+                metric_name=meta.name,
+                high_pole=meta.high_pole,
+                low_pole=meta.low_pole,
+                anchor_disabled=meta.behavioral_anchors["disabled"],
+                anchor_enabled=meta.behavioral_anchors["enabled"],
+                turn_index=turn_index,
+                utterance=utterance,
+            )
+        else:
+            prompt = _JUDGE_USER.format(
+                scenario_context=scenario_context,
+                role=role,
+                metric_name=meta.name,
+                high_pole=meta.high_pole,
+                low_pole=meta.low_pole,
+                anchor_1=meta.behavioral_anchors[1],
+                anchor_3=meta.behavioral_anchors[3],
+                anchor_5=meta.behavioral_anchors[5],
+                turn_index=turn_index,
+                utterance=utterance,
+            )
         messages = [
             {"role": "system", "content": _JUDGE_SYSTEM},
             {"role": "user",   "content": prompt},
