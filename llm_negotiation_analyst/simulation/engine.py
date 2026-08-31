@@ -184,6 +184,7 @@ class SimulationEngine:
         turn_delay_seconds: float = 0.0,
         use_system_reminder: bool = True,
         tactics: Optional[dict[str, dict]] = None,
+        experiment_name: Optional[str] = None,
     ):
         self.scenario = scenario
         self.raw_agents = agents
@@ -193,6 +194,7 @@ class SimulationEngine:
         self.benchmark_turns = benchmark_turns
         self.turn_delay_seconds = turn_delay_seconds
         self.use_system_reminder = use_system_reminder
+        self.experiment_name = experiment_name
 
     def run(self) -> NegotiationResult:
         if self.benchmark_turns is not None:
@@ -321,8 +323,19 @@ class SimulationEngine:
             for k, v in tact.items():
                 if v is None:
                     continue
-                if isinstance(v, str) and v.strip().lower() in ("none","null","nil"):
+                # Trata enabled/disabled (novo) e none/null
+                if isinstance(v, bool):
+                    if not v:
+                        continue
+                    base[k] = "enabled"
                     continue
+                if isinstance(v, str):
+                    vl = v.strip().lower()
+                    if vl in ("none","null","nil","disabled","false","off","0","no","inactive"):
+                        continue
+                    if vl in ("enabled","true","on","1","yes","active"):
+                        base[k] = "enabled"
+                        continue
                 try:
                     base[k] = int(v)
                 except Exception:
@@ -344,7 +357,8 @@ class SimulationEngine:
             started_at=started_at,
             ended_at=time.time(),
             metadata={**scenario.metadata, "personas": personas_meta, "context": context_meta,
-                      "settlement_keywords": scenario.settlement_keywords},
+                      "settlement_keywords": scenario.settlement_keywords,
+                      "experiment_name": self.experiment_name},
         )
 
     # ------------------------------------------------------------------

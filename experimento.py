@@ -261,6 +261,7 @@ if __name__ == "__main__":
     config_juiz = EvaluatorConfig.from_strings(metricas_textos) if metricas_textos else None
 
     # 5. Simulação principal
+    experiment_name = exp.get("name")
     result, profiles, _ = run_negotiation(
         scenario=scenario,
         agents=agents_dict,
@@ -272,6 +273,7 @@ if __name__ == "__main__":
         context=macro_context,
         output_dir="results/",
         use_system_reminder=exp.get("use_system_reminder", False),
+        experiment_name=experiment_name,
     )
     print("✅ Simulação concluída.")
 
@@ -291,8 +293,10 @@ if __name__ == "__main__":
     satisfaction_results = sat_evaluator.evaluate_all(result)
     print("✅ Satisfação avaliada.")
 
-    # 8. Regera o relatório com as novas seções
-    report_path = f"results/{result.scenario_name}_{result.run_id}_report.md"
+    # 8. Regera o relatório com as novas seções (usa experiment_name no nome do arquivo)
+    exp_name = result.metadata.get("experiment_name") or experiment_name or result.scenario_name
+    prefix = f"{exp_name}_{result.scenario_name}" if exp_name else result.scenario_name
+    report_path = f"results/{prefix}_{result.run_id}_report.md"
     generate_report(
         result=result,
         profiles=profiles,

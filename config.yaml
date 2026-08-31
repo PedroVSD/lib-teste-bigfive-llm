@@ -1,42 +1,14 @@
 experiment:
-  name: "teste_modelos_todas_as_variaveis"
-  # Cenários disponíveis (scenarios/__init__.py:52):
-  #  - salary_negotiation          → Negociação salarial: candidate vs recruiter (R$12k vs R$16k + bônus/férias). Âncora, utilidade, concessões. [HR, 8 turnos]
-  #  - company_acquisition         → Aquisição de empresa: seller vs buyer (R$8M vs R$5-7M, earn-out, IP). Risco, informação assimétrica. [M&A, 10 turnos]
-  #  - strategic_supplier_contract → Contrato fornecedor: buyer vs supplier (R$1.200 vs R$950, volume/prazo/garantias). Trade-offs e criação de valor. [Supply Chain, 10 turnos]
-  #  - property_boundary_dispute    → Disputa propriedade: owner_a vs owner_b (12m², R$80k). Justiça percebida, rapport, resiliência. [Property, 10 turnos]
-  #  Para criar um novo, veja CONFIGURACAO_YAML.md §5 e scenarios/__init__.py:228
-  scenario: "salary_negotiation"
-  turn_delay_seconds: 10
-  max_turns: 5
+  name: crescimento_forte
+  scenario: salary_negotiation
+  max_turns: 8
   use_system_reminder: true
-
-# Define a pressão do mundo externo
-# Use `preset:` para selecionar um dos 10 contextos prontos (ver situational.py:ContextPresets)
-# ou preencha manualmente os campos abaixo. Se `preset` for usado, os campos manuais
-# complementam/sobrescrevem o preset.
 context:
-  # preset: "crescimento_forte"   # descomente para usar preset
-  enabled: true
-  inflation: "HIGH"
-  interest_rates: "VERY_HIGH"
-  government: "INTERVENTIONIST"
-  crises:
-    - "ECONOMIC_RECESSION"
-    - "POLITICAL_INSTABILITY"
-  gdp_growth: "Queda acentuada no último semestre."
-  unemployment: "Taxas estáveis, mas em mercado informal."
-  custom_conditions:
-    - "O fornecedor principal ameaçou cancelar contratos anteriores. Só há orçamento aprovado para pagamentos parcelados."
-
-# Big Five: use apenas 'positive' ou 'negative' (não use números).
-# Exemplo: agreeableness: positive | neuroticism: negative
-# Tactics: use 1 a 5 (1-2 → âncora 1, 3 → âncora 3, 4-5 → âncora 5)
+  preset: crescimento_forte
 models:
-  # Primeira role
   agent_1:
-    provider: "ollama"
-    name: "gemma4:31b-cloud"
+    provider: ollama
+    name: gemma4:31b-cloud
     temperature: 0.5
     max_tokens: 2048
     persona:
@@ -45,75 +17,63 @@ models:
       extraversion: positive
       openness: positive
       conscientiousness: positive
-      extra_instructions: "Sua empresa (varejo) está sofrendo muito com a recessão. Você TEM que conseguir um desconto agressivo no software ou o projeto será cancelado. Jogue duro e não aceite a primeira oferta."
     tactics:
-      anchoring: 5
-      conditional_concession: 2
-      value_creation: 4
-      rapport: 5
-      resilience: 4
-      clarity: 4
-      anchor_susceptibility: 2
-      loss_aversion: 1
-      fact_justification: 5
-
-  # Segunda role
+      anchoring: enabled
+      anchor_susceptibility: enabled
+      loss_aversion: enabled
+      conditional_concession: enabled
+      value_creation: enabled
+      rapport: enabled
+      resilience: enabled
+      clarity: enabled
+      fact_justification: enabled
   agent_2:
-    provider: "gemini"
-    name: "gemma-4-26b-a4b-it"
+    provider: gemini
+    name: gemma-4-26b-a4b-it
     temperature: 0.5
     max_tokens: 2048
     persona:
       agreeableness: positive
-      neuroticism: positive
-      extraversion: positive
-      openness: positive
-      conscientiousness: positive
-      extra_instructions: "Você precisa bater sua meta de vendas do trimestre. Seja empático, tente construir relacionamento, mas use concessões condicionais: só diminua o preço se o cliente abrir mão de algo."
+      neuroticism: negative
     tactics:
-      anchoring: 2
-      conditional_concession: 4
-      value_creation: 5
-      rapport: 5
-      resilience: 4
-      clarity: 4
-      anchor_susceptibility: 2
-      loss_aversion: 2
-      fact_justification: 5
-
+      anchoring: enabled
+      anchor_susceptibility: enabled
+      loss_aversion: enabled
+      conditional_concession: enabled
+      value_creation: enabled
+      rapport: enabled
+      resilience: enabled
+      clarity: enabled
+      fact_justification: enabled
   judge:
-    provider: "ollama"
-    name: "gpt-oss:120b-cloud"
+    provider: ollama
+    name: gpt-oss:120b-cloud
     temperature: 0.0
     metrics:
-      - "agreeableness"
-      - "neuroticism"
-      - "extraversion"
-      - "openness"
-      - "conscientiousness"
-      - "anchoring"
-      - "conditional_concession"
-      - "value_creation"
-      - "rapport"
-      - "resilience"
-      - "clarity"
-      - "anchor_susceptibility"
-      - "loss_aversion"
-      - "fact_justification"
-#deepseek-v4-pro:cloud
-#provider: "lmstudio"
-#name: "google/gemma-4-e2b"
-
+    - agreeableness
+    - neuroticism
+    - extraversion
+    - openness
+    - conscientiousness
+    - anchoring
+    - anchor_susceptibility
+    - loss_aversion
+    - conditional_concession
+    - value_creation
+    - rapport
+    - resilience
+    - clarity
+    - fact_justification
 utility:
   agent_1:
-    role_type: "buyer"      # agente quer maximizar o salário
-    p_target: 18000         # salário alvo do candidato (R$/mês)
-    p_floor: 15500          # BATNA (oferta concorrente)
-    currency: "R$"
-    unit: "/mês"
+    role_type: buyer
+    p_target: 18000
+    p_floor: 15500
+    currency: R\$
+    unit: /mês
   agent_2:
-    role_type: "seller"     # agente quer minimizar o custo
-    p_target: 14000         # salário ideal para o recrutador
-    p_floor: 16500          # teto orçamentário
-    currency: "R$"
-    unit: "/mês"
+    role_type: seller
+    p_target: 14000
+    p_floor: 16500
+    currency: R\$
+    unit: /mês

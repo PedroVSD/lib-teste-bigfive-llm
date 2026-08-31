@@ -5,18 +5,44 @@ persona/tactics_builder.py
 Transforma as métricas de negociação configuradas no YAML em
 instruções comportamentais para o system prompt.
 
-A escala utilizada é 1 a 5 (comportamento gradual), mapeada para
-as âncoras 1, 3 e 5 dos metadados:
+Suporta dois formatos (compatíveis):
 
-    1-2 -> âncora 1 (polo negativo)
-    3   -> âncora 3 (neutro/moderado)
-    4-5 -> âncora 5 (polo positivo)
+  1) Numérico 1-5 (legado, gradual):
+     1-2 -> âncora 1 (polo negativo)
+     3   -> âncora 3 (neutro/moderado)
+     4-5 -> âncora 5 (polo positivo)
+
+  2) Booleano enabled/disabled (atual):
+     enabled  -> injeta âncora 5 (ativo, polo positivo)
+     disabled -> não injeta (métrica desativada)
+
+Exemplo YAML:
+  tactics:
+    anchoring: enabled
+    rapport: disabled
+    clarity: enabled
 """
 
 from ..scoring.negotiation_metrics import (
     NegotiationMetric,
     NEGOTIATION_META,
 )
+
+_ENABLED_VALUES = {"enabled", "true", "on", "yes", "1", "active"}
+_DISABLED_VALUES = {"disabled", "false", "off", "0", "no", "none", "inactive"}
+
+
+def _is_enabled(value) -> bool | None:
+    """Retorna True=enabled, False=disabled, None=não é booleano."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in _ENABLED_VALUES:
+            return True
+        if v in _DISABLED_VALUES:
+            return False
+    return None
 
 
 class TacticsPromptBuilder:
@@ -35,23 +61,39 @@ class TacticsPromptBuilder:
             "",
         ]
 
-        for key, score in tactics_dict.items():
+        has_any = False
 
-            if score is None:
+        for key, raw_val in tactics_dict.items():
+
+            if raw_val is None:
                 continue
 
-            try:
-                score = int(score)
-            except (TypeError, ValueError):
-                raise ValueError(
-                    f"Invalid score for tactic '{key}': {score!r}. "
-                    "Expected integer 1-5."
-                )
-
-            if not 1 <= score <= 5:
-                raise ValueError(
-                    f"Tactic '{key}' score must be between 1 and 5. Got {score}."
-                )
+            # Primeiro testa enabled/disabled (string ou bool)
+            enabled = _is_enabled(raw_val)
+            if enabled is not None:
+                if not enabled:
+                    continue  # disabled = não injeta
+                # enabled = âncora 5 (polo positivo)
+                anchor_key = 5
+            else:
+                # Fallback legado: tenta int 1-5
+                try:
+                    score = int(raw_val)
+                except (TypeError, ValueError):
+                    raise ValueError(
+                        f"Invalid value for tactic '{key}': {raw_val!r}. "
+                        "Expected 'enabled'/'disabled' or integer 1-5."
+                    )
+                if not 1 <= score <= 5:
+                    raise ValueError(
+                        f"Tactic '{key}' score must be between 1 and 5. Got {score}."
+                    )
+                if score <= 2:
+                    anchor_key = 1
+                elif score == 3:
+                    anchor_key = 3
+                else:
+                    anchor_key = 5
 
             try:
                 metric = NegotiationMetric(key)
@@ -60,20 +102,15 @@ class TacticsPromptBuilder:
                 continue
 
             meta = NEGOTIATION_META[metric]
-
-            # Mapeia 1-5 para âncoras 1, 3, 5
-            if score <= 2:
-                anchor_key = 1
-            elif score == 3:
-                anchor_key = 3
-            else:
-                anchor_key = 5
-
             guidance = meta.behavioral_anchors[anchor_key]
 
             lines.append(f"[{meta.name}]")
             lines.append(f"Guidance: {guidance}")
             lines.append("")
+            has_any = True
+
+        if not has_any:
+            return ""
 
         lines.append(self.FOOTER)
 

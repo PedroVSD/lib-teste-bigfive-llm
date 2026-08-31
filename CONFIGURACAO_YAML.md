@@ -186,7 +186,9 @@ Guias em `_GUIDANCE:76`; nomes em `_DIM_NAMES`. `none`/`null`/`nil`/`~`/omitir =
 | `loss_aversion` | Focado no ganho | Reativo à perda |
 | `fact_justification` | Argumentos vazios | Altamente embasado |
 
-`3` = neutro/moderado (âncora 3).
+**Configuração:** `tactics:` agora `enabled`/`disabled` (binário, `persona/tactics_builder.py:16`). `enabled` injeta âncora 5, `disabled`/`none` não injeta. Legado `1-5` ainda funciona (`1-2→1`, `3→3`, `4-5→5`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 9 métricas `enabled` em ambos agentes e `judge.metrics` com as 14 dimensões, e `experimento.py:272` avalia **utilidade** (`utility`) e **satisfação** (IPC) para todos.
+
+**Observação:** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:294`) recebe `anchor_1/3/5` + utterance e retorna `score 1-5` por turno (`per_turn_scores`), média em `Big5Profile.scores` (`evaluator.py:266`). `clarity`/`rapport` etc são observáveis só pelo texto.
 
 ### 3.4 `judge.metrics`
 

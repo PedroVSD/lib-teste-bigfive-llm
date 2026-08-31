@@ -319,9 +319,22 @@ persona:
 * `negative` → `a low level of` + guia `_GUIDANCE[dim]["negative"]`
 * `none` / `null` / `~` / omitir → traço não induzido (sem linha no prompt)
 
-Táticas de negociação (`tactics:` no YAML) continuam `1 a 5` (`1-2→âncora 1`, `3→âncora 3`, `4-5→âncora 5`).
+Táticas de negociação (`tactics:` no YAML) agora são **binárias** `enabled`/`disabled` (legado `1-5` ainda suportado):
+```yaml
+tactics:
+  anchoring: enabled              # injeta âncora 5 (polo positivo)
+  anchor_susceptibility: disabled # não injeta
+  loss_aversion: enabled
+  conditional_concession: enabled
+  value_creation: enabled
+  rapport: enabled
+  resilience: enabled
+  clarity: enabled
+  fact_justification: enabled
+```
+`enabled` → `NEGOTIATION_META[metric].behavioral_anchors[5]` (`persona/tactics_builder.py:16`), `disabled`/`none` → não injeta. Arquivos em `results/` agora incluem `experiment_name` (`results/{experiment}_{scenario}_{run_id}_report.md` via `simulation/engine.py:359` e `storage/jsonl_store.py:54`).
 
-> Todas as frases de indução ficam em `persona/big5_persona.py:76` `_GUIDANCE` e os nomes em `_DIM_NAMES`. O builder injeta bloco `--- Personality Profile ---` no system prompt.
+> Indução Big Five em `persona/big5_persona.py:76` `_GUIDANCE` / `_DIM_NAMES` → bloco `--- Personality Profile ---`. Táticas em `persona/tactics_builder.py:16` → bloco `--- Negotiation Tactics ---`.
 
 ---
 

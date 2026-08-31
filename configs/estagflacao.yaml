@@ -18,15 +18,15 @@ models:
       openness: positive
       conscientiousness: positive
     tactics:
-      anchoring: 3
-      anchor_susceptibility: 2
-      loss_aversion: 1
-      conditional_concession: 2
-      value_creation: 4
-      rapport: 5
-      resilience: 4
-      clarity: 4
-      fact_justification: 5
+      anchoring: enabled
+      anchor_susceptibility: enabled
+      loss_aversion: enabled
+      conditional_concession: enabled
+      value_creation: enabled
+      rapport: enabled
+      resilience: enabled
+      clarity: enabled
+      fact_justification: enabled
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -39,15 +39,15 @@ models:
       openness: positive
       conscientiousness: positive
     tactics:
-      anchoring: 3
-      anchor_susceptibility: 2
-      loss_aversion: 1
-      conditional_concession: 2
-      value_creation: 4
-      rapport: 5
-      resilience: 4
-      clarity: 4
-      fact_justification: 5
+      anchoring: enabled
+      anchor_susceptibility: enabled
+      loss_aversion: enabled
+      conditional_concession: enabled
+      value_creation: enabled
+      rapport: enabled
+      resilience: enabled
+      clarity: enabled
+      fact_justification: enabled
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud

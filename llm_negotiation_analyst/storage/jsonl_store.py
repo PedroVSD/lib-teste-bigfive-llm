@@ -51,7 +51,8 @@ class StorageManager:
         Save transcript and return file paths.
         Also appends a summary line to runs_index.jsonl.
         """
-        slug = f"{result.scenario_name}_{result.run_id}"
+        exp_name = result.metadata.get("experiment_name") if result.metadata else None
+        slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
 
         # --- Transcript JSONL (one line per turn) ---
         transcript_path = self.base / "transcripts" / f"{slug}.jsonl"
@@ -93,7 +94,8 @@ class StorageManager:
         profiles: dict[str, Big5Profile],
     ) -> Path:
         """Save Big5 profiles to JSONL."""
-        slug = f"{result.scenario_name}_{result.run_id}"
+        exp_name = result.metadata.get("experiment_name") if result.metadata else None
+        slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
         scores_path = self.base / "scores" / f"{slug}_scores.jsonl"
 
         with open(scores_path, "w", encoding="utf-8") as f:

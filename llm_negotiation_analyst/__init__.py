@@ -42,10 +42,16 @@ def run_negotiation(
     verbose: bool = True,
     use_system_reminder: bool = True,
     tactics=None,
+    experiment_name=None,
 ):
     import logging
     if verbose:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
+
+    # Usa experiment_name do YAML (file stem) se não fornecido
+    if not experiment_name:
+        # tenta inferir de result depois, mas passa para engine para metadata
+        experiment_name = None
 
     engine = SimulationEngine(
         scenario=scenario,
@@ -55,8 +61,12 @@ def run_negotiation(
         turn_delay_seconds=turn_delay_seconds,
         use_system_reminder=use_system_reminder,
         tactics=tactics,
+        experiment_name=experiment_name,
     )
     result = engine.run()
+    # Se engine não tinha nome mas result tem, propaga
+    if not experiment_name:
+        experiment_name = result.metadata.get("experiment_name")
 
     evaluator = Evaluator(judge=judge, config=evaluator_config, second_judge=second_judge)
     profiles = evaluator.evaluate_transcript(
@@ -71,7 +81,9 @@ def run_negotiation(
     storage.save_result(result)
     storage.save_scores(result, profiles)
 
-    report_path = f"{output_dir}/{result.scenario_name}_{result.run_id}_report.md"
+    # Nome do arquivo inclui experiment_name se disponível
+    prefix = f"{experiment_name}_{result.scenario_name}" if experiment_name else result.scenario_name
+    report_path = f"{output_dir}/{prefix}_{result.run_id}_report.md"
     report_md = generate_report(result, profiles, output_path=report_path)
     return result, profiles, report_md
 

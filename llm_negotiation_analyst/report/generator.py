@@ -68,11 +68,8 @@ def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
 
 
 # Mapeamento induzido → numérico para cálculo de alinhamento
-# positive = "a high level of" → 4.0, negative = "a low level of" → 2.0
-# (não 5/1 "very high/low" porque a indução bipolar é high/low, não very).
-# Isso também faz as médias finais ficarem numa escala interpretável:
-# observado 4.6 vs induzido 4.0 diff 0.6 → ótimo, não punido por não ser 5.0.
-_POLARITY_NUMERIC = {"positive": 4.0, "negative": 2.0, "none": None}
+# Big Five: positive→4.0 (high), negative→2.0 (low); táticas: enabled→5.0
+_POLARITY_NUMERIC = {"positive": 4.0, "negative": 2.0, "enabled": 5.0, "none": None}
 _POLARITY_THRESHOLD = 3.0  # ≥3.0 → POSITIVE, <3.0 → NEGATIVE (bipolar puro, sem neutro)
 
 def _induced_to_numeric(val):
@@ -113,10 +110,13 @@ def generate_report(
     settled       = result.settled or _detect_settlement_retroactively(result)
     personas_meta = result.metadata.get("personas", {})
     context_meta  = result.metadata.get("context")
+    experiment_name = result.metadata.get("experiment_name")
 
     # ── CABEÇALHO ─────────────────────────────────────────────────────
     a("# Relatório de Análise de Negociação")
     a("")
+    if experiment_name:
+        a(f"> **Experimento:** `{experiment_name}`  ")
     a(f"> **Cenário:** {result.scenario_description}  ")
     a(f"> **ID da Execução:** `{result.run_id}`  ")
     a(f"> **Gerado em:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}  ")
@@ -157,15 +157,15 @@ def generate_report(
             a("| Dimensão | Valor Induzido (Target) |")
             a("|-----------|-------------------------|")
             for dim_key, score in scores.items():
-                # 'none' significa desativado — não exibe na tabela
-                if isinstance(score, str) and score.lower() == "none":
+                # 'none'/'disabled' significa desativado — não exibe na tabela
+                if isinstance(score, str) and score.lower() in ("none","disabled","false","off"):
                     continue
                 if score is None:
                     continue
                 try:
                     metric = resolve_metric(dim_key)
                     meta   = ALL_METRICS_META[metric]
-                    if isinstance(score, str) and score.lower() in ("positive", "negative"):
+                    if isinstance(score, str) and score.lower() in ("positive", "negative", "enabled"):
                         disp = f"**{score.upper()}**"
                     else:
                         disp = f"**{score}**/5"
@@ -251,9 +251,12 @@ def generate_report(
             meta    = ALL_METRICS_META[dim]
             ind_val = induced.get(dim.value)
             obs_val = profile.scores.get(dim)
-            # Induzido: POSITIVE/NEGATIVE (bipolar) ou numérico 1-5 (táticas)
+            # Induzido: POSITIVE/NEGATIVE/ENABLED ou numérico 1-5
             if isinstance(ind_val, str):
-                ind_str = f"**{ind_val.upper()}**" if ind_val.lower() in ("positive","negative") else f"{ind_val}"
+                if ind_val.lower() in ("positive","negative","enabled"):
+                    ind_str = f"**{ind_val.upper()}**"
+                else:
+                    ind_str = f"{ind_val}"
             elif ind_val is not None:
                 ind_str = f"**{ind_val}**/5"
             else:
@@ -386,8 +389,11 @@ def generate_report(
     # ── 9. DADOS BRUTOS ───────────────────────────────────────────────
     e(["## 9. Dados Brutos", ""])
     a("Os dados detalhados desta execução foram salvos em:")
-    a(f"- Transcrição: `results/transcripts/{result.scenario_name}_{result.run_id}.jsonl`")
-    a(f"- Scores: `results/scores/{result.scenario_name}_{result.run_id}_scores.jsonl`")
+    exp_prefix = f"{experiment_name}_{result.scenario_name}" if experiment_name else result.scenario_name
+    a(f"- Transcrição: `results/transcripts/{exp_prefix}_{result.run_id}.jsonl`")
+    a(f"- Scores: `results/scores/{exp_prefix}_{result.run_id}_scores.jsonl`")
+    if experiment_name:
+        a(f"- Experimento: `{experiment_name}`")
     a("")
 
     report_md = "\n".join(lines)
