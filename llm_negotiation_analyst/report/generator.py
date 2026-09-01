@@ -329,12 +329,13 @@ def generate_report(
             a(f"| {meta.name} | {ind_str} | `{exp_str}` | {obs_str} | {status} |")
         a("")
 
-        # Observações por dimensão com evidências
-        a("#### Evidências por dimensão")
+        # Observações por dimensão — legível
+        a("#### Evidências por dimensão (amostras por turno)")
         a("")
-        # agrupar observations por dimensão
+        a("_Cada linha abaixo é uma observação categórica de um turno com evidência textual curta. `occurrence_rate` já resumida na tabela acima._")
+        a("")
         obs_by_dim = {}
-        source = profile.observations if profile.observations else profile.per_turn_scores
+        source = profile.observations
         for o in source:
             obs_by_dim.setdefault(o.dimension, []).append(o)
         if not obs_by_dim:
@@ -344,23 +345,32 @@ def generate_report(
             for dim in sorted(obs_by_dim.keys(), key=_dim_sort_key):
                 meta = ALL_METRICS_META[dim]
                 summary = profile.summaries.get(dim)
-                pct_str = _format_occurrence_compact(summary) if summary else "—"
+                occ = _format_occurrence(summary) if summary else "—"
                 warn = " _(⚠ baixa observabilidade)_" if meta.observability <= 2 else ""
-                a(f"**{meta.name}** — `{pct_str}` — *{meta.high_pole} ↔ {meta.low_pole}*{warn}")
-                # mostrar até 2 evidências PRESENT e 1 ABSENT como exemplo
-                present_evs = [o for o in obs_by_dim[dim] if o.result == BehavioralResult.PRESENT][:2]
-                absent_evs = [o for o in obs_by_dim[dim] if o.result == BehavioralResult.ABSENT][:1]
-                for o in present_evs:
-                    ev = o.evidence[:160].replace(chr(10), " ")
-                    a(f"> **PRESENT** T{o.turn_index}: _{ev}_")
-                for o in absent_evs:
-                    ev = o.evidence[:160].replace(chr(10), " ")
-                    a(f"> **ABSENT** T{o.turn_index}: _{ev}_")
-                if not present_evs and not absent_evs:
-                    na_evs = [o for o in obs_by_dim[dim] if o.result == BehavioralResult.NOT_APPLICABLE][:1]
-                    for o in na_evs:
-                        ev = o.evidence[:160].replace(chr(10), " ")
-                        a(f"> **NOT_APPLICABLE** T{o.turn_index}: _{ev}_")
+                a(f"**{meta.name}** (`{meta.abbreviation}`) — {occ} — *{meta.high_pole} ↔ {meta.low_pole}*{warn}")
+                a("")
+                # Tabela por dimensão — mostra todas as observações aplicáveis, NOT_APPLICABLE colapsado
+                a("| Turno | Resultado | Conf. | Evidence |")
+                a("|-------|-----------|-------|----------|")
+                shown = 0
+                for o in sorted(obs_by_dim[dim], key=lambda x: x.turn_index):
+                    if o.result == BehavioralResult.NOT_APPLICABLE:
+                        continue
+                    ev = o.evidence.replace("\n", " ").replace("|", "\\|").strip()
+                    if len(ev) > 180:
+                        ev = ev[:177] + "..."
+                    # escape pipes
+                    a(f"| T{o.turn_index} | **{o.result.value}** | {o.confidence:.2f} | {ev} |")
+                    shown += 1
+                if shown == 0:
+                    # só NA — mostrar 1 exemplo
+                    for o in sorted(obs_by_dim[dim], key=lambda x: x.turn_index)[:1]:
+                        ev = o.evidence.replace("\n", " ").replace("|", "\\|").strip()
+                        a(f"| T{o.turn_index} | **{o.result.value}** | {o.confidence:.2f} | {ev} |")
+                # resumo NA se houver
+                na_count = sum(1 for o in obs_by_dim[dim] if o.result == BehavioralResult.NOT_APPLICABLE)
+                if na_count:
+                    a(f"| — | *{na_count}× NOT_APPLICABLE* | — | _Turnos sem oportunidade suficiente (ignorados no %)_ |")
                 a("")
 
     # ── 4. COMPARAÇÃO ENTRE AGENTES ──────────────────────────────────
@@ -403,27 +413,42 @@ def generate_report(
     # ── 7. TRANSCRIÇÃO ───────────────────────────────────────
     e(["## 7. Transcrição Completa da Negociação", ""])
 
+    # Lookup turno → observações daquele turno
     score_lookup: dict[tuple, dict] = {}
     for profile in profiles.values():
-        source = profile.observations if profile.observations else profile.per_turn_scores
+        source = profile.observations
         for o in source:
             key = (profile.agent_id, o.turn_index)
             score_lookup.setdefault(key, {})[o.dimension] = o
 
     for turn in result.transcript:
         a("---")
-        a(f"**Turno {turn.turn_index} · {turn.role.upper()}**")
+        a(f"**Turno {turn.turn_index} · {turn.role.upper()}**  `({turn.agent_id})`")
         a("")
-        a(turn.content)
+        # citação da fala
+        a(f"> {turn.content}")
         a("")
         dim_obs = score_lookup.get((turn.agent_id, turn.turn_index), {})
-        valid = {d: o for d, o in dim_obs.items() if o.result != BehavioralResult.NOT_APPLICABLE}
-        if valid:
-            parts = " | ".join(
-                f"{ALL_METRICS_META[d].abbreviation}: {o.result.value} — _{o.evidence[:80]}_"
-                for d, o in valid.items()
-            )
-            a(f"*(Observações: {parts})*")
+        # separar PRESENT / ABSENT / NA
+        present = {d: o for d, o in dim_obs.items() if o.result == BehavioralResult.PRESENT}
+        absent = {d: o for d, o in dim_obs.items() if o.result == BehavioralResult.ABSENT}
+        na = {d: o for d, o in dim_obs.items() if o.result == BehavioralResult.NOT_APPLICABLE}
+        if present or absent:
+            a("**Observações deste turno** _(PRESENT/ABSENT; NOT_APPLICABLE omitido)_:")
+            a("")
+            for d, o in sorted(present.items(), key=lambda x: ALL_METRICS_META[x[0]].abbreviation):
+                meta = ALL_METRICS_META[d]
+                ev = o.evidence.replace("\n", " ").strip()
+                a(f"- `{meta.abbreviation}` **{meta.name}** — **PRESENT** (conf. {o.confidence:.2f}) — _{ev}_")
+            for d, o in sorted(absent.items(), key=lambda x: ALL_METRICS_META[x[0]].abbreviation):
+                meta = ALL_METRICS_META[d]
+                ev = o.evidence.replace("\n", " ").strip()
+                a(f"- `{meta.abbreviation}` **{meta.name}** — **ABSENT** (conf. {o.confidence:.2f}) — _{ev}_")
+            if na:
+                a(f"- _+ {len(na)}× NOT_APPLICABLE (sem oportunidade neste turno, ignorado no %)_")
+            a("")
+        elif na:
+            a(f"_Todas as {len(na)} métricas NOT_APPLICABLE neste turno (sem oportunidade)_")
             a("")
 
     # ── 8. NOTAS ───────────────────────────────────────

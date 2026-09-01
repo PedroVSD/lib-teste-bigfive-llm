@@ -214,7 +214,6 @@ class Evaluator:
                 turn_index=i,
             )
             profiles[agent_id].observations.extend(turn_obs)
-            profiles[agent_id].per_turn_scores = profiles[agent_id].observations
 
         # Agrega: counts + occurrence_rate por métrica
         for agent_id, profile in profiles.items():

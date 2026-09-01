@@ -91,16 +91,16 @@ class Big5Profile:
     # legacy alias: scores was dict metric -> float; kept for compat reading but not written
     scores: dict = field(default_factory=dict)
     observations: list[BehaviorObservation] = field(default_factory=list)
-    # legacy alias
-    per_turn_scores: list[BehaviorObservation] = field(default_factory=list)
     notes: str = ""
 
-    def __post_init__(self):
-        # keep aliases in sync
-        if self.observations and not self.per_turn_scores:
-            self.per_turn_scores = self.observations
-        if self.per_turn_scores and not self.observations:
-            self.observations = self.per_turn_scores
+    # per_turn_scores is legacy alias for observations — kept as property for compat
+    @property
+    def per_turn_scores(self) -> list[BehaviorObservation]:
+        return self.observations
+
+    @per_turn_scores.setter
+    def per_turn_scores(self, value: list[BehaviorObservation]):
+        self.observations = value
 
     def to_dict(self) -> dict:
         return {

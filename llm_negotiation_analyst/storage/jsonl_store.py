@@ -87,7 +87,13 @@ class StorageManager:
                     scores_out[key] = v
 
                 observations_out = []
-                source = profile.observations if profile.observations else profile.per_turn_scores
+                source = profile.observations  # canonical; per_turn_scores is property alias
+                # fallback for legacy profiles that might have only per_turn_scores
+                if not source and hasattr(profile, "per_turn_scores"):
+                    try:
+                        source = profile.per_turn_scores  # type: ignore
+                    except Exception:
+                        source = []
                 for o in source:
                     # handle both new BehaviorObservation and legacy DimensionScore
                     dim_val = o.dimension.value if hasattr(o.dimension, "value") else str(o.dimension)
@@ -112,7 +118,6 @@ class StorageManager:
                     "summaries": summaries_out,
                     "scores": scores_out,
                     "observations": observations_out,
-                    "per_turn_scores": observations_out,  # alias
                     "notes": profile.notes,
                 }
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
