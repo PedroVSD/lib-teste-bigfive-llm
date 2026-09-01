@@ -476,8 +476,8 @@ class ContextPresets:
         return SituationalContext(
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.HIGH,
-            government=GovernmentOrientation.CONSERVATIVE,
-            crises=[CrisisType.ECONOMIC_RECESSION],
+            government=GovernmentOrientation.POPULIST,
+            crises=[CrisisType.ECONOMIC_RECESSION, CrisisType.GEOPOLITICAL, CrisisType.HEALTH_PANDEMIC],
             gdp_growth="PIB negativo, contração de -2% a -3%.",
             unemployment="Desemprego alto, 10-12%. Mercado de trabalho fraco.",
             custom_conditions=[
@@ -617,8 +617,8 @@ class ContextPresets:
             interest_rates=InterestRateLevel.LOW,
             government=GovernmentOrientation.ANCAP,
             crises=[],
-            gdp_growth="PIB em crescimento alto, tendência de alta.",
-            unemployment="Desemprego baixo, estável.",
+            gdp_growth="PIB em crescimento alto, tendência de alta. 5% para mais",
+            unemployment="Desemprego baixo, estável. 4%",
             custom_conditions=[
                 "Intervenção mínima, regulação muito baixa, tributação muito baixa, política monetária descentralizada e fiscal limitada.",
                 "Banco central: NONE — sistema monetário competitivo, crédito privado, regulação bancária mínima.",
