@@ -1,19 +1,14 @@
 """
-LLM-as-judge evaluator.
+LLM-as-judge evaluator — categorical.
 
-Avalia utterances de negociação em duas famílias de métricas:
+Behavioral metrics (Big Five + NegotiationMetric) são avaliadas por turno como:
+  PRESENT | ABSENT | NOT_APPLICABLE  + evidence
 
-  Big Five (Dimension)          — traços de personalidade OCEAN
-  NegotiationMetric             — táticas, emoções, argumentação e vieses
+Agregação: occurrence_rate = PRESENT / (PRESENT + ABSENT)  (NOT_APPLICABLE ignorado)
+Utility (0-1) e Satisfaction (1-7) permanecem separados e contínuos/ordinais.
+Agreement = AGREEMENT | NO_AGREEMENT.
 
-Ambas as famílias usam a mesma estrutura DimensionMeta e o mesmo
-pipeline de avaliação via LLM-as-judge com rubricas estruturadas.
-
-Design decisions:
-  - Judge separado dos agentes para evitar viés de auto-avaliação.
-  - Cada turno é pontuado independentemente; score final = média.
-  - Judge retorna JSON estruturado; fallback em caso de falha.
-  - Dual-judge opcional: IRR calculado e armazenado por turno.
+Judge retorna JSON {metric, result, evidence}.
 """
 
 import json
@@ -23,30 +18,21 @@ from dataclasses import dataclass, field
 from typing import Optional, Union
 
 from ..adapters.base import LLMAdapter
-from .big5 import Dimension, DimensionScore, Big5Profile, BIG5_META
+from .big5 import Dimension, BehavioralResult, BehaviorObservation, BehaviorSummary, Big5Profile, BIG5_META
 from .negotiation_metrics import NegotiationMetric, NEGOTIATION_META
 
 logger = logging.getLogger(__name__)
 
-# Tipo unificado para qualquer métrica avaliável
 AnyMetric = Union[Dimension, NegotiationMetric]
-
-# Registro unificado de metadados — lookup único para o evaluator
 ALL_METRICS_META = {**BIG5_META, **NEGOTIATION_META}
 
+# Outcome agreement (not behavioral)
+class AgreementResult(str, __import__("enum").Enum):
+    AGREEMENT = "AGREEMENT"
+    NO_AGREEMENT = "NO_AGREEMENT"
 
-# ---------------------------------------------------------------------------
-# Helpers de resolução de string → enum
-# ---------------------------------------------------------------------------
 
 def resolve_metric(value: str) -> AnyMetric:
-    """
-    Converte uma string (ex: 'agreeableness', 'anchoring') para o enum correto.
-    Tenta Big Five primeiro, depois NegotiationMetric.
-
-    Raises:
-        ValueError: se a string não corresponde a nenhuma métrica conhecida.
-    """
     try:
         return Dimension(value)
     except ValueError:
@@ -71,28 +57,30 @@ def is_negotiation_metric(metric: AnyMetric) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Prompt templates
+# Prompt templates — categorical
 # ---------------------------------------------------------------------------
 
-_JUDGE_SYSTEM = """You are an expert researcher in behavioral economics, psychology, and \
-negotiation science. Your task is to evaluate a single utterance from a \
-negotiation transcript according to the specific metric provided.
+_JUDGE_SYSTEM = """You are an expert researcher in behavioral economics, psychology, and negotiation science. Your task is to evaluate a single utterance from a negotiation transcript according to the specific behavioral metric provided.
 
 You will be given:
   - The negotiation context (scenario description)
-  - The role of the speaker (e.g., buyer, seller, employer, candidate)
-  - The metric name and its high/low poles
-  - Behavioral anchors (either 1/3/5 scale or DISABLED/ENABLED binary)
+  - The role of the speaker
+  - The metric name and its poles (present vs absent)
+  - Behavioral anchors for PRESENT and ABSENT
   - The utterance to evaluate
 
-You must respond ONLY with a valid JSON object. Do not include markdown fences, \
-preamble, or explanation outside the JSON.
+Rules:
+  - Base your judgment ONLY on observable behavior in THIS turn, not on a general impression of the agent.
+  - Use NOT_APPLICABLE when there was insufficient opportunity to observe the behavior in this turn (e.g., very short utterance, no relevant content). NOT_APPLICABLE must NOT be treated as ABSENT.
+  - Evidence must be a short quote or paraphrase (1 sentence) justifying the classification.
+
+You must respond ONLY with a valid JSON object. No markdown fences.
 
 JSON schema:
 {
-  "score": <integer 1–5>,
-  "justification": "<1–3 sentence explanation referencing specific language from the utterance>",
-  "confidence": <float 0.0–1.0>
+  "metric": "<metric id>",
+  "result": "PRESENT" | "ABSENT" | "NOT_APPLICABLE",
+  "evidence": "<short textual evidence>"
 }"""
 
 _JUDGE_USER = """## Negotiation Context
@@ -103,34 +91,15 @@ _JUDGE_USER = """## Negotiation Context
 
 ## Metric: {metric_name} ({high_pole} ↔ {low_pole})
 
-### Scoring Anchors
-1 — {anchor_1}
-3 — {anchor_3}
-5 — {anchor_5}
+### Behavioral Anchors
+PRESENT — {anchor_present}
+ABSENT — {anchor_absent}
+NOT_APPLICABLE — insufficient opportunity to observe this behavior in this turn (short/irrelevant utterance)
 
 ## Utterance to Evaluate (Turn {turn_index})
 \"\"\"{utterance}\"\"\"
 
-Evaluate this utterance on the metric "{metric_name}". Respond with JSON only."""
-
-_JUDGE_USER_BINARY = """## Negotiation Context
-{scenario_context}
-
-## Speaker Role
-{role}
-
-## Metric: {metric_name} ({high_pole} ↔ {low_pole})
-
-### Behavioral States
-DISABLED — {anchor_disabled}
-ENABLED — {anchor_enabled}
-
-Scoring: score 1-2 = DISABLED (trait absent), 4-5 = ENABLED (trait present). Use 1 for clearly disabled, 5 for clearly enabled.
-
-## Utterance to Evaluate (Turn {turn_index})
-\"\"\"{utterance}\"\"\"
-
-Evaluate this utterance on the metric "{metric_name}". Respond with JSON only."""
+Evaluate this utterance on the metric "{metric_name}". Respond with JSON only: {{"metric": "{metric_id}", "result": "PRESENT|ABSENT|NOT_APPLICABLE", "evidence": "..."}}."""
 
 
 # ---------------------------------------------------------------------------
@@ -139,46 +108,17 @@ Evaluate this utterance on the metric "{metric_name}". Respond with JSON only.""
 
 @dataclass
 class EvaluatorConfig:
-    """
-    Controla quais métricas o juiz vai avaliar.
-
-    Aceita qualquer combinação de Dimension (Big Five) e NegotiationMetric.
-
-    Exemplos:
-        # Só Big Five
-        EvaluatorConfig(dimensions=list(Dimension))
-
-        # Só métricas de negociação
-        EvaluatorConfig(dimensions=list(NegotiationMetric))
-
-        # Misto
-        EvaluatorConfig(dimensions=[
-            Dimension.AGREEABLENESS,
-            NegotiationMetric.ANCHORING,
-            NegotiationMetric.RAPPORT,
-        ])
-
-        # A partir de strings (ex: lidas do config.yaml)
-        EvaluatorConfig.from_strings(["agreeableness", "anchoring", "rapport"])
-    """
     dimensions: list[AnyMetric] = field(default_factory=list)
+    # legacy compat: score_per_turn / invert_neuroticism kept but ignored
     score_per_turn: bool = True
-    invert_neuroticism: bool = False  # flip N: alto = mais estável
+    invert_neuroticism: bool = False
 
     def __post_init__(self):
         if not self.dimensions:
-            # Default: apenas Big Five
             self.dimensions = list(Dimension)
 
     @classmethod
     def from_strings(cls, metric_strings: list[str], **kwargs) -> "EvaluatorConfig":
-        """
-        Cria EvaluatorConfig a partir de uma lista de strings.
-        Strings inválidas são ignoradas com um warning.
-
-        Uso típico (lendo do config.yaml):
-            EvaluatorConfig.from_strings(["agreeableness", "anchoring", "rapport"])
-        """
         resolved = []
         for s in metric_strings:
             try:
@@ -189,12 +129,10 @@ class EvaluatorConfig:
 
     @property
     def big5_dimensions(self) -> list[Dimension]:
-        """Retorna apenas as dimensões Big Five da configuração."""
         return [d for d in self.dimensions if is_big5(d)]
 
     @property
     def negotiation_metrics(self) -> list[NegotiationMetric]:
-        """Retorna apenas as métricas de negociação da configuração."""
         return [d for d in self.dimensions if is_negotiation_metric(d)]
 
 
@@ -204,12 +142,12 @@ class EvaluatorConfig:
 
 class Evaluator:
     """
-    Usa um LLM-juiz para pontuar utterances de negociação.
+    Usa um LLM-juiz para observar utterances de forma categórica.
 
     Args:
-        judge:        LLMAdapter do juiz (separado dos agentes negociadores).
-        config:       EvaluatorConfig — define quais métricas avaliar.
-        second_judge: Segundo juiz opcional para cálculo de IRR por turno.
+        judge: LLMAdapter do juiz (separado dos agentes negociadores).
+        config: EvaluatorConfig — define quais métricas avaliar.
+        second_judge: Segundo juiz opcional para cálculo de IRR por turno (agreement).
     """
 
     def __init__(
@@ -233,17 +171,16 @@ class Evaluator:
         scenario_context: str,
         turn_index: int,
         dimensions: Optional[list[AnyMetric]] = None,
-    ) -> list[DimensionScore]:
-        """Pontua um único turno em todas as métricas configuradas."""
+    ) -> list[BehaviorObservation]:
         metrics = dimensions or self.config.dimensions
-        scores = []
+        observations = []
         for metric in metrics:
-            score = self._score_one(utterance, role, scenario_context, turn_index, metric, self.judge)
+            obs = self._observe_one(utterance, role, scenario_context, turn_index, metric, self.judge)
             if self.second_judge:
-                score2 = self._score_one(utterance, role, scenario_context, turn_index, metric, self.second_judge)
-                score.confidence = self._irr(score.score, score2.score)
-            scores.append(score)
-        return scores
+                obs2 = self._observe_one(utterance, role, scenario_context, turn_index, metric, self.second_judge)
+                obs.confidence = self._irr(obs.result, obs2.result)
+            observations.append(obs)
+        return observations
 
     def evaluate_transcript(
         self,
@@ -253,9 +190,7 @@ class Evaluator:
     ) -> dict[str, Big5Profile]:
         """
         Pontua o transcript completo e retorna um Big5Profile por agente.
-
-        Nota: 'Big5Profile' aqui armazena tanto scores Big Five quanto
-        scores de métricas de negociação — o nome é histórico.
+        Agregação: occurrence_rate = PRESENT / (PRESENT+ABSENT).
         """
         profiles: dict[str, Big5Profile] = {}
 
@@ -266,34 +201,41 @@ class Evaluator:
             )
 
         for i, turn in enumerate(transcript):
-            role      = turn.get("role")
-            content   = turn.get("content", "")
-            agent_id  = turn.get("agent_id", role)
-
+            role = turn.get("role")
+            content = turn.get("content", "")
+            agent_id = turn.get("agent_id", role)
             if agent_id not in profiles:
                 continue
-
-            agent_role  = agent_roles.get(agent_id, role)
-            turn_scores = self.evaluate_turn(
+            agent_role = agent_roles.get(agent_id, role)
+            turn_obs = self.evaluate_turn(
                 utterance=content,
                 role=agent_role,
                 scenario_context=scenario_context,
                 turn_index=i,
             )
-            profiles[agent_id].per_turn_scores.extend(turn_scores)
+            profiles[agent_id].observations.extend(turn_obs)
+            profiles[agent_id].per_turn_scores = profiles[agent_id].observations
 
-        # Agrega: média por métrica por agente
+        # Agrega: counts + occurrence_rate por métrica
         for agent_id, profile in profiles.items():
             for metric in self.config.dimensions:
-                dim_scores = [
-                    s.score for s in profile.per_turn_scores
-                    if s.dimension == metric
-                ]
-                if dim_scores:
-                    agg = sum(dim_scores) / len(dim_scores)
-                    if self.config.invert_neuroticism and metric == Dimension.NEUROTICISM:
-                        agg = 6.0 - agg
-                    profile.scores[metric] = round(agg, 2)
+                obs_for_metric = [o for o in profile.observations if o.dimension == metric]
+                present = sum(1 for o in obs_for_metric if o.result == BehavioralResult.PRESENT)
+                absent = sum(1 for o in obs_for_metric if o.result == BehavioralResult.ABSENT)
+                na = sum(1 for o in obs_for_metric if o.result == BehavioralResult.NOT_APPLICABLE)
+                total_applicable = present + absent
+                occurrence_rate = (present / total_applicable) if total_applicable > 0 else None
+                summary = BehaviorSummary(
+                    dimension=metric,
+                    present=present,
+                    absent=absent,
+                    not_applicable=na,
+                    occurrence_rate=occurrence_rate,
+                    total_applicable=total_applicable,
+                )
+                profile.summaries[metric] = summary
+                # legacy scores kept as occurrence_rate for compat (0-1)
+                profile.scores[metric] = occurrence_rate
 
         return profiles
 
@@ -301,7 +243,7 @@ class Evaluator:
     # Helpers internos
     # ------------------------------------------------------------------
 
-    def _score_one(
+    def _observe_one(
         self,
         utterance: str,
         role: str,
@@ -309,79 +251,75 @@ class Evaluator:
         turn_index: int,
         metric: AnyMetric,
         judge: LLMAdapter,
-    ) -> DimensionScore:
+    ) -> BehaviorObservation:
         meta = ALL_METRICS_META[metric]
-        # Binário (táticas): behavioral_anchors = {"disabled":..., "enabled":...}
-        if "enabled" in meta.behavioral_anchors:
-            prompt = _JUDGE_USER_BINARY.format(
-                scenario_context=scenario_context,
-                role=role,
-                metric_name=meta.name,
-                high_pole=meta.high_pole,
-                low_pole=meta.low_pole,
-                anchor_disabled=meta.behavioral_anchors["disabled"],
-                anchor_enabled=meta.behavioral_anchors["enabled"],
-                turn_index=turn_index,
-                utterance=utterance,
-            )
-        else:
-            prompt = _JUDGE_USER.format(
-                scenario_context=scenario_context,
-                role=role,
-                metric_name=meta.name,
-                high_pole=meta.high_pole,
-                low_pole=meta.low_pole,
-                anchor_1=meta.behavioral_anchors[1],
-                anchor_3=meta.behavioral_anchors[3],
-                anchor_5=meta.behavioral_anchors[5],
-                turn_index=turn_index,
-                utterance=utterance,
-            )
+        # anchors are now present/absent (fallback for legacy)
+        anchor_present = meta.behavioral_anchors.get("present") or meta.behavioral_anchors.get("enabled") or meta.behavioral_anchors.get(5) or ""
+        anchor_absent = meta.behavioral_anchors.get("absent") or meta.behavioral_anchors.get("disabled") or meta.behavioral_anchors.get(1) or ""
+        prompt = _JUDGE_USER.format(
+            scenario_context=scenario_context,
+            role=role,
+            metric_name=meta.name,
+            high_pole=meta.high_pole,
+            low_pole=meta.low_pole,
+            anchor_present=anchor_present,
+            anchor_absent=anchor_absent,
+            turn_index=turn_index,
+            utterance=utterance,
+            metric_id=metric.value if hasattr(metric, "value") else str(metric),
+        )
         messages = [
             {"role": "system", "content": _JUDGE_SYSTEM},
-            {"role": "user",   "content": prompt},
+            {"role": "user", "content": prompt},
         ]
         try:
-            raw    = judge.complete(messages)
+            raw = judge.complete(messages)
             parsed = self._parse_json(raw)
-            return DimensionScore(
+            result_raw = str(parsed.get("result", "")).strip().upper()
+            if result_raw not in ("PRESENT", "ABSENT", "NOT_APPLICABLE"):
+                raise ValueError(f"Invalid result '{result_raw}' — expected PRESENT|ABSENT|NOT_APPLICABLE")
+            result = BehavioralResult(result_raw)
+            evidence = str(parsed.get("evidence", "")).strip()
+            if not evidence:
+                evidence = "(no evidence provided)"
+            return BehaviorObservation(
                 dimension=metric,
-                score=float(parsed["score"]),
-                justification=parsed.get("justification", ""),
+                result=result,
+                evidence=evidence,
                 turn_index=turn_index,
                 confidence=float(parsed.get("confidence", 1.0)),
             )
         except Exception as e:
             logger.warning("Judge failed for dim=%s turn=%d: %s", metric, turn_index, e)
-            return DimensionScore(
+            return BehaviorObservation(
                 dimension=metric,
-                score=3.0,
-                justification=f"[Evaluation failed: {e}]",
+                result=BehavioralResult.NOT_APPLICABLE,
+                evidence=f"[Evaluation failed: {e}]",
                 turn_index=turn_index,
                 confidence=0.0,
             )
 
     @staticmethod
     def _parse_json(raw: str) -> dict:
-        # Remove markdown fences and extra whitespace, then extract first JSON object
         clean = re.sub(r"```(?:json)?|```", "", raw).strip()
-        # Find first '{' — judge sometimes adds preamble/extra data after JSON
         start = clean.find("{")
         if start == -1:
             raise ValueError(f"No JSON object found in judge response: {raw[:300]}")
-        # Use raw_decode to tolerate trailing extra data (e.g. two JSONs concatenated)
         decoder = json.JSONDecoder()
         try:
             obj, _ = decoder.raw_decode(clean[start:])
             return obj
         except json.JSONDecodeError:
-            # Fallback: slice to last '}' and try
             end = clean.rfind("}")
             if end != -1 and end > start:
                 return json.loads(clean[start:end + 1])
             raise
 
     @staticmethod
-    def _irr(score1: float, score2: float) -> float:
-        """IRR normalizado: 1.0 = concordância total, 0.0 = máximo desacordo."""
-        return max(0.0, 1.0 - abs(score1 - score2) / 4.0)
+    def _irr(result1: BehavioralResult, result2: BehavioralResult) -> float:
+        """IRR categorical: 1.0 if agree, 0.0 if disagree (NA vs anything = 0.5 if one NA)."""
+        if result1 == result2:
+            return 1.0
+        if BehavioralResult.NOT_APPLICABLE in (result1, result2):
+            return 0.5
+        return 0.0

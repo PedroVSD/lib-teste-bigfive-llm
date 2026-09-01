@@ -172,27 +172,27 @@ models:
 
 Guias em `_GUIDANCE:76`; nomes em `_DIM_NAMES`. `none`/`null`/`nil`/`~`/omitir = não injeta.
 
-### 3.3 `tactics` — `enabled`/`disabled` (`persona/tactics_builder.py:16`)
+### 3.3 `tactics` — `PRESENT`/`ABSENT`/`NOT_APPLICABLE` (`persona/tactics_builder.py:14`, `scoring/negotiation_metrics.py:1`)
 
-| Métrica | `disabled` | `enabled` (âncora 5) |
-|---|---|---|
-| `anchoring` | não injeta | Âncora forte |
-| `conditional_concession` | não injeta | Trocas estritas |
-| `value_creation` | não injeta | Integrativo/criativo |
-| `rapport` | não injeta | Altamente empático |
-| `resilience` | não injeta | Calmo/inabalável |
-| `clarity` | não injeta | Estruturado/matemático |
-| `anchor_susceptibility` | não injeta | Facilmente influenciado |
-| `loss_aversion` | não injeta | Focado no ganho → Reativo à perda* |
-| `fact_justification` | não injeta | Altamente embasado |
+| Métrica | `ABSENT` / `disabled` | `PRESENT` / `enabled` | `NOT_APPLICABLE` |
+|---|---|---|---|
+| `anchoring` | não injeta | Âncora forte | não injeta (sem oportunidade) |
+| `conditional_concession` | não injeta | Trocas estritas | — |
+| `value_creation` | não injeta | Integrativo/criativo | — |
+| `rapport` | não injeta | Altamente empático | — |
+| `resilience` | não injeta | Calmo/inabalável | — |
+| `clarity` | não injeta | Estruturado/matemático | — |
+| `anchor_susceptibility` | não injeta (imune) | Facilmente influenciado | — |
+| `loss_aversion` | não injeta (imune) | Reativo à perda | — |
+| `fact_justification` | não injeta | Altamente embasado | — |
 
-*`loss_aversion`/`anchor_susceptibility` baixo = `DISABLED` (imune). Legado `1-5` ainda funciona (`1-2→1`, `3→3`, `4-5→5`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 9 métricas `enabled` em ambos agentes e `judge.metrics` com as 14 dimensões, e `experimento.py:272` avalia **utilidade** (`utility`) e **satisfação** (IPC) para todos.
+`PRESENT` = comportamento observado no turno; `ABSENT` = oportunidade havia mas ausente; `NOT_APPLICABLE` = turno sem oportunidade suficiente (não entra no denominador) e deve ter `evidence` curta. Alias `enabled→PRESENT`, `disabled/absent→ABSENT`, `none/not_applicable→ignorado`. Legado `1-5` ainda funciona (`1-2→ABSENT`, `4-5→PRESENT`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 9 métricas `present`/`enabled` em ambos agentes e `judge.metrics` com as 14 dimensões, e `experimento.py:272` avalia **utilidade** (`utility` contínua 0-1) e **satisfação** (IPC 1-7) separadamente.
 
-**Observação (mesma base):** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:294`) recebe `anchor_1/3/5` + utterance e retorna `score 1-5` por turno, convertido para `ENABLED` se `≥3.0` senão `DISABLED` para comparar com `enabled/disabled` induzido. `Induzido ENABLED` vs `Observado ENABLED (4.2)` → `✅ Compatível`, `ENABLED` vs `DISABLED (2.1)` → `❌ Não compatível` (`report/generator.py:250`). Big Five análogo `POSITIVE`/`NEGATIVE` (`≥3.0`).
+**Observação categórica (mesma base):** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:28`) recebe `anchor_present`/`anchor_absent` + utterance e retorna por turno `{metric, result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}`. Agregação: `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado) → exibido como `65% (13/20; 5 NA)`. Big Five respeita polaridade induzida: `positive→PRESENT` esperado, `negative→ABSENT` esperado; táticas `enabled→PRESENT`. Ex: `Induzido PRESENT` vs `Observado 65%` → `✅ Compatível` (`≥50%`), `PRESENT` vs `20%` → `❌ Não compatível` (`report/generator.py:250`).
 
-### 3.4 `judge.metrics`
+### 3.4 `judge.metrics` (comportamentais categóricos)
 
-Lista livre de Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:42`). Se omitido, avalia só Big Five. Observado convertido para mesma base do induzido: Big Five `≥3.0→POSITIVE` else `NEGATIVE`; táticas `≥3.0→ENABLED` else `DISABLED` — alinhamento `Compatível` se igual.
+Lista livre de Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:42`). Se omitido, avalia só Big Five. Cada turno retorna `{metric, result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}` (`scoring/evaluator.py:28`). Métricas comportamentais **não** usam média: `occurrence_rate = PRESENT/(PRESENT+ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado) → `65%`. Respeita polaridade Big Five (`positive→PRESENT`, `negative→ABSENT`). `utility` (contínua 0-1, `scoring/utility.py:147`) e `satisfaction` (ordinal 1-7, `scoring/satisfaction.py:48` IPC) são separadas e não binarizadas; `agreement` é `AGREEMENT|NO_AGREEMENT`. Relatório separa `3 Behavioral Metrics | 5 Utility | 6 Subjective`.
 
 ---
 

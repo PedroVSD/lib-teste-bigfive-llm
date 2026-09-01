@@ -1,6 +1,5 @@
 """
-Testes para o módulo persona/ (atualizado para API positive/negative/none).
-Execute com: pytest test_persona.py -v
+Testes para o módulo persona/ — categorical PRESENT/ABSENT.
 """
 
 from llm_negotiation_analyst.persona import Big5Persona, PersonaPromptBuilder
@@ -27,7 +26,7 @@ class TestBig5Persona:
         with pytest.raises(ValueError):
             Big5Persona(agreeableness="invalid")
         with pytest.raises(ValueError):
-            Big5Persona(openness=4)  # numérico não permitido
+            Big5Persona(openness=4)
         with pytest.raises(ValueError):
             Big5Persona(agreeableness="maybe")
 
@@ -150,20 +149,28 @@ class TestTacticsBuilder:
     def setup_method(self):
         self.builder = TacticsPromptBuilder()
 
-    def test_tactics_enabled(self):
-        block = self.builder.build({"anchoring": "enabled"})
+    def test_tactics_present(self):
+        block = self.builder.build({"anchoring": "present"})
         assert "Firmeza" in block or "Anchoring" in block
+        # alias enabled still works
         block2 = self.builder.build({"rapport": "enabled"})
         assert len(block2) > 0
 
-    def test_tactics_disabled_nao_gera_bloco(self):
-        block = self.builder.build({"anchoring": "disabled"})
+    def test_tactics_enabled_alias(self):
+        block = self.builder.build({"anchoring": "enabled"})
+        assert "Firmeza" in block
+
+    def test_tactics_absent_nao_gera_bloco(self):
+        block = self.builder.build({"anchoring": "absent"})
         assert block == ""
-        block2 = self.builder.build({"anchoring": "disabled", "rapport": "disabled"})
+        block2 = self.builder.build({"anchoring": "disabled", "rapport": "absent"})
         assert block2 == ""
 
+    def test_tactics_not_applicable_nao_gera_bloco(self):
+        assert self.builder.build({"anchoring": "not_applicable"}) == ""
+        assert self.builder.build({"anchoring": "none"}) == ""
+
     def test_tactics_legado_numerico(self):
-        # Legado 1-5 ainda funciona: 1-2 → disabled (vazio), 3-5 → enabled
         assert self.builder.build({"anchoring": 1}) == ""
         assert self.builder.build({"anchoring": 2}) == ""
         block = self.builder.build({"anchoring": 5})

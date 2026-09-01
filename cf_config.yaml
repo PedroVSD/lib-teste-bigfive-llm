@@ -1,10 +1,10 @@
 experiment:
-  name: recessao
+  name: crescimento_forte
   scenario: salary_negotiation
   max_turns: 8
   use_system_reminder: true
 context:
-  preset: recessao
+  preset: crescimento_forte
 models:
   agent_1:
     provider: ollama

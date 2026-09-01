@@ -319,20 +319,20 @@ persona:
 * `negative` → `a low level of` + guia `_GUIDANCE[dim]["negative"]`
 * `none` / `null` / `~` / omitir → traço não induzido (sem linha no prompt)
 
-Táticas de negociação (`tactics:` no YAML) agora são **binárias** `enabled`/`disabled` (legado `1-5` ainda suportado):
+Táticas de negociação (`tactics:` no YAML) agora são **categóricas** `PRESENT`/`ABSENT`/`NOT_APPLICABLE` (alias `enabled`/`disabled` ainda suportado, legado `1-5`: `1-2→ABSENT`, `4-5→PRESENT`):
 ```yaml
 tactics:
-  anchoring: enabled              # injeta âncora 5 (polo positivo)
-  anchor_susceptibility: disabled # não injeta
-  loss_aversion: enabled
-  conditional_concession: enabled
-  value_creation: enabled
-  rapport: enabled
-  resilience: enabled
-  clarity: enabled
-  fact_justification: enabled
+  anchoring: present              # injeta âncora present (polo positivo)
+  anchor_susceptibility: absent   # não injeta (imune)
+  loss_aversion: present
+  conditional_concession: present
+  value_creation: present
+  rapport: present
+  resilience: present
+  clarity: present
+  fact_justification: present
 ```
-`enabled` → `NEGOTIATION_META[metric].behavioral_anchors[5]` (`persona/tactics_builder.py:16`), `disabled`/`none` → não injeta. Arquivos em `results/` agora incluem `experiment_name` (`results/{experiment}_{scenario}_{run_id}_report.md` via `simulation/engine.py:359` e `storage/jsonl_store.py:54`).
+`present`/`enabled` → `NEGOTIATION_META[metric].behavioral_anchors["present"]` (`persona/tactics_builder.py:14`), `absent`/`disabled`/`none`/`not_applicable` → não injeta (sem oportunidade não entra no denominador). Cada observação inclui `evidence` curta e `occurrence_rate = PRESENT/(PRESENT+ABSENT)` nos turnos aplicáveis. Arquivos em `results/` agora incluem `experiment_name` (`results/{experiment}_{scenario}_{run_id}_report.md` via `simulation/engine.py:359` e `storage/jsonl_store.py:54`).
 
 > Indução Big Five em `persona/big5_persona.py:76` `_GUIDANCE` / `_DIM_NAMES` → bloco `--- Personality Profile ---`. Táticas em `persona/tactics_builder.py:16` → bloco `--- Negotiation Tactics ---`.
 
@@ -348,49 +348,49 @@ Abaixo segue como é feita a avaliação realizada pelo juiz.
 O motor não envia a transcrição inteira para o juiz. A função evaluate_turn isola uma única fala (utterance) de um agente de cada vez. Se um agente falou 5 vezes durante a simulação, o juiz avaliará esse agente 5 vezes separadas. Além disso, a avaliação é isolada por métrica: para uma mesma frase, o juiz é consultado individualmente para cada dimensão exigida (ex: uma consulta para ancoragem, outra para amabilidade, etc).
 
 2. O "Gabarito" de Correção (Behavioral Anchors)
-Para que o juiz (que é um LLM) não use seus próprios critérios subjetivos, o sistema injeta um "gabarito" estrito no prompt. Esse gabarito vem dos dicionários BIG5_META e NEGOTIATION_META.
-Quando o juiz vai avaliar a "Firmeza na Oferta Inicial" (Anchoring), por exemplo, o código extrai as âncoras Comportamentais (Behavioral Anchors) específicas daquela métrica e envia para o modelo, explicando exatamente o que significa tirar nota 1, nota 3 e nota 5.
+Para que o juiz não use critérios subjetivos, o sistema injeta um "gabarito" estrito no prompt (`BIG5_META`/`NEGOTIATION_META` `behavioral_anchors={"present":..., "absent":...}`).
+Quando o juiz avalia "Firmeza na Oferta Inicial" (Anchoring), o código extrai as âncoras `PRESENT` (âncora forte) e `ABSENT` (cede rapidamente) e envia para o modelo, explicando exatamente o que significa cada categoria. `NOT_APPLICABLE` é reservado para turno sem oportunidade suficiente.
 
 3. A Construção do Prompt (_JUDGE_USER)
-Para cada frase avaliada, a função _score_one monta um prompt contextualizado. O juiz recebe:
+Para cada frase avaliada, a função `_observe_one` monta um prompt contextualizado. O juiz recebe:
 
 * O contexto do cenário (para entender o que está sendo negociado).
 * O papel de quem está falando (ex: cliente ou vendedor).
 * O nome da métrica e seus extremos (ex: "Firmeza na Oferta Inicial: Âncora Forte ↔ Cede Rapidamente").
-* O texto exato das réguas de nota 1, 3 e 5.
+* O texto exato das âncoras `PRESENT` e `ABSENT` (+ regra `NOT_APPLICABLE`).
 * A frase exata dita pelo agente naquele turno.
 
 4. Resposta em JSON
-* O prompt de sistema do juiz (_JUDGE_SYSTEM) é desenhado para proibir tagarelice. Ele obriga o LLM a responder exclusivamente com um objeto JSON contendo três chaves:
-* score: Um número inteiro de 1 a 5.
-* justification: Uma explicação curta (1 a 3 frases) referenciando palavras específicas usadas pelo agente para provar o porquê da nota.
-* confidence: O nível de confiança da IA naquela avaliação (de 0.0 a 1.0).
+* O `_JUDGE_SYSTEM` obriga o LLM a responder exclusivamente com JSON `{metric, result, evidence}`:
+* `metric`: id da métrica;
+* `result`: `PRESENT` | `ABSENT` | `NOT_APPLICABLE` (estrito, baseado apenas no comportamento observável daquele turno, não impressão geral);
+* `evidence`: evidência textual curta (quote/paráfrase) que justifica o rótulo.
+* `confidence` opcional. `NOT_APPLICABLE` **não** é tratado como `ABSENT`.
 
-5. O Boletim Final (Média Matemática)
-Após avaliar todos os turnos da conversa, o método evaluate_transcript é executado para a nota. Ele pega todas as notas que um agente tirou ao longo do tempo para uma métrica específica e calcula a média aritmética (sum(dim_scores) / len(dim_scores)).
-Exemplo: Se o candidato tirou as notas 1, 3 e 5 em "Criação de Valor" durante os três turnos que falou, a nota final dele no relatório (o Big5Profile.scores) será 3.00.
+5. O Boletim Final (occurrence_rate)
+Após avaliar todos os turnos, `evaluate_transcript` conta por métrica `PRESENT/ABSENT/NOT_APPLICABLE` e calcula `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado, `behavioral_anchors` `scoring/big5.py:43`). Ex: candidato com `PRESENT` em 2 de 3 turnos aplicáveis em "Criação de Valor" → `67% (2/3; 1 NA)` em `Big5Profile.summaries[metric].occurrence_rate` e `observations` com `evidence`.
 
 > **Induzido vs observado (mesma base):**
-> * **Big Five:** induzido `positive`/`negative`/`none`; observado `1-5` → `≥3.0→POSITIVE` / `<3.0→NEGATIVE` exibido como `**4.60** (POSITIVE)`. Média `3.2→POSITIVE` também bipolar.
-> * **Táticas (9):** induzido `enabled`/`disabled` (`enabled`→âncora 5, `disabled` omite); observado `1-5` → `≥3.0→ENABLED` / `<3.0→DISABLED` exibido como `**ENABLED** (4.2)`. Legado `1-5` ainda funciona (`1-2→DISABLED`, `4-5→ENABLED`).
-> * **Alinhamento:** `✅ Compatível` se mesma categoria (`POSITIVE=POSITIVE` ou `ENABLED=ENABLED`), `❌ Não compatível` se oposta. Big Five sempre primeiro nas tabelas (O-C-E-A-N).
+> * **Big Five:** induzido `positive`/`negative`/`none` (respeita polaridade); observado categórico `present/absent` → `occurrence_rate`. `positive` espera `PRESENT` (`≥50%`), `negative` espera `ABSENT` (`<50%`), exibido como `**67%** (2/3; 1 NA)`.
+> * **Táticas (9):** induzido `present`/`enabled` vs `absent`/`disabled`/`not_applicable`; observado `PRESENT/ABSENT/NOT_APPLICABLE` → `occurrence_rate`. Ex: `**65%** (13/20; 5 NA)`. Legado `1-5` ainda funciona (`1-2→ABSENT`, `4-5→PRESENT`).
+> * **Outcome/Utility/Subjetivo separados:** `agreement` é `AGREEMENT|NO_AGREEMENT`; `utility` contínua `0-1` (`(p-p_floor)/(p_target-p_floor)`); `satisfaction` ordinal `1-7` IPC (seção 6). Alinhamento comportamental `✅ Compatível` se `PRESENT↔PRESENT`/`ABSENT↔ABSENT`, `❌ Não compatível` se oposto.
 
 6. Opcional: Duplo Juiz
-É possível instanciar a classe Evaluator passando um second_judge (um segundo modelo LLM), o sistema fará com que os dois juízes avaliem a mesma frase independentemente. O código então calcula o IRR (Confiabilidade Interavaliadores), substituindo a métrica de "confiança" padrão por um cálculo matemático que reflete o quanto os dois modelos concordaram entre si (1.0 - abs(score1 - score2) / 4.0).
+É possível instanciar `Evaluator(second_judge=...)`; os dois juízes avaliam a mesma frase independentemente. O `IRR` passa a taxa de acordo categórico por turno: `1.0` acordo (`PRESENT=PRESENT`), `0.0` desacordo, `0.5` se um `NOT_APPLICABLE`, substituindo `confidence`.
 
 #### Confiabilidade inter-avaliadores (IRR)
 
-Quando `second_judge` é fornecido, o campo `confidence` de cada `DimensionScore` contém o IRR normalizado entre os dois juízes:
+Quando `second_judge` é fornecido, o campo `confidence` de cada `BehaviorObservation` contém o IRR categórico entre os dois juízes:
 
 ``` python
-IRR = 1 - |score_juiz1 - score_juiz2| / 4
+IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 ```
 
 - `1.0` = concordância total
-- `0.75` = diferença de 1 ponto (aceitável)
-- `< 0.5` = desacordo significativo (verificar rubricas)
+- `0.5` = um `NOT_APPLICABLE`
+- `0.0` = desacordo (`PRESENT` vs `ABSENT` — verificar rubricas)
 
-**Importante:** use o mesmo modelo-juiz em todos os runs de uma comparação. Trocar o juiz entre runs invalida a comparabilidade dos scores.
+**Importante:** use o mesmo modelo-juiz em todos os runs. Trocar o juiz entre runs invalida a comparabilidade dos `%`.
 
 ---
 ##  Métricas

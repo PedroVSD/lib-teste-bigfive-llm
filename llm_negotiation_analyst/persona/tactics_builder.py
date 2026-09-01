@@ -2,25 +2,14 @@
 persona/tactics_builder.py
 ==========================
 
-Transforma as métricas de negociação configuradas no YAML em
-instruções comportamentais para o system prompt.
+Transforma métricas de negociação configuradas no YAML em instruções
+para o system prompt. Categórico: PRESENT / ABSENT / NOT_APPLICABLE (ou enabled/disabled).
 
-Suporta dois formatos (compatíveis):
+  PRESENT (enabled, true, present)  -> injeta âncora "present" (comportamento ativo)
+  ABSENT (disabled, false, absent)  -> não injeta (métrica desativada)
+  NOT_APPLICABLE / none             -> não injeta
 
-  1) Numérico 1-5 (legado, gradual):
-     1-2 -> âncora 1 (polo negativo)
-     3   -> âncora 3 (neutro/moderado)
-     4-5 -> âncora 5 (polo positivo)
-
-  2) Booleano enabled/disabled (atual):
-     enabled  -> injeta âncora 5 (ativo, polo positivo)
-     disabled -> não injeta (métrica desativada)
-
-Exemplo YAML:
-  tactics:
-    anchoring: enabled
-    rapport: disabled
-    clarity: enabled
+Legado 1-5 ainda aceito com aviso: 1-2 -> ABSENT (não injeta), 4-5 -> PRESENT.
 """
 
 from ..scoring.negotiation_metrics import (
@@ -28,21 +17,24 @@ from ..scoring.negotiation_metrics import (
     NEGOTIATION_META,
 )
 
-_ENABLED_VALUES = {"enabled", "true", "on", "yes", "1", "active"}
-_DISABLED_VALUES = {"disabled", "false", "off", "0", "no", "none", "inactive"}
+_PRESENT_VALUES = {"present", "enabled", "true", "on", "yes", "1", "active"}
+_ABSENT_VALUES = {"absent", "disabled", "false", "off", "0", "no", "none", "inactive", "not_applicable"}
 
 
-def _is_enabled(value) -> bool | None:
-    """Retorna True=enabled, False=disabled, None=não é booleano."""
+def _is_present(value) -> bool | None:
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
         v = value.strip().lower()
-        if v in _ENABLED_VALUES:
+        if v in _PRESENT_VALUES:
             return True
-        if v in _DISABLED_VALUES:
+        if v in _ABSENT_VALUES:
             return False
     return None
+
+
+# compat alias
+_is_enabled = _is_present
 
 
 class TacticsPromptBuilder:
@@ -68,48 +60,38 @@ class TacticsPromptBuilder:
             if raw_val is None:
                 continue
 
-            # Primeiro testa enabled/disabled (string ou bool) — binário puro
-            enabled = _is_enabled(raw_val)
-            if enabled is not None:
-                if not enabled:
-                    continue  # disabled = não injeta (métrica ausente)
-                # enabled = usa âncora "enabled"
-                anchor_key = "enabled"
+            present = _is_present(raw_val)
+            if present is not None:
+                if not present:
+                    continue  # absent/disabled = não injeta
+                anchor_key = "present"
             else:
-                # Fallback legado: tenta int 1-5 (compatibilidade)
                 try:
                     score = int(raw_val)
                 except (TypeError, ValueError):
                     raise ValueError(
                         f"Invalid value for tactic '{key}': {raw_val!r}. "
-                        "Expected 'enabled'/'disabled' or integer 1-5."
+                        "Expected 'present'/'absent' (or 'enabled'/'disabled') or integer 1-5."
                     )
                 if not 1 <= score <= 5:
                     raise ValueError(
                         f"Tactic '{key}' score must be between 1 and 5. Got {score}."
                     )
-                # Legado 1-5 mapeado para binário: 1-2→disabled (não injeta), 3→disabled, 4-5→enabled
                 if score >= 4:
-                    anchor_key = "enabled"
+                    anchor_key = "present"
                 else:
-                    continue  # 1-3 = não injeta no modo binário
-                # Para compatibilidade total, se quiser manter granular, descomente:
-                # if score <= 2: anchor_key = "disabled"
-                # elif score == 3: anchor_key = "disabled"
-                # else: anchor_key = "enabled"
+                    continue
 
             try:
                 metric = NegotiationMetric(key)
             except ValueError:
-                # Métricas desconhecidas são ignoradas (compatibilidade)
                 continue
 
             meta = NEGOTIATION_META[metric]
-            # Binário: apenas "enabled"/"disabled"
             guidance = meta.behavioral_anchors.get(anchor_key)
             if guidance is None:
-                # Fallback para chaves numéricas antigas (1/5)
-                guidance = meta.behavioral_anchors.get(5 if anchor_key == "enabled" else 1)
+                # fallback legacy keys
+                guidance = meta.behavioral_anchors.get("enabled") or meta.behavioral_anchors.get(5) or meta.behavioral_anchors.get(1)
             if guidance is None:
                 continue
 

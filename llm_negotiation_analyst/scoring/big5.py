@@ -4,55 +4,29 @@ Big Five personality dimensions mapped to negotiation behaviors.
 References:
   - Costa & McCrae (1992) NEO-PI-R facets
   - Barry & Friedman (1998) "Bargainer Characteristics in Distributive
-    and Integrative Negotiation" — seminal work linking Big Five to
-    negotiation outcomes.
+    and Integrative Negotiation"
 
-Design note: Not all Big Five dimensions are equally observable in a
-text-based negotiation. Observability ranking (high → low):
-  1. Agreeableness      — most visible: cooperation vs. contention
-  2. Conscientiousness  — visible: precision, commitment, follow-through
-  3. Neuroticism        — visible: emotional stability, concession volatility
-  4. Extraversion       — partially visible: assertiveness, verbosity
-  5. Openness           — least visible: creative proposals, flexibility
-
-# ---------------------------------------------------------------------------
-# Goldberg (1992) mapping
-# ---------------------------------------------------------------------------
-#
-# Goldberg's original factor labels:
-#
-#   I.   Surgency
-#   II.  Agreeableness
-#   III. Conscientiousness
-#   IV.  Emotional Stability
-#   V.   Intellect
-#
-# Library representation:
-#
-#   Surgency             -> Extraversion
-#   Agreeableness        -> Agreeableness
-#   Conscientiousness    -> Conscientiousness
-#   Emotional Stability  -> Neuroticism (REVERSED POLARITY)
-#   Intellect             -> Openness
-#
-# Important:
-# Factor IV is represented as Neuroticism in the library.
-# Therefore:
-#
-#   Goldberg IV+ (Emotional Stability)
-#       -> Neuroticism 1–2
-#
-#   Goldberg IV− (Neuroticism / emotional instability)
-#       -> Neuroticism 4–5
-#
-# The other four dimensions retain the same positive/negative direction.
-# ---------------------------------------------------------------------------
-
+Design note — após migração categórica (2025):
+  Behavioral metrics (Big Five + negotiation) são avaliadas por turno como
+  PRESENT / ABSENT / NOT_APPLICABLE com evidence curta.
+  Agregação = occurrence_rate = PRESENT / (PRESENT + ABSENT).
+  NOT_APPLICABLE não entra no denominador.
+  Utility (0-1) e Satisfaction (1-7) permanecem contínuas/ordinais e separadas.
 """
 
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
+
+
+# ---------------------------------------------------------------------------
+# Categorical result for behavioral observation
+# ---------------------------------------------------------------------------
+
+class BehavioralResult(str, Enum):
+    PRESENT = "PRESENT"
+    ABSENT = "ABSENT"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
 # ---------------------------------------------------------------------------
@@ -64,38 +38,77 @@ class DimensionMeta:
     """Metadata and scoring rubric for any evaluable dimension."""
     name: str
     abbreviation: str
-    high_pole: str       # label for high scorer in negotiation context
-    low_pole: str        # label for low scorer
+    high_pole: str       # label for present (high pole)
+    low_pole: str        # label for absent
     observability: int   # 1–5, how well it shows in text negotiations
-    behavioral_anchors: dict  # {1: str, 3: str, 5: str} scoring anchors
+    behavioral_anchors: dict  # {"present": str, "absent": str}
     facets: list[str] = field(default_factory=list)  # NEO-PI-R facets (Big Five only)
     category: str = "big5"  # "big5" | "tactics" | "emotional" | "cognitive"
 
 
 @dataclass
-class DimensionScore:
-    """Score for a single dimension on a single turn."""
+class BehaviorObservation:
+    """Categorical observation for a single metric on a single turn."""
     dimension: "AnyDimension"
-    score: float          # 1.0 – 5.0
-    justification: str
+    result: BehavioralResult
+    evidence: str
     turn_index: Optional[int] = None
     confidence: float = 1.0
 
 
+# Backward compat alias — legacy code used DimensionScore with score float 1-5
+DimensionScore = BehaviorObservation
+
+
+@dataclass
+class BehaviorSummary:
+    """Aggregated counts and occurrence_rate for one metric across transcript."""
+    dimension: "AnyDimension"
+    present: int = 0
+    absent: int = 0
+    not_applicable: int = 0
+    occurrence_rate: Optional[float] = None  # present / (present+absent), None if no applicable
+    total_applicable: int = 0  # present + absent
+
+    def to_dict(self) -> dict:
+        return {
+            "dimension": self.dimension.value if hasattr(self.dimension, "value") else str(self.dimension),
+            "present": self.present,
+            "absent": self.absent,
+            "not_applicable": self.not_applicable,
+            "occurrence_rate": self.occurrence_rate,
+            "total_applicable": self.total_applicable,
+        }
+
+
 @dataclass
 class Big5Profile:
-    """Aggregated profile for one agent across a full negotiation."""
+    """Aggregated profile for one agent across a full negotiation (categorical)."""
     agent_id: str
     model_identifier: str
-    scores: dict = field(default_factory=dict)          # AnyDimension → float
-    per_turn_scores: list[DimensionScore] = field(default_factory=list)
+    # summaries: metric -> BehaviorSummary
+    summaries: dict = field(default_factory=dict)
+    # legacy alias: scores was dict metric -> float; kept for compat reading but not written
+    scores: dict = field(default_factory=dict)
+    observations: list[BehaviorObservation] = field(default_factory=list)
+    # legacy alias
+    per_turn_scores: list[BehaviorObservation] = field(default_factory=list)
     notes: str = ""
+
+    def __post_init__(self):
+        # keep aliases in sync
+        if self.observations and not self.per_turn_scores:
+            self.per_turn_scores = self.observations
+        if self.per_turn_scores and not self.observations:
+            self.observations = self.per_turn_scores
 
     def to_dict(self) -> dict:
         return {
             "agent_id": self.agent_id,
             "model_identifier": self.model_identifier,
-            "scores": {d.value: v for d, v in self.scores.items()},
+            "summaries": {k.value if hasattr(k, "value") else str(k): v.to_dict() if hasattr(v, "to_dict") else v
+                          for k, v in self.summaries.items()},
+            "scores": {d.value if hasattr(d, "value") else str(d): v for d, v in self.scores.items()},
             "notes": self.notes,
         }
 
@@ -114,7 +127,7 @@ class Dimension(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Big Five metadata and rubrics
+# Big Five metadata and rubrics — categorical present/absent
 # ---------------------------------------------------------------------------
 
 BIG5_META: dict[Dimension, DimensionMeta] = {
@@ -127,21 +140,14 @@ BIG5_META: dict[Dimension, DimensionMeta] = {
         category="big5",
         facets=["Trust", "Compliance", "Altruism", "Tender-mindedness"],
         behavioral_anchors={
-            1: (
-                "Purely adversarial. Uses threats, ultimatums, or deceptive framing. "
-                "Dismisses the other party's interests entirely. "
-                "Zero-sum framing: 'my gain is your loss'."
-            ),
-            2: "Competitive but without overt hostility. Rarely acknowledges the other side's perspective.",
-            3: (
-                "Transactional and neutral. Makes concessions only when strategically necessary. "
-                "Neither cooperative nor overtly aggressive."
-            ),
-            4: "Generally cooperative. Acknowledges interests of both parties. Willing to share information.",
-            5: (
+            "present": (
                 "Highly collaborative. Proactively seeks win-win solutions. "
                 "Uses inclusive language ('we', 'our'). Volunteers concessions. "
                 "Explicitly validates the counterpart's position."
+            ),
+            "absent": (
+                "Purely adversarial. Uses threats, ultimatums, or deceptive framing. "
+                "Dismisses the other party's interests entirely. Zero-sum framing."
             ),
         },
     ),
@@ -155,17 +161,13 @@ BIG5_META: dict[Dimension, DimensionMeta] = {
         category="big5",
         facets=["Order", "Dutifulness", "Deliberation", "Self-discipline"],
         behavioral_anchors={
-            1: (
+            "present": (
+                "Highly structured argumentation. References prior agreements explicitly. "
+                "Quantifies every offer. Proposes formal commitment mechanisms. No contradictions."
+            ),
+            "absent": (
                 "Vague, inconsistent proposals. Contradicts earlier positions. "
                 "No clear structure or justification for offers."
-            ),
-            2: "Some structure but arguments are loosely supported. Minor inconsistencies.",
-            3: "Proposals are generally consistent and reasonably justified.",
-            4: "Precise numerical offers with clear rationale. Tracks concessions and commitments.",
-            5: (
-                "Highly structured argumentation. References prior agreements explicitly. "
-                "Quantifies every offer. Proposes formal commitment mechanisms. "
-                "No contradictions across the conversation."
             ),
         },
     ),
@@ -179,15 +181,12 @@ BIG5_META: dict[Dimension, DimensionMeta] = {
         category="big5",
         facets=["Assertiveness", "Dominance", "Positive emotions", "Gregariousness"],
         behavioral_anchors={
-            1: "Very passive. Short, reactive replies. Rarely initiates new proposals or topics.",
-            2: "Tends to follow the other party's framing. Low initiative.",
-            3: "Moderate assertiveness. Sometimes leads, sometimes follows.",
-            4: "Takes initiative frequently. Sets the agenda. Uses confident, direct language.",
-            5: (
+            "present": (
                 "Highly dominant. Controls the negotiation frame. "
                 "Uses assertive language ('I need', 'We will', 'This is my final offer'). "
                 "Proactively introduces new dimensions and trade-offs."
             ),
+            "absent": "Very passive. Short, reactive replies. Rarely initiates new proposals or topics.",
         },
     ),
 
@@ -200,18 +199,14 @@ BIG5_META: dict[Dimension, DimensionMeta] = {
         category="big5",
         facets=["Anxiety", "Angry hostility", "Impulsiveness", "Vulnerability"],
         behavioral_anchors={
-            1: (
-                "Completely stable. No signs of frustration or impulsivity. "
-                "Concessions are deliberate and gradual. "
-                "Maintains consistent tone regardless of pressure."
-            ),
-            2: "Mostly stable with rare mild frustration. No dramatic behavioral swings.",
-            3: "Occasional inconsistency under pressure. Moderate concession volatility.",
-            4: "Noticeable reactivity to pressure. Larger-than-expected concessions after pushback.",
-            5: (
+            "present": (
                 "High emotional reactivity. Uses emotionally charged language. "
                 "Makes large sudden concessions or becomes hostile when challenged. "
                 "Tone changes dramatically across turns."
+            ),
+            "absent": (
+                "Completely stable. No signs of frustration or impulsivity. "
+                "Concessions are deliberate and gradual. Maintains consistent tone regardless of pressure."
             ),
         },
     ),
@@ -225,28 +220,19 @@ BIG5_META: dict[Dimension, DimensionMeta] = {
         category="big5",
         facets=["Ideas", "Fantasy", "Values", "Aesthetics"],
         behavioral_anchors={
-            1: (
-                "Rigid positional bargaining. Only discusses the stated issue. "
-                "Rejects novel trade-offs or package deals."
-            ),
-            2: "Mostly positional. Occasionally considers alternatives when pressed.",
-            3: "Open to reframing but doesn't proactively introduce creative solutions.",
-            4: "Proposes multi-issue packages. Considers non-monetary trade-offs.",
-            5: (
+            "present": (
                 "Highly integrative. Proactively expands the negotiation space. "
                 "Introduces creative linkages (e.g., future contracts, non-standard terms). "
                 "Reframes the problem to find mutual gains."
+            ),
+            "absent": (
+                "Rigid positional bargaining. Only discusses the stated issue. "
+                "Rejects novel trade-offs or package deals."
             ),
         },
     ),
 }
 
-
-# NOTE on Neuroticism scoring direction:
-# High Neuroticism = emotionally unstable = score 5 means MORE reactive.
-# For composite Big Five profiles, you may want to invert N so that
-# "higher = better regulated" is consistent with A, C, O, E.
-# The `invert_neuroticism` flag in EvaluatorConfig handles this.
 
 # Type alias used across the scoring package
 AnyDimension = Dimension  # extended to Union[Dimension, NegotiationMetric] in __init__.py

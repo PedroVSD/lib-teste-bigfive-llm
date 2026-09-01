@@ -1,19 +1,9 @@
 """
-Storage layer for negotiation results and scores.
+Storage layer for negotiation results and scores — categorical.
 
-Design goals:
-  - Zero external dependencies (only stdlib)
-  - Append-only JSONL for raw transcripts (easy to grep, stream, process with pandas)
-  - Separate JSONL for scored profiles (can be loaded independently)
-  - Each run identified by run_id; all files use run_id in filenames
-
-Output structure:
-    results/
-    ├── transcripts/
-    │   └── {scenario}_{run_id}.jsonl     # one line per turn
-    ├── scores/
-    │   └── {scenario}_{run_id}_scores.jsonl  # one line per agent Big5Profile
-    └── runs_index.jsonl                   # one line per run (summary)
+Behavioral: summaries {present,absent,not_applicable,occurrence_rate}
+Outcomes: utility continuous, agreement categorical.
+Subjective: satisfaction 1-7 separate.
 """
 
 import json
@@ -27,13 +17,6 @@ from ..scoring.big5 import Big5Profile, Dimension
 
 
 class StorageManager:
-    """
-    Persists negotiation results to a directory tree of JSONL files.
-
-    Args:
-        base_dir: Root directory for all outputs. Created if it doesn't exist.
-    """
-
     def __init__(self, base_dir: str = "results"):
         self.base = Path(base_dir)
         self._init_dirs()
@@ -42,19 +25,9 @@ class StorageManager:
         for sub in ["transcripts", "scores"]:
             (self.base / sub).mkdir(parents=True, exist_ok=True)
 
-    # ------------------------------------------------------------------
-    # Save
-    # ------------------------------------------------------------------
-
     def save_result(self, result: NegotiationResult) -> dict[str, Path]:
-        """
-        Save transcript and return file paths.
-        Also appends a summary line to runs_index.jsonl.
-        """
         exp_name = result.metadata.get("experiment_name") if result.metadata else None
         slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
-
-        # --- Transcript JSONL (one line per turn) ---
         transcript_path = self.base / "transcripts" / f"{slug}.jsonl"
         with open(transcript_path, "w", encoding="utf-8") as f:
             for turn in result.transcript:
@@ -70,7 +43,6 @@ class StorageManager:
                 }
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
-        # --- Runs index ---
         index_path = self.base / "runs_index.jsonl"
         summary = {
             "run_id": result.run_id,
@@ -93,39 +65,59 @@ class StorageManager:
         result: NegotiationResult,
         profiles: dict[str, Big5Profile],
     ) -> Path:
-        """Save Big5 profiles to JSONL."""
+        """Save categorical profiles (summaries + observations)."""
         exp_name = result.metadata.get("experiment_name") if result.metadata else None
         slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
         scores_path = self.base / "scores" / f"{slug}_scores.jsonl"
 
         with open(scores_path, "w", encoding="utf-8") as f:
             for agent_id, profile in profiles.items():
+                # summaries categorical
+                summaries_out = {}
+                for metric, summ in profile.summaries.items():
+                    key = metric.value if hasattr(metric, "value") else str(metric)
+                    if hasattr(summ, "to_dict"):
+                        summaries_out[key] = summ.to_dict()
+                    else:
+                        summaries_out[key] = summ
+                # also include legacy scores (occurrence_rate) for compat
+                scores_out = {}
+                for k, v in profile.scores.items():
+                    key = k.value if hasattr(k, "value") else str(k)
+                    scores_out[key] = v
+
+                observations_out = []
+                source = profile.observations if profile.observations else profile.per_turn_scores
+                for o in source:
+                    # handle both new BehaviorObservation and legacy DimensionScore
+                    dim_val = o.dimension.value if hasattr(o.dimension, "value") else str(o.dimension)
+                    result_val = o.result.value if hasattr(o.result, "value") else getattr(o, "score", None)
+                    # legacy score -> map to PRESENT/ABSENT approx
+                    if not hasattr(o, "result"):
+                        result_val = "PRESENT" if o.score >= 3 else "ABSENT"
+                    observations_out.append({
+                        "dimension": dim_val,
+                        "result": result_val if isinstance(result_val, str) else result_val.value,
+                        "evidence": getattr(o, "evidence", getattr(o, "justification", "")),
+                        "turn_index": o.turn_index,
+                        "confidence": o.confidence,
+                    })
+
                 line = {
                     "run_id": result.run_id,
                     "scenario": result.scenario_name,
                     "agent_id": agent_id,
                     "model_identifier": profile.model_identifier,
                     "role": result.agent_roles.get(agent_id, "unknown"),
-                    "scores": {d.value: v for d, v in profile.scores.items()},
-                    "per_turn_scores": [
-                        {
-                            "dimension": s.dimension.value,
-                            "score": s.score,
-                            "justification": s.justification,
-                            "turn_index": s.turn_index,
-                            "confidence": s.confidence,
-                        }
-                        for s in profile.per_turn_scores
-                    ],
+                    "summaries": summaries_out,
+                    "scores": scores_out,
+                    "observations": observations_out,
+                    "per_turn_scores": observations_out,  # alias
                     "notes": profile.notes,
                 }
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
         return scores_path
-
-    # ------------------------------------------------------------------
-    # Load helpers
-    # ------------------------------------------------------------------
 
     def load_transcript(self, run_id: str, scenario: str) -> list[dict]:
         path = self.base / "transcripts" / f"{scenario}_{run_id}.jsonl"
@@ -142,17 +134,10 @@ class StorageManager:
         return self._read_jsonl(path)
 
     def to_dataframe(self, data_type: str = "scores"):
-        """
-        Load all records of a given type into a pandas DataFrame.
-
-        Args:
-            data_type: "scores" or "transcripts"
-        """
         try:
             import pandas as pd
         except ImportError:
             raise ImportError("Install pandas: pip install pandas")
-
         folder = self.base / data_type
         records = []
         for path in sorted(folder.glob("*.jsonl")):
