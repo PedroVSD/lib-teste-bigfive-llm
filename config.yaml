@@ -15,8 +15,8 @@ models:
       agreeableness: positive
       neuroticism: positive
       extraversion: positive
-      openness: positive
-      conscientiousness: positive
+      openness: negative
+      conscientiousness: negative
     tactics:
       anchoring: enabled
       anchor_susceptibility: enabled
@@ -34,7 +34,10 @@ models:
     max_tokens: 2048
     persona:
       agreeableness: positive
-      neuroticism: negative
+      neuroticism: positive
+      extraversion: negative
+      openness: negative
+      conscientiousness: negative
     tactics:
       anchoring: enabled
       anchor_susceptibility: enabled
@@ -67,13 +70,13 @@ models:
 utility:
   agent_1:
     role_type: buyer
-    p_target: 18000
-    p_floor: 15500
+    p_target: 21000
+    p_floor: 18000
     currency: R\$
     unit: /mês
   agent_2:
     role_type: seller
-    p_target: 14000
-    p_floor: 16500
+    p_target: 16500
+    p_floor: 17000
     currency: R\$
     unit: /mês
