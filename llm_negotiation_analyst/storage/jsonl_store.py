@@ -27,7 +27,12 @@ class StorageManager:
 
     def save_result(self, result: NegotiationResult) -> dict[str, Path]:
         exp_name = result.metadata.get("experiment_name") if result.metadata else None
-        slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
+        display = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name") if result.metadata else None
+        if display:
+            safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display)).strip()
+            slug = f"{safe_display}_{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{safe_display}_{result.scenario_name}_{result.run_id}"
+        else:
+            slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
         transcript_path = self.base / "transcripts" / f"{slug}.jsonl"
         with open(transcript_path, "w", encoding="utf-8") as f:
             for turn in result.transcript:
@@ -67,7 +72,12 @@ class StorageManager:
     ) -> Path:
         """Save categorical profiles (summaries + observations)."""
         exp_name = result.metadata.get("experiment_name") if result.metadata else None
-        slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
+        display = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name") if result.metadata else None
+        if display:
+            safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display)).strip()
+            slug = f"{safe_display}_{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{safe_display}_{result.scenario_name}_{result.run_id}"
+        else:
+            slug = f"{exp_name}_{result.scenario_name}_{result.run_id}" if exp_name else f"{result.scenario_name}_{result.run_id}"
         scores_path = self.base / "scores" / f"{slug}_scores.jsonl"
 
         with open(scores_path, "w", encoding="utf-8") as f:

@@ -156,7 +156,6 @@ context:
                           # crise_politica, governo_intervencionista, governo_liberal,
                           # crise_desemprego, anarcho_capitalist
   # campos manuais complementam/sobrescrevem o preset:
-  country: "Argentina"
   custom_conditions:
     - "Condição extra específica do experimento"
 ```
@@ -164,7 +163,7 @@ context:
 | Preset | `inflation` | `interest_rates` | `government` | `crises` | Destaque |
 |---|---|---|---|---|---|
 | `crescimento_forte` | `LOW` | `LOW` | `MARKET_FRIENDLY` | — | PIB alto, desemprego baixo, mercado aquecido — trabalhador com poder |
-| `recessao` | `LOW` | `HIGH` | `CONSERVATIVE` | `ECONOMIC_RECESSION` | PIB negativo, desemprego alto — empregador com poder |
+| `recessao` | `LOW` | `HIGH` | `POPULIST` | `ECONOMIC_RECESSION, GEOPOLITICAL` | PIB negativo, desemprego alto — empregador com poder |
 | `estagflacao` | `VERY_HIGH` | `HIGH` | `INTERVENTIONIST` | `ECONOMIC_RECESSION` | 12%/18%/-1.5%/10% — conflito custo de vida vs queda de demanda |
 | `boom_inflacionario` | `HIGH` | `HIGH` | `MARKET_FRIENDLY` | — | Alta inflação + crescimento — reajuste necessário |
 | `crise_financeira` | `MODERATE` | `VERY_HIGH` | `INTERVENTIONIST` | `FINANCIAL_CRISIS` | Crédito restrito — patrimônio ≠ liquidez |
@@ -246,7 +245,7 @@ class ContextPresets:
 
 ## scenarios/\_\_init\_\_.py
 
-É possível criar ou modificar os cenários da simulação.
+### É possível criar ou modificar os cenários da simulação.
 
 Abaixo tem o corpo das simulações:
 ```python
@@ -280,18 +279,18 @@ SCENARIO_REGISTRY: dict[str, NegotiationScenario] = {
 
 ## persona/big5_persona.py
 
-| Goldberg (1992)             | Sua biblioteca      | Correspondência            | Observação                                                            |
-| --------------------------- | ------------------- | -------------------------- | --------------------------------------------------------------------- |
-| **I. Surgency**             | `extraversion`      | **Extraversion**           | Correspondência direta                                                |
-| **II. Agreeableness**       | `agreeableness`     | **Agreeableness**          | Correspondência direta                                                |
-| **III. Conscientiousness**  | `conscientiousness` | **Conscientiousness**      | Correspondência direta                                                |
-| **IV. Emotional Stability** | `neuroticism`       | **Neuroticism**            | **Mesma dimensão, mas com polaridade invertida**                      |
-| **V. Intellect**            | `openness`          | **Openness to Experience** | Correspondência funcional, mas o nome/conceito enfatizado é diferente |
-
-
 Onde ocorre toda a configuração de injeção de traços de personalidade das LLMs.
+O modelo big5 se baseia em cindo traços de personalidade, sendo eles:
 
-O modelo big5 se baseia em cindo traços dde personalidade, sendo eles:
+| Goldberg (1992)             | Biblioteca      | Correspondência            | Observação                                                            |
+| --------------------------- | ------------------- | -------------------------- | --------------------------------------------------------------------- |
+| **I. Surgency**             | Extraversion      | *Extraversion*           | Correspondência direta                                                |
+| **II. Agreeableness**       | Agreeableness    | *Agreeableness*         | Correspondência direta                                                |
+| **III. Conscientiousness**  | Conscientiousness | *Conscientiousness*      | Correspondência direta                                                |
+| **IV. Emotional Stability** | Neuroticism       | *Neuroticism*            | **Mesma dimensão, mas com polaridade invertida**                      |
+| **V. Intellect**            | Openness          | *Openness to Experience* | Correspondência funcional, mas o nome/conceito enfatizado é diferente |
+
+---
 
 | Dimensão | Polo alto | Polo baixo | Descrição |
 |----------|-----------|------------|-----------------|
@@ -315,11 +314,6 @@ persona:
   extra_instructions: "Instrução livre adicional"
 ```
 
-* `positive` → `a high level of` + guia `_GUIDANCE[dim]["positive"]`
-* `negative` → `a low level of` + guia `_GUIDANCE[dim]["negative"]`
-* `none` / `null` / `~` / omitir → traço não induzido (sem linha no prompt)
-
-Táticas de negociação (`tactics:` no YAML) agora são **categóricas** `PRESENT`/`ABSENT`/`NOT_APPLICABLE` (alias `enabled`/`disabled` ainda suportado, legado `1-5`: `1-2→ABSENT`, `4-5→PRESENT`):
 ```yaml
 tactics:
   anchoring: present              # injeta âncora present (polo positivo)
@@ -332,15 +326,15 @@ tactics:
   clarity: present
   fact_justification: present
 ```
-`present`/`enabled` → `NEGOTIATION_META[metric].behavioral_anchors["present"]` (`persona/tactics_builder.py:14`), `absent`/`disabled`/`none`/`not_applicable` → não injeta (sem oportunidade não entra no denominador). Cada observação inclui `evidence` curta e `occurrence_rate = PRESENT/(PRESENT+ABSENT)` nos turnos aplicáveis. Arquivos em `results/` agora incluem `experiment_name` (`results/{experiment}_{scenario}_{run_id}_report.md` via `simulation/engine.py:359` e `storage/jsonl_store.py:54`).
 
-> Indução Big Five em `persona/big5_persona.py:76` `_GUIDANCE` / `_DIM_NAMES` → bloco `--- Personality Profile ---`. Táticas em `persona/tactics_builder.py:16` → bloco `--- Negotiation Tactics ---`.
+* Indução Big Five em `persona/big5_persona.py:76` `_GUIDANCE` / `_DIM_NAMES` → bloco `Personality Profile`.
+* Táticas em `persona/tactics_builder.py:16` → bloco `Negotiation Tactics`.
 
 ---
 
 ## scoring/evaluator
 
-Como mencionado antes, a avaliação da negociação é feita por uma ou duas LLMs, que ao final da negociação verifica como foi o andamento e dá as "notas" para algumas classes das avaliações. Um ponto importante é que, as métricas de utilidade e satisfação **NÃO** são de responsabilidade do juiz, e sim de quem utiliza a biblioteca para o experimento.
+Como mencionado antes, a avaliação da negociação é feita por uma ou duas LLMs, que ao final da negociação verifica como foi o andamento e classifica as métricas. Um ponto importante é que, as métricas de utilidade e satisfação **NÃO** são de responsabilidade do juiz. Elas são calculadas seguindo, cada uma, a sua definição matemática.
 
 Abaixo segue como é feita a avaliação realizada pelo juiz.
 
@@ -395,22 +389,38 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 ---
 ##  Métricas
 
-Há várias métricas que são avaliadas com as simulações.
+Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas (`tests/test_all.py:91 passed`). Método: `LLM-as-judge` por turno por métrica → `{metric, result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}` (`scoring/evaluator.py:28`, `scoring/big5.py:84`). `NOT_APPLICABLE` = sem oportunidade naquele turno (ignorado). Agregação: `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis → relatório exibe `65% (13/20; 5 NA)` (`report/generator.py:48`). Big Five respeita polaridade induzida (`positive→PRESENT`, `negative→ABSENT`).
 
-Sendo que elas foram separadas por categorias, sendo:
+#### 1. Behavioral Metrics — Big Five (5) + Negociação (9)
 
-* Categoria 1: Táticas e Comportamento de Negociação
-  * Essas métricas avaliam como o agente está negociando, independentemente da sua personalidade.
-* Categoria 2: Inteligência Emocional e Relacionamento
-  * Avaliando a forma como o agente constrói a relação e lida com a situação.
-* Categoria 3: Argumentação Lógica e Uso de Dados
-  * Avaliando a racionalidade por trás das propostas.
-* Categoria 4: Vieses e Erros Cognitivos
-  * Economia comportamental.
-* Utilidade(métrica objetiva)
-  * Avalia o quão efetivo foi o efeito âncora.
-* Satisfação(métrica subjetiva)
-  * Avalia como foi a satisfação final do agente ao final da negociação.
+| # | Métrica | Código | Categoria | PRESENT ↔ ABSENT (âncora resumida) | Obs. | Como é julgada |
+|---|---|---|---|---|---|---|
+| 1 | **Agreeableness** | `A` | big5 | `Cooperative/Prosocial` (usa `we/our`, valida, concede) ↔ `Competitive/Adversarial` (ameaça, zero-sum) | 5 | `BIG5_META` `present/absent` (`scoring/big5.py:120`) |
+| 2 | **Conscientiousness** | `C` | big5 | `Organized/Precise` (estrutura, quantifica, sem contradição) ↔ `Flexible/Impulsive` (vago, inconsistente) | 4 | idem |
+| 3 | **Extraversion** | `E` | big5 | `Assertive/Dominant` (`I need/final offer`, controla frame) ↔ `Reserved/Passive` (reativo, curto) | 3 | idem |
+| 4 | **Neuroticism** | `N` | big5 | `Unstable/Reactive` (emotivo, hostil, volátil) ↔ `Stable/Composed` (calmo, concessões graduais) | 4 | IV invertido `positive=instável` |
+| 5 | **Openness** | `O` | big5 | `Creative/Integrative` (expande espaço, linkages) ↔ `Conventional/Rigid` (posicional, rejeita trade-off) | 2 |  |
+| 6 | **Firmeza na Oferta Inicial** | `ANC` | tactics | **Anchoring** — âncora forte e defende antes de conceder ↔ cede imediato | 5 | `NEGOTIATION_META` (`scoring/negotiation_metrics.py:28`) |
+| 7 | **Concessões Condicionais** | `CON` | tactics | `Se X então Y` estrito ↔ concessão unilateral | 5 |  |
+| 8 | **Criação de Valor** | `VAL` | tactics | Adiciona variáveis (bônus, remoto, PLR) win-win ↔ briga só salário soma-zero | 3 |  |
+| 9 | **Rapport** | `RAP` | emotional | Valida emoções, tom colaborativo, parceria longo prazo ↔ frio/transacional | 5 |  |
+| 10 | **Resiliência à Pressão** | `RES` | emotional | Inabalável, redireciona a fatos ↔ cede a ultimato/desespero | 3 |  |
+| 11 | **Justificação Baseada em Fatos** | `JUS` | argumentation | Dados (PIB, inflação, benchmark, ROI) ↔ desejo subjetivo sem dado | 5 |  |
+| 12 | **Clareza** | `CLA` | argumentation | Estruturado, tópicos, aritmética impecável ↔ confuso, valores conflitantes | 5 |  |
+| 13 | **Suscetibilidade à Âncora** | `SUS` | cognitive_bias | Orbita valor absurdo do oponente ↔ imune, mantém original | 1 |  |
+| 14 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional | 1 |  |
+
+*Categorias `METRICS_BY_CATEGORY` (`scoring/negotiation_metrics.py:254`): `tactics: ANC,CON,VAL` | `emotional: RAP,RES` | `argumentation: JUS,CLA` | `cognitive_bias: SUS,LSS`.*
+
+#### 2. Negotiation Outcomes — categórico + contínuo (não binarizado)
+
+| Métrica | Tipo | Como é calculada | Onde |
+|---|---|---|---|
+| **Agreement** | `AGREEMENT|NO_AGREEMENT` | exige confirmação de **ambos** papéis com keyword `[ACORDO_FECHADO]/SIMULACAO_CONCLUIDA` (`simulation/engine.py:258`) | `report §2.1 Negotiation Outcome Summary` |
+| **Final Price** | `float|None` `R$` | extraído do transcript pelo juiz LLM (últimas 8 linhas, `json {price}`) (`scoring/utility.py:118`) | por papel |
+| **Utility** | `float 0-1` | `u_s=(p-p_floor)/(p_target-p_floor)` seller / `u_b=(p_floor-p)/(p_floor-p_target)` buyer (`scoring/utility.py:8`) | por papel |
+| **Joint Utility / Final Surplus** | `float` | `joint = sum(utilities)` | Joint |
+| **Turns / Duration** | `int` / `s` | `result.total_turns`, `result.duration_seconds` | Joint |
 
 #### Utilidade
 
@@ -425,9 +435,9 @@ $$u_b(p) = \frac{\overline{p_b} - p}{\overline{p_b} - \underline{p_b}}$$
 
 * $p$ é o valor dado ao produto
 * $\overline{p_s}$ representa o valor alvo do vendedor
-* $\underline{p_s}$ representa o mínimo valor aceitável
-* $\overline{p_b}$ representa o máximo valor aceitável
-* $\underline{p_s}$ representa o valor alvo
+* $\underline{p_s}$ representa o mínimo valor aceitável (piso do vendedor)
+* $\overline{p_b}$ representa o máximo valor aceitável (teto do comprador)
+* $\underline{p_b}$ representa o valor alvo do comprador
 
 #### Satifação
 
@@ -512,8 +522,4 @@ config_det = AdapterConfig(
     extra={"seed": 42}   # suportado pelo Ollama; OpenAI suporta via "seed"
 )
 ```
-
-É um número que fixa o ponto de partida do gerador de números aleatórios do modelo.
-O 42 é só uma referência a *"o guia dos mochileiros da galáxia"*
-
 ---

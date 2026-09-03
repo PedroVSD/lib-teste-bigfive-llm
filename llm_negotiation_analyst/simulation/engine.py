@@ -227,6 +227,7 @@ class SimulationEngine:
         use_system_reminder: bool = True,
         tactics: Optional[dict[str, dict]] = None,
         experiment_name: Optional[str] = None,
+        experiment_display_name: Optional[str] = None,
     ):
         self.scenario = scenario
         self.raw_agents = agents
@@ -237,6 +238,7 @@ class SimulationEngine:
         self.turn_delay_seconds = turn_delay_seconds
         self.use_system_reminder = use_system_reminder
         self.experiment_name = experiment_name
+        self.experiment_display_name = experiment_display_name
 
     def run(self) -> NegotiationResult:
         if self.benchmark_turns is not None:
@@ -387,6 +389,11 @@ class SimulationEngine:
                 personas_meta[role] = base
         context_meta = self.context.to_dict() if self.context else None
 
+        meta_extra = {"experiment_name": self.experiment_name}
+        if getattr(self, "experiment_display_name", None):
+            meta_extra["experiment_display_name"] = self.experiment_display_name
+            meta_extra["experiment_title"] = self.experiment_display_name
+            meta_extra["yaml_name"] = self.experiment_display_name
         return NegotiationResult(
             run_id=run_id,
             scenario_name=scenario.name,
@@ -401,7 +408,7 @@ class SimulationEngine:
             ended_at=time.time(),
             metadata={**scenario.metadata, "personas": personas_meta, "context": context_meta,
                       "settlement_keywords": scenario.settlement_keywords,
-                      "experiment_name": self.experiment_name},
+                      **meta_extra},
         )
 
     # ------------------------------------------------------------------

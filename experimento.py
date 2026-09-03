@@ -34,14 +34,21 @@ def load_config(filepath: str):
         data = yaml.safe_load(file)
     # Nome do experimento = nome do arquivo YAML (sem extensão)
     # Ex: `estagflacao.yaml` → experiment.name = "estagflacao" (sempre sobrescreve o YAML)
+    # display_name/title com espaços (ex: "teste com X variável") é preservado em display_name/yaml_name
     try:
         from pathlib import Path
         file_stem = Path(filepath).stem
         exp = data.get("experiment") or {}
         yaml_name = exp.get("name")
+        # title/display_name/label explícito tem prioridade como nome humano
+        display_raw = exp.get("title") or exp.get("display_name") or exp.get("label") or yaml_name
         exp["name"] = file_stem
-        if yaml_name and yaml_name != file_stem:
-            exp["yaml_name"] = yaml_name  # guarda original para rastreabilidade
+        if display_raw and str(display_raw).strip() and str(display_raw).strip() != file_stem:
+            exp["display_name"] = str(display_raw).strip()
+            exp["yaml_name"] = str(display_raw).strip()  # compat
+        elif yaml_name and yaml_name != file_stem:
+            exp["yaml_name"] = yaml_name
+            exp["display_name"] = yaml_name
         exp["config_file"] = filepath
         data["experiment"] = exp
     except Exception:
@@ -262,6 +269,7 @@ if __name__ == "__main__":
 
     # 5. Simulação principal
     experiment_name = exp.get("name")
+    display_name = exp.get("display_name") or exp.get("title") or exp.get("yaml_name")
     result, profiles, _ = run_negotiation(
         scenario=scenario,
         agents=agents_dict,
@@ -274,6 +282,7 @@ if __name__ == "__main__":
         output_dir="results/",
         use_system_reminder=exp.get("use_system_reminder", False),
         experiment_name=experiment_name,
+        experiment_display_name=display_name,
     )
     print("✅ Simulação concluída.")
 
@@ -293,9 +302,15 @@ if __name__ == "__main__":
     satisfaction_results = sat_evaluator.evaluate_all(result)
     print("✅ Satisfação avaliada.")
 
-    # 8. Regera o relatório com as novas seções (usa experiment_name no nome do arquivo)
+    # 8. Regera o relatório com as novas seções (usa display_name + experiment_name no nome do arquivo)
     exp_name = result.metadata.get("experiment_name") or experiment_name or result.scenario_name
-    prefix = f"{exp_name}_{result.scenario_name}" if exp_name else result.scenario_name
+    display = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
+    if display:
+        safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display)).strip()
+        # keep spaces for readability but filesystem-safe (spaces allowed); also keep file_stem
+        prefix = f"{safe_display}_{exp_name}_{result.scenario_name}" if exp_name else f"{safe_display}_{result.scenario_name}"
+    else:
+        prefix = f"{exp_name}_{result.scenario_name}" if exp_name else result.scenario_name
     report_path = f"results/{prefix}_{result.run_id}_report.md"
     generate_report(
         result=result,

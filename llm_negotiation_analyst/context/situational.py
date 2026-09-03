@@ -477,7 +477,7 @@ class ContextPresets:
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.HIGH,
             government=GovernmentOrientation.POPULIST,
-            crises=[CrisisType.ECONOMIC_RECESSION, CrisisType.GEOPOLITICAL, CrisisType.HEALTH_PANDEMIC],
+            crises=[CrisisType.ECONOMIC_RECESSION, CrisisType.GEOPOLITICAL],
             gdp_growth="PIB negativo, contração de -2% a -3%.",
             unemployment="Desemprego alto, 10-12%. Mercado de trabalho fraco.",
             custom_conditions=[

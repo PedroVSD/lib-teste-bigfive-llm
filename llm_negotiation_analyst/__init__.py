@@ -43,6 +43,7 @@ def run_negotiation(
     use_system_reminder: bool = True,
     tactics=None,
     experiment_name=None,
+    experiment_display_name=None,
 ):
     import logging
     if verbose:
@@ -62,11 +63,14 @@ def run_negotiation(
         use_system_reminder=use_system_reminder,
         tactics=tactics,
         experiment_name=experiment_name,
+        experiment_display_name=experiment_display_name,
     )
     result = engine.run()
     # Se engine não tinha nome mas result tem, propaga
     if not experiment_name:
         experiment_name = result.metadata.get("experiment_name")
+    if not experiment_display_name:
+        experiment_display_name = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
 
     evaluator = Evaluator(judge=judge, config=evaluator_config, second_judge=second_judge)
     profiles = evaluator.evaluate_transcript(
@@ -81,8 +85,13 @@ def run_negotiation(
     storage.save_result(result)
     storage.save_scores(result, profiles)
 
-    # Nome do arquivo inclui experiment_name se disponível
-    prefix = f"{experiment_name}_{result.scenario_name}" if experiment_name else result.scenario_name
+    # Nome do arquivo inclui display_name (com espaços) + experiment_name (file stem) se disponível
+    display = experiment_display_name or result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
+    if display:
+        safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display)).strip()
+        prefix = f"{safe_display}_{experiment_name}_{result.scenario_name}" if experiment_name else f"{safe_display}_{result.scenario_name}"
+    else:
+        prefix = f"{experiment_name}_{result.scenario_name}" if experiment_name else result.scenario_name
     report_path = f"{output_dir}/{prefix}_{result.run_id}_report.md"
     report_md = generate_report(result, profiles, output_path=report_path)
     return result, profiles, report_md

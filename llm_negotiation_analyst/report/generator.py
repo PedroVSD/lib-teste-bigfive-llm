@@ -145,6 +145,7 @@ def generate_report(
     personas_meta = result.metadata.get("personas", {})
     context_meta = result.metadata.get("context")
     experiment_name = result.metadata.get("experiment_name")
+    display_name = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
 
     # Agreement categorical
     agreement_label = "AGREEMENT" if settled else "NO_AGREEMENT"
@@ -152,7 +153,11 @@ def generate_report(
     # ── CABEÇALHO ─────────────────────────────────────────────────────
     a("# Relatório de Análise de Negociação")
     a("")
-    if experiment_name:
+    if display_name and display_name != experiment_name:
+        a(f"> **Experimento:** {display_name}  ")
+        if experiment_name:
+            a(f"> **Arquivo:** `{experiment_name}`  ")
+    elif experiment_name:
         a(f"> **Experimento:** `{experiment_name}`  ")
     a(f"> **Cenário:** {result.scenario_description}  ")
     a(f"> **ID da Execução:** `{result.run_id}`  ")
@@ -191,6 +196,7 @@ def generate_report(
                 continue
             has_any = True
             a(f"**Papel: {role}**")
+            a("")
             a("| Dimensão | Valor Induzido (Target) | Esperado (categórico) |")
             a("|-----------|-------------------------|----------------------|")
             for dim_key, score in scores.items():
@@ -256,6 +262,111 @@ def generate_report(
         a(f"- **Latência média por turno:** {sum(latencias)/len(latencias):.0f}ms")
     a("")
     a("_Outcomes são categóricos (AGREEMENT/NO_AGREEMENT) ou contínuos (utility, preço). Comportamento é separado na seção 3._")
+    a("")
+
+    # ── 2.1 Negotiation Outcome Summary (consolidated) ─────────────────
+    e(["### 2.1 Negotiation Outcome Summary", ""])
+    # Determine role order — prefer scenario order, fallback to agent_roles
+    try:
+        ordered_roles = list(result.agent_roles.values())
+        # deduplicate preserving order
+        seen = []
+        for r in ordered_roles:
+            if r not in seen:
+                seen.append(r)
+        ordered_roles = seen
+        # also try scenario order if available
+        if hasattr(result, "scenario_name"):
+            from ..scenarios import SCENARIO_REGISTRY
+            sc = SCENARIO_REGISTRY.get(result.scenario_name)
+            if sc:
+                ordered_roles = [r for r in sc.roles.keys() if r in ordered_roles] + [r for r in ordered_roles if r not in sc.roles]
+    except Exception:
+        ordered_roles = []
+    if len(ordered_roles) < 2:
+        # fallback to sorted keys of utility_results or agent_roles
+        if utility_results:
+            ordered_roles = list(utility_results.keys())[:2]
+        else:
+            ordered_roles = (list(result.agent_roles.values()) + ["candidate", "recruiter"])[:2]
+    # Ensure two roles for table
+    role_a = ordered_roles[0] if len(ordered_roles) > 0 else "candidate"
+    role_b = ordered_roles[1] if len(ordered_roles) > 1 else "recruiter"
+
+    # Helpers to format values
+    def _fmt_price(v, currency="R$", unit="/mês"):
+        if v is None:
+            return "—"
+        try:
+            return f"{currency}{v:,.2f}{unit}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except Exception:
+            return str(v)
+
+    def _fmt_utility(v):
+        if v is None:
+            return "—"
+        return f"{v:.3f}"
+
+    # Collect per-role data
+    def _role_data(role: str):
+        if utility_results and role in utility_results:
+            ur = utility_results[role]
+            price = getattr(ur, "agreed_price", None)
+            util = getattr(ur, "utility", None)
+            currency = getattr(getattr(ur, "params", None), "currency", "R$")
+            unit = getattr(getattr(ur, "params", None), "unit", "/mês")
+            return price, util, currency, unit
+        return None, None, "R$", "/mês"
+
+    price_a, util_a, curr_a, unit_a = _role_data(role_a)
+    price_b, util_b, curr_b, unit_b = _role_data(role_b)
+
+    # Joint calculations — use first currency/unit
+    joint_price = price_a if price_a is not None else price_b
+    # if both have prices and they match, use that; otherwise —
+    if price_a is not None and price_b is not None and abs(price_a - price_b) > 0.01:
+        joint_price_str = "—"
+    else:
+        joint_price_str = _fmt_price(joint_price, curr_a, unit_a) if joint_price is not None else "—"
+
+    util_joint = None
+    if util_a is not None and util_b is not None:
+        try:
+            util_joint = float(util_a) + float(util_b)
+        except Exception:
+            util_joint = None
+    elif util_a is not None:
+        util_joint = util_a
+    elif util_b is not None:
+        util_joint = util_b
+
+    # Final Surplus — define as Joint Utility (sum) when available
+    surplus_a = util_a
+    surplus_b = util_b
+    surplus_joint = util_joint
+
+    # Agreement per role (global)
+    agree_str = "YES" if settled else "NO"
+    # Turns and duration — joint only
+    turns_str = str(result.total_turns)
+    duration_str = f"{result.duration_seconds:.1f}s"
+
+    # Build markdown table
+    # Header uses spec names Candidate/Recruiter when roles match salary_negotiation, otherwise actual role names
+    header_a = role_a.capitalize()
+    header_b = role_b.capitalize()
+    # Keep spec literal for salary_negotiation for compliance
+    if set([role_a, role_b]) == {"candidate", "recruiter"}:
+        header_a, header_b = "Candidate", "Recruiter"
+    a(f"| Metric | {header_a} | {header_b} | Joint |")
+    a("|--------|-----------|-----------|-------|")
+    a(f"| Agreement | {agree_str} | {agree_str} | {agree_str} |")
+    a(f"| Final Price | {_fmt_price(price_a, curr_a, unit_a)} | {_fmt_price(price_b, curr_b, unit_b)} | {joint_price_str} |")
+    a(f"| Utility | {_fmt_utility(util_a)} | {_fmt_utility(util_b)} | {_fmt_utility(util_joint)} |")
+    a(f"| Joint Utility | — | — | {_fmt_utility(util_joint)} |")
+    a(f"| Final Surplus | {_fmt_utility(surplus_a)} | {_fmt_utility(surplus_b)} | {_fmt_utility(surplus_joint)} |")
+    a(f"| Turns | {turns_str} | {turns_str} | {turns_str} |")
+    a(f"| Negotiation Duration | {duration_str} | {duration_str} | {duration_str} |")
     a("")
 
     # ── 3. BEHAVIORAL METRICS ──────────────────────────
@@ -467,11 +578,17 @@ def generate_report(
     # ── 9. DADOS BRUTOS ───────────────────────────────────────
     e(["## 9. Dados Brutos", ""])
     a("Os dados detalhados desta execução foram salvos em:")
-    exp_prefix = f"{experiment_name}_{result.scenario_name}" if experiment_name else result.scenario_name
+    if display_name:
+        safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display_name)).strip()
+        exp_prefix = f"{safe_display}_{experiment_name}_{result.scenario_name}" if experiment_name else f"{safe_display}_{result.scenario_name}"
+    else:
+        exp_prefix = f"{experiment_name}_{result.scenario_name}" if experiment_name else result.scenario_name
     a(f"- Transcrição: `results/transcripts/{exp_prefix}_{result.run_id}.jsonl`")
     a(f"- Scores: `results/scores/{exp_prefix}_{result.run_id}_scores.jsonl` (summaries + observations categóricos)")
+    if display_name and display_name != experiment_name:
+        a(f"- Experimento (display): `{display_name}`")
     if experiment_name:
-        a(f"- Experimento: `{experiment_name}`")
+        a(f"- Experimento (arquivo): `{experiment_name}`")
     a("")
 
     report_md = "\n".join(lines)
