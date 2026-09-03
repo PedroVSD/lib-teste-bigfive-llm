@@ -17,9 +17,16 @@ class MockAdapter(LLMAdapter):
         self.response_text = response_text
 
     def complete(self, messages, **kwargs):
-        # judge system prompt contains "metric" and "evidence"
-        if "evidence" in messages[0].get("content", "").lower() or "result" in messages[0].get("content", "").lower():
-            return json.dumps({"metric": "anchoring", "result": "PRESENT", "evidence": "Avaliação simulada com 'we'."})
+        # judge system prompt contains "evaluations" and history
+        content = messages[0].get("content", "").lower()
+        if "evaluations" in content or "result" in content or "evidence" in content:
+            # Batch response for all metrics requested (anchoring, value_creation)
+            return json.dumps({
+                "evaluations": {
+                    "anchoring": {"result": "PRESENT", "evidence": "Avaliação simulada anchoring."},
+                    "value_creation": {"result": "PRESENT", "evidence": "Avaliação simulada value."}
+                }
+            })
         return self.response_text
 
     @property

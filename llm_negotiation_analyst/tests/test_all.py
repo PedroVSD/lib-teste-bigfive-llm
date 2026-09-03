@@ -15,6 +15,7 @@ from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
 from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION, SCENARIO_REGISTRY
 from llm_negotiation_analyst.simulation.engine import SimulationEngine, NegotiationResult
 from llm_negotiation_analyst.scoring.big5 import Dimension, BIG5_META, BehavioralResult, BehaviorObservation
+from llm_negotiation_analyst.scoring.negotiation_metrics import NegotiationMetric
 from llm_negotiation_analyst.scoring.evaluator import Evaluator, EvaluatorConfig, AgreementResult
 from llm_negotiation_analyst.scoring.utility import UtilityCalculator, RoleUtilityParams
 from llm_negotiation_analyst.scoring.satisfaction import SatisfactionEvaluator
@@ -31,28 +32,63 @@ class MockAdapter(LLMAdapter):
 
 
 class MockJudge(LLMAdapter):
-    """Returns categorical JSON {metric, result, evidence}."""
+    """Batch judge: returns evaluations for all metrics in one call."""
     def __init__(self, result: str = "PRESENT", model: str = "mock-judge"):
         super().__init__(model=model)
         self._result = result
+        self.call_count = 0
+        self.last_prompt = ""
     def complete(self, messages: list[dict], **kwargs) -> str:
-        return json.dumps({
-            "metric": "agreeableness",
-            "result": self._result,
-            "evidence": f"Mock evidence for {self._result}",
-        })
+        self.call_count += 1
+        self.last_prompt = messages[-1]["content"] if messages else ""
+        # Build evaluations for all possible metrics so any subset is covered
+        all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
+                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+        evals = {mid: {"result": self._result, "evidence": f"Mock evidence for {self._result} on {mid}"} for mid in all_ids}
+        return json.dumps({"evaluations": evals})
 
 
 class SequenceJudge(LLMAdapter):
-    """Cycles through results list per call."""
+    """Batch judge that cycles result per call (per turn) for agreeableness."""
     def __init__(self, results: list[str], model: str = "seq-judge"):
         super().__init__(model=model)
         self.results = results
         self.idx = 0
+        self.call_count = 0
     def complete(self, messages: list[dict], **kwargs) -> str:
         r = self.results[self.idx % len(self.results)]
         self.idx += 1
-        return json.dumps({"metric": "anchoring", "result": r, "evidence": f"evidence {r}"})
+        self.call_count += 1
+        # Return batch with agreeableness varying, others as PRESENT (to not affect that metric's counts)
+        all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
+                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+        evals = {}
+        for mid in all_ids:
+            if mid == "agreeableness":
+                evals[mid] = {"result": r, "evidence": f"evidence {r}"}
+            else:
+                evals[mid] = {"result": "PRESENT", "evidence": "other"}
+        # For tests that use only agreeableness, this suffices
+        return json.dumps({"evaluations": evals})
+
+
+class CountingJudge(LLMAdapter):
+    """Counts calls and returns batch for all metrics."""
+    def __init__(self, result: str = "PRESENT"):
+        super().__init__(model="count-judge")
+        self.result = result
+        self.call_count = 0
+        self.prompts = []
+    def complete(self, messages: list[dict], **kwargs) -> str:
+        self.call_count += 1
+        self.prompts.append(messages[-1]["content"])
+        all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
+                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+        evals = {mid: {"result": self.result, "evidence": f"ev {mid}"} for mid in all_ids}
+        return json.dumps({"evaluations": evals})
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +329,86 @@ class TestEvaluator:
         # satisfaction uses 1-7 scale
         ev = SatisfactionEvaluator(judge=MockJudge(result="PRESENT"))
         assert ev is not None
+
+
+class TestBatchEvaluator:
+    """Verifies new batch per-turn flow: one call per turn for all metrics with context."""
+
+    def test_complete_response_single_unit(self):
+        judge = CountingJudge(result="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS, Dimension.EXTRAVERSION]))
+        utterance = "Entendo a preocupação de vocês. Nossa proposta inicial era R$ 12.000. Podemos reduzir para R$ 10.000, desde que o contrato seja fechado por dois anos. Também podemos incluir suporte adicional."
+        obs = evaluator.evaluate_turn(utterance=utterance, role="candidate", scenario_context="ctx", turn_index=5)
+        # One call, and prompt contains full utterance verbatim (not split)
+        assert judge.call_count == 1
+        assert utterance in judge.prompts[0]
+        assert len(obs) == 2  # both metrics evaluated in one call
+
+    def test_context_included_in_prompt(self):
+        judge = CountingJudge(result="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [
+            {"role": "candidate", "agent_id": "c", "content": "Oferta inicial R$ 18.000"},
+            {"role": "recruiter", "agent_id": "r", "content": "Contraoferta R$ 12.000"},
+        ]
+        obs = evaluator.evaluate_turn(utterance="Podemos reduzir para R$ 10.000 se fechar 2 anos", role="candidate", scenario_context="salary", turn_index=2, transcript=transcript)
+        assert judge.call_count == 1
+        prompt = judge.prompts[0]
+        assert "Negotiation History" in prompt
+        assert "Turn 0 — candidate" in prompt
+        assert "Turn 1 — recruiter" in prompt
+
+    def test_one_call_per_turn_not_per_metric(self):
+        judge = CountingJudge(result="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS, Dimension.EXTRAVERSION, Dimension.OPENNESS]))
+        transcript = [
+            {"role": "candidate", "agent_id": "c", "content": f"turn {i}"} for i in range(3)
+        ]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "candidate"}, "ctx")
+        # 3 turns × 1 call per turn = 3, not 3×3=9
+        assert judge.call_count == 3
+        # Each profile should have 3 turns × 3 metrics = 9 observations
+        assert len(profiles["c"].observations) == 9
+
+    def test_all_metrics_in_one_response(self):
+        class AllMetricsJudge(LLMAdapter):
+            def complete(self, messages, **kwargs):
+                all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
+                           "anchoring","conditional_concession","value_creation","rapport","resilience",
+                           "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+                evals = {mid: {"result": "PRESENT", "evidence": f"ev {mid}"} for mid in all_ids}
+                return json.dumps({"evaluations": evals})
+        judge = AllMetricsJudge(model="all")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS, Dimension.OPENNESS, NegotiationMetric.ANCHORING]))
+        obs = evaluator.evaluate_turn(utterance="test", role="candidate", scenario_context="ctx", turn_index=0)
+        assert len(obs) == 3
+        assert all(o.result == BehavioralResult.PRESENT for o in obs)
+        assert all(o.evidence for o in obs)
+
+    def test_persistence_per_turn_per_agent(self):
+        judge = MockJudge(result="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [
+            {"role": "candidate", "agent_id": "c", "content": "A"},
+            {"role": "recruiter", "agent_id": "r", "content": "B"},
+            {"role": "candidate", "agent_id": "c", "content": "C"},
+        ]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "candidate", "r": "recruiter"}, "ctx")
+        # c has 2 turns (0 and 2), r has 1 turn (1)
+        c_obs = [o.turn_index for o in profiles["c"].observations]
+        r_obs = [o.turn_index for o in profiles["r"].observations]
+        assert c_obs == [0, 2]
+        assert r_obs == [1]
+
+    def test_aggregation_still_works_after_batch(self):
+        judge = SequenceJudge(["PRESENT", "ABSENT", "PRESENT"])
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [{"role": "candidate", "agent_id": "c", "content": f"t{i}"} for i in range(3)]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "candidate"}, "ctx")
+        # SequenceJudge cycles PRESENT, ABSENT, PRESENT per turn
+        assert profiles["c"].summaries[Dimension.AGREEABLENESS].present == 2
+        assert profiles["c"].summaries[Dimension.AGREEABLENESS].absent == 1
+        assert profiles["c"].summaries[Dimension.AGREEABLENESS].occurrence_rate == 2/3
 
 
 # ---------------------------------------------------------------------------

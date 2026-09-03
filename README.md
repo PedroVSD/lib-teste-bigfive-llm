@@ -338,28 +338,28 @@ Como mencionado antes, a avaliação da negociação é feita por uma ou duas LL
 
 Abaixo segue como é feita a avaliação realizada pelo juiz.
 
-1. Avaliação Granular (Frase por Frase)
-O motor não envia a transcrição inteira para o juiz. A função evaluate_turn isola uma única fala (utterance) de um agente de cada vez. Se um agente falou 5 vezes durante a simulação, o juiz avaliará esse agente 5 vezes separadas. Além disso, a avaliação é isolada por métrica: para uma mesma frase, o juiz é consultado individualmente para cada dimensão exigida (ex: uma consulta para ancoragem, outra para amabilidade, etc).
+1. Avaliação por Turno (Resposta Completa, não frase)
+O motor avalia a **resposta completa do agente naquele turno** como unidade única — não divide em frases. `evaluate_transcript` itera `Turn 1..N`; para cada `Turn i` chama `evaluate_turn(utterance=resposta_completa, history=Turns 0..i-1)` **uma única vez** para todas as métricas aplicáveis. Se um agente falou 5 vezes, são 5 chamadas (não 5×M). O histórico da negociação (janela `history_window=8`, `evaluator.py:98` `_format_history`) é enviado junto para interpretar comportamentos dependentes de contexto (`anchoring`, `conditional_concession`).
 
 2. O "Gabarito" de Correção (Behavioral Anchors)
 Para que o juiz não use critérios subjetivos, o sistema injeta um "gabarito" estrito no prompt (`BIG5_META`/`NEGOTIATION_META` `behavioral_anchors={"present":..., "absent":...}`).
 Quando o juiz avalia "Firmeza na Oferta Inicial" (Anchoring), o código extrai as âncoras `PRESENT` (âncora forte) e `ABSENT` (cede rapidamente) e envia para o modelo, explicando exatamente o que significa cada categoria. `NOT_APPLICABLE` é reservado para turno sem oportunidade suficiente.
 
-3. A Construção do Prompt (_JUDGE_USER)
-Para cada frase avaliada, a função `_observe_one` monta um prompt contextualizado. O juiz recebe:
+3. A Construção do Prompt (_JUDGE_USER_BATCH)
+Para cada turno, `_observe_batch` monta **um único prompt** contextualizado com todas as métricas. O juiz recebe:
 
 * O contexto do cenário (para entender o que está sendo negociado).
-* O papel de quem está falando (ex: cliente ou vendedor).
-* O nome da métrica e seus extremos (ex: "Firmeza na Oferta Inicial: Âncora Forte ↔ Cede Rapidamente").
-* O texto exato das âncoras `PRESENT` e `ABSENT` (+ regra `NOT_APPLICABLE`).
-* A frase exata dita pelo agente naquele turno.
+* O histórico da negociação (turnos anteriores, janela 8) — explicitamente `A resposta atual deve ser avaliada considerando o contexto e o histórico fornecidos`.
+* O papel de quem está falando no turno atual.
+* A resposta completa do turno atual (`Turn i`).
+* A lista de todas as métricas a avaliar, cada uma com `PRESENT`/`ABSENT` e âncoras.
 
-4. Resposta em JSON
-* O `_JUDGE_SYSTEM` obriga o LLM a responder exclusivamente com JSON `{metric, result, evidence}`:
-* `metric`: id da métrica;
-* `result`: `PRESENT` | `ABSENT` | `NOT_APPLICABLE` (estrito, baseado apenas no comportamento observável daquele turno, não impressão geral);
-* `evidence`: evidência textual curta (quote/paráfrase) que justifica o rótulo.
-* `confidence` opcional. `NOT_APPLICABLE` **não** é tratado como `ABSENT`.
+4. Resposta em JSON (lote)
+* O `_JUDGE_SYSTEM_BATCH` obriga o LLM a responder exclusivamente com JSON em lote:
+```json
+{"evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, "rapport": {"result": "ABSENT", "evidence": "..."}, ...}}
+```
+* Para cada métrica: `result: PRESENT|ABSENT|NOT_APPLICABLE` (só no observável deste turno), `evidence: quote curta daquele turno` (ou `null` se `NOT_APPLICABLE`). `confidence` opcional. Persistência: `Big5Profile.observations: list[BehaviorObservation{dimension,result,evidence,turn_index}]` por `turn×metric` (`storage/jsonl_store.py:89`), permitindo `occurrence_rate` por sequência temporal.
 
 5. O Boletim Final (occurrence_rate)
 Após avaliar todos os turnos, `evaluate_transcript` conta por métrica `PRESENT/ABSENT/NOT_APPLICABLE` e calcula `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado, `behavioral_anchors` `scoring/big5.py:43`). Ex: candidato com `PRESENT` em 2 de 3 turnos aplicáveis em "Criação de Valor" → `67% (2/3; 1 NA)` em `Big5Profile.summaries[metric].occurrence_rate` e `observations` com `evidence`.
@@ -369,8 +369,8 @@ Após avaliar todos os turnos, `evaluate_transcript` conta por métrica `PRESENT
 > * **Táticas (9):** induzido `present`/`enabled` vs `absent`/`disabled`/`not_applicable`; observado `PRESENT/ABSENT/NOT_APPLICABLE` → `occurrence_rate`. Ex: `**65%** (13/20; 5 NA)`. Legado `1-5` ainda funciona (`1-2→ABSENT`, `4-5→PRESENT`).
 > * **Outcome/Utility/Subjetivo separados:** `agreement` é `AGREEMENT|NO_AGREEMENT`; `utility` contínua `0-1` (`(p-p_floor)/(p_target-p_floor)`); `satisfaction` ordinal `1-7` IPC (seção 6). Alinhamento comportamental `✅ Compatível` se `PRESENT↔PRESENT`/`ABSENT↔ABSENT`, `❌ Não compatível` se oposto.
 
-6. Opcional: Duplo Juiz
-É possível instanciar `Evaluator(second_judge=...)`; os dois juízes avaliam a mesma frase independentemente. O `IRR` passa a taxa de acordo categórico por turno: `1.0` acordo (`PRESENT=PRESENT`), `0.0` desacordo, `0.5` se um `NOT_APPLICABLE`, substituindo `confidence`.
+6. Opcional: Duplo Juiz (eficiência mantida)
+É possível instanciar `Evaluator(second_judge=...)`; os dois juízes avaliam a **mesma resposta completa** independentemente, cada um com **1 chamada por turno** (total `2×N` chamadas para `N` turnos, não `2×N×M`). O `IRR` por métrica por turno passa a taxa de acordo categórico: `1.0` acordo (`PRESENT=PRESENT`), `0.0` desacordo, `0.5` se um `NOT_APPLICABLE`, substituindo `confidence`. Fluxo `Judge → Turn-level evaluations → Metric aggregation → Experiment analysis` (não `Judge → Immediate aggregate`).
 
 #### Confiabilidade inter-avaliadores (IRR)
 
@@ -388,8 +388,9 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 
 ---
 ##  Métricas
+---
+### #Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas. Método: `LLM-as-judge` **por turno (resposta completa) com todas as métricas em 1 chamada**:
 
-Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas (`tests/test_all.py:91 passed`). Método: `LLM-as-judge` por turno por métrica → `{metric, result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}` (`scoring/evaluator.py:28`, `scoring/big5.py:84`). `NOT_APPLICABLE` = sem oportunidade naquele turno (ignorado). Agregação: `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis → relatório exibe `65% (13/20; 5 NA)` (`report/generator.py:48`). Big Five respeita polaridade induzida (`positive→PRESENT`, `negative→ABSENT`).
 
 #### 1. Behavioral Metrics — Big Five (5) + Negociação (9)
 
@@ -410,7 +411,7 @@ Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas*
 | 13 | **Suscetibilidade à Âncora** | `SUS` | cognitive_bias | Orbita valor absurdo do oponente ↔ imune, mantém original | 1 |  |
 | 14 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional | 1 |  |
 
-*Categorias `METRICS_BY_CATEGORY` (`scoring/negotiation_metrics.py:254`): `tactics: ANC,CON,VAL` | `emotional: RAP,RES` | `argumentation: JUS,CLA` | `cognitive_bias: SUS,LSS`.*
+---
 
 #### 2. Negotiation Outcomes — categórico + contínuo (não binarizado)
 
@@ -418,7 +419,6 @@ Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas*
 |---|---|---|---|
 | **Agreement** | `AGREEMENT|NO_AGREEMENT` | exige confirmação de **ambos** papéis com keyword `[ACORDO_FECHADO]/SIMULACAO_CONCLUIDA` (`simulation/engine.py:258`) | `report §2.1 Negotiation Outcome Summary` |
 | **Final Price** | `float|None` `R$` | extraído do transcript pelo juiz LLM (últimas 8 linhas, `json {price}`) (`scoring/utility.py:118`) | por papel |
-| **Utility** | `float 0-1` | `u_s=(p-p_floor)/(p_target-p_floor)` seller / `u_b=(p_floor-p)/(p_floor-p_target)` buyer (`scoring/utility.py:8`) | por papel |
 | **Joint Utility / Final Surplus** | `float` | `joint = sum(utilities)` | Joint |
 | **Turns / Duration** | `int` / `s` | `result.total_turns`, `result.duration_seconds` | Joint |
 
@@ -519,7 +519,7 @@ from llm_negotiation_analyst.adapters.base import AdapterConfig
 
 config_det = AdapterConfig(
     temperature=0.0,
-    extra={"seed": 42}   # suportado pelo Ollama; OpenAI suporta via "seed"
+    extra={"seed": 42}
 )
 ```
 ---

@@ -133,7 +133,7 @@ models:
     provider: "ollama"
     name: "gpt-oss:120b-cloud"
     temperature: 0.0
-    metrics:                   # quais dimensões o juiz avalia (1 chamada por métrica por turno)
+    metrics:                   # quais dimensões o juiz avalia (1 chamada por turno para todas as métricas, com histórico)
       - "agreeableness"        # Big Five: openness, conscientiousness, extraversion, agreeableness, neuroticism
       - "neuroticism"
       - "extraversion"
@@ -188,11 +188,11 @@ Guias em `_GUIDANCE:76`; nomes em `_DIM_NAMES`. `none`/`null`/`nil`/`~`/omitir =
 
 `PRESENT` = comportamento observado no turno; `ABSENT` = oportunidade havia mas ausente; `NOT_APPLICABLE` = turno sem oportunidade suficiente (não entra no denominador) e deve ter `evidence` curta. Alias `enabled→PRESENT`, `disabled/absent→ABSENT`, `none/not_applicable→ignorado`. Legado `1-5` ainda funciona (`1-2→ABSENT`, `4-5→PRESENT`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 9 métricas `present`/`enabled` em ambos agentes e `judge.metrics` com as 14 dimensões, e `experimento.py:272` avalia **utilidade** (`utility` contínua 0-1) e **satisfação** (IPC 1-7) separadamente.
 
-**Observação categórica (mesma base):** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:28`) recebe `anchor_present`/`anchor_absent` + utterance e retorna por turno `{metric, result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}`. Agregação: `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado) → exibido como `65% (13/20; 5 NA)`. Big Five respeita polaridade induzida: `positive→PRESENT` esperado, `negative→ABSENT` esperado; táticas `enabled→PRESENT`. Ex: `Induzido PRESENT` vs `Observado 65%` → `✅ Compatível` (`≥50%`), `PRESENT` vs `20%` → `❌ Não compatível` (`report/generator.py:250`).
+**Observação categórica em lote (mesma base):** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:62` `_JUDGE_SYSTEM_BATCH`) recebe **por turno, em 1 chamada**, a **resposta completa** do agente + **histórico da negociação** (janela 8 turnos, `_format_history`) + `anchor_present/absent` de **todas** as métricas listadas em `judge.metrics`. Retorna em lote `{"evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, ...}}` (`N` turnos = `N` chamadas, antes `N×M`). Agregação posterior: `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado) → `65% (13/20; 5 NA)`, permitindo `persistence_rate/first/last_occurrence` por sequência temporal `Turn 1:0, Turn 2:N/A...`. Big Five respeita polaridade: `positive→PRESENT`, `negative→ABSENT`; táticas `enabled→PRESENT`. Ex: `Induzido PRESENT` vs `Observado 65%` → `✅ Compatível` (`≥50%`), `20%` → `❌` (`report/generator.py:250`).
 
-### 3.4 `judge.metrics` (comportamentais categóricos)
+### 3.4 `judge.metrics` (comportamentais em lote, com contexto)
 
-Lista livre de Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:42`). Se omitido, avalia só Big Five. Cada turno retorna `{metric, result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}` (`scoring/evaluator.py:28`). Métricas comportamentais **não** usam média: `occurrence_rate = PRESENT/(PRESENT+ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado) → `65%`. Respeita polaridade Big Five (`positive→PRESENT`, `negative→ABSENT`). `utility` (contínua 0-1, `scoring/utility.py:147`) e `satisfaction` (ordinal 1-7, `scoring/satisfaction.py:48` IPC) são separadas e não binarizadas; `agreement` é `AGREEMENT|NO_AGREEMENT`. Relatório separa `3 Behavioral Metrics | 5 Utility | 6 Subjective`.
+Lista livre de Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:42`). Se omitido, avalia só Big Five. Para cada turno, **uma única chamada** avalia todas as métricas com contexto: `Turn i` (resposta completa) + `Turns 0..i-1` (histórico) + rubricas `PRESENT/ABSENT`. Cada turno retorna `{"evaluations": {metric: {result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}}}` (`scoring/evaluator.py:98`). Métricas comportamentais **não** usam média imediata: `occurrence_rate` posterior (`NOT_APPLICABLE` ignorado) → `65%`. `utility` (contínua 0-1, `utility.py:147`) e `satisfaction` (ordinal 1-7, `satisfaction.py:48`) separadas; `agreement` `AGREEMENT|NO_AGREEMENT`. Relatório separa `3 Behavioral Metrics | 5 Utility | 6 Subjective`; `evidence` por `turn×metric` persiste em `scores.jsonl` (`storage/jsonl_store.py:89`).
 
 ---
 
