@@ -8,6 +8,7 @@ Suporta modelos via **API**
 * Gemini
 * Ollama cloud
 * entre outros(caso necessário)
+* openrouter
 
 **localmente**
 * Ollama

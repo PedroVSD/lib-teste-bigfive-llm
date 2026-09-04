@@ -1,5 +1,5 @@
 experiment:
-  name: Refinando a lib
+  name: teste_openrouter
   scenario: salary_negotiation
   max_turns: 8
   use_system_reminder: true
@@ -7,8 +7,8 @@ context:
   preset: anarcho_capitalist
 models:
   agent_1:
-    provider: ollama
-    name: gemma4:31b-cloud
+    provider: openrouter
+    name: minimax/minimax-m3:free
     temperature: 0.5
     max_tokens: 2048
     persona:
@@ -67,8 +67,8 @@ models:
 utility:
   agent_1:
     role_type: buyer
-    p_target: 18000
-    p_floor: 15500
+    p_target: 28000
+    p_floor: 20500
     currency: R\$
     unit: /mês
   agent_2:
