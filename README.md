@@ -419,7 +419,7 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 |---|---|---|---|
 | **Agreement** | `AGREEMENT|NO_AGREEMENT` | exige confirmação de **ambos** papéis com keyword `[ACORDO_FECHADO]/SIMULACAO_CONCLUIDA` (`simulation/engine.py:258`) | `report §2.1 Negotiation Outcome Summary` |
 | **Final Price** | `float|None` `R$` | extraído do transcript pelo juiz LLM (últimas 8 linhas, `json {price}`) (`scoring/utility.py:118`) | por papel |
-| **Joint Utility / Final Surplus** | `float` | `joint = sum(utilities)` | Joint |
+| **Joint Utility** | `float 0-0.25` | `u_bs(p)=(p-p_s)*(p_b-p)/(p_b-p_s)^2` (Nash, Luce & Raiffa 1989, Eq.4) = `u_s*u_b`, max 0.25 fair (0.5×0.5) | Joint |
 | **Turns / Duration** | `int` / `s` | `result.total_turns`, `result.duration_seconds` | Joint |
 
 #### Utilidade

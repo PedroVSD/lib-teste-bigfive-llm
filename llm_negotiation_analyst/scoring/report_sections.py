@@ -54,6 +54,35 @@ def render_utility_section(utility_results: dict[str, UtilityResult]) -> list[st
             a(f"**{role}** — {res.interpretation}")
             if res.note:
                 a(f"> ⚠️ {res.note}")
+    # Joint Utility (Nash, Luce & Raiffa Eq.4) — dentro do bloco Utility, logo abaixo de candidate/recruiter
+    try:
+        if len(utility_results) >= 2 and any_settled:
+            # p_s = seller reservation (min), p_b = buyer reservation (max)
+            p_s = None
+            p_b = None
+            p = None
+            for role, res in utility_results.items():
+                rt = getattr(getattr(res, "params", None), "role_type", "")
+                pf = getattr(getattr(res, "params", None), "p_floor", None)
+                if rt == "seller" and pf is not None:
+                    p_s = pf
+                elif rt == "buyer" and pf is not None:
+                    p_b = pf
+                if res.agreed_price is not None:
+                    p = res.agreed_price
+            if p_s is None or p_b is None:
+                floors = [getattr(getattr(r, "params", None), "p_floor", None) for r in utility_results.values()]
+                floors = [f for f in floors if f is not None]
+                if len(floors) >= 2:
+                    p_s, p_b = min(floors), max(floors)
+            joint = None
+            if p is not None and p_s is not None and p_b is not None and p_b != p_s:
+                joint = (p - p_s) * (p_b - p) / ((p_b - p_s) ** 2)
+            if joint is not None:
+                a(f"**Joint Utility:** `{joint:.3f}`")
+                a("")
+    except Exception:
+        pass
     a("")
 
     return lines

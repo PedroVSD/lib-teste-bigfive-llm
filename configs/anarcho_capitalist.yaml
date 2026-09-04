@@ -1,5 +1,5 @@
 experiment:
-  name: anarcho_capitalist
+  name: Refinando a lib
   scenario: salary_negotiation
   max_turns: 8
   use_system_reminder: true

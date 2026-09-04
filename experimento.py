@@ -234,12 +234,19 @@ if __name__ == "__main__":
         scenario.max_turns = exp["max_turns"]
         print(f"⚙️  Limite de turnos ajustado para: {scenario.max_turns}")
 
-    # 1. Juiz
+    # 1. Juiz(es)
     ag_judge = create_adapter(config["models"]["judge"])
+    second_judge = None
+    if "second_judge" in config["models"]:
+        second_judge = create_adapter(config["models"]["second_judge"])
+        print(f"⚖️  Segundo juiz ativado: {config['models']['second_judge'].get('name')} ({config['models']['second_judge'].get('provider')}) — IRR será calculado")
+    elif "judge2" in config["models"]:
+        second_judge = create_adapter(config["models"]["judge2"])
+        print(f"⚖️  Segundo juiz ativado: {config['models']['judge2'].get('name')}")
 
     # 2. Agentes e personas
     papeis_do_cenario    = list(scenario.roles.keys())
-    chaves_agentes_yaml  = [k for k in config["models"].keys() if k != "judge"]
+    chaves_agentes_yaml  = [k for k in config["models"].keys() if k not in ("judge", "second_judge", "judge2")]
 
     if len(chaves_agentes_yaml) < len(papeis_do_cenario):
         raise ValueError("Agentes insuficientes no YAML para este cenário!")
@@ -274,6 +281,7 @@ if __name__ == "__main__":
         scenario=scenario,
         agents=agents_dict,
         judge=ag_judge,
+        second_judge=second_judge,
         evaluator_config=config_juiz,
         turn_delay_seconds=exp.get("turn_delay_seconds", 0.0),
         personas=personas_dict,
