@@ -75,7 +75,17 @@ def create_adapter(config_dict: dict):
         return OllamaAdapter(model=model_name, base_url=config_dict.get("base_url"), config=config_obj)
     elif provider == "deepseek":
         return DeepSeekAdapter(model=model_name, base_url=config_dict.get("base_url"), config=config_obj)
-    raise ValueError(f"Provedor desconhecido: {provider}")
+    elif provider == "openrouter":
+        from llm_negotiation_analyst.adapters.openrouter_adapter import OpenRouterAdapter
+        return OpenRouterAdapter(
+            model=model_name,
+            api_key=config_dict.get("api_key"),
+            base_url=config_dict.get("base_url"),
+            referer=config_dict.get("referer"),
+            title=config_dict.get("title"),
+            config=config_obj,
+        )
+    raise ValueError(f"Provedor desconhecido: {provider}. Opções: gemini, openai, lmstudio, ollama, ollama_local, deepseek, openrouter")
 
 
 def parse_persona(agent_config: dict) -> Big5Persona | None:
