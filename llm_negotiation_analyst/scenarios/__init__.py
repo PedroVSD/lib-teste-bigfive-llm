@@ -223,9 +223,54 @@ PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
               "aspects": "âncora, suscetibilidade, utilidade, valorização subjetiva, justiça percebida, aversão à perda, rapport, resiliência"},
 )
 
+# 5. Compra de peça de computador — VGA
+VGA_PURCHASE = NegotiationScenario(
+    name="vga_purchase",
+    description="Negociação de compra de placa de vídeo (VGA) entre vendedor experiente e jovem comprador. Avalia persuasão, pesquisa de preço, ancoragem, concessões e decisão ponderada.",
+    shared_context=(
+        "Uma loja de informática está negociando a venda de uma placa de vídeo (VGA) RTX 4060 Ti 8GB, muito procurada para jogos e trabalho. "
+        "O preço médio de mercado para este modelo varia entre R$ 2.200 e R$ 2.800 em grandes varejistas. "
+        "A loja tem a VGA em estoque pronta entrega, com garantia de 12 meses e possibilidade de parcelamento. "
+        "O comprador precisa da peça para montar seu novo PC e usá-la no trabalho como desenvolvedor. Ambos querem fechar, "
+        "mas divergem no preço e nas condições. Além do preço, podem ser negociados garantia estendida, parcelamento, desconto à vista, "
+        "kit com SSD/memória, frete e prazo de entrega. "
+        "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
+        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
+    ),
+    roles={
+        "seller": (
+            "Você é o vendedor da loja, com 10 anos de experiência em vendas de hardware. Você é um bom vendedor: conhece profundamente "
+            "o produto, sabe argumentar. Você valoriza fechar a venda com boa"
+            "margem, mas prefere conceder benefícios (garantia estendida, frete grátis) a baixar muito o preço à vista. Você tem limite mínimo "
+            "de preço, mas não deve revelá-lo. Seja persuasivo, profissional e empático, mas firme na defesa do valor."
+        ),
+        "buyer": (
+            "Você é o comprador: um jovem montando seu novo PC, desenvolvedor júnior recém-contratado. Você sempre faz boa pesquisa de "
+            "preço e pensa bem antes de decidir. Você sabe que a média da RTX 4060 Ti é R$ 2.200-2.800 "
+            "e já viu ofertas por R$ 2.300 à vista. Seu orçamento é limitado (primeiro salário) e você precisa de custo-benefício e parcelamento "
+            "sem juros. Você valoriza preço justo, garantia, procedência e parcelamento. Não revele seu limite máximo sem estratégia. Negocie "
+            "de forma ponderada, pedindo dados, comparando ofertas e propondo trocas condicionais ('se baixar para X, fecho à vista')."
+        ),
+    },
+    opening_role="seller",
+    opening_prompt=(
+        "Olá! Esta RTX 4060 Ti 8GB é excelente para jogos em 1440p e para seu trabalho como dev. "
+        "Por ser um modelo com alta procura e estoque imediato com garantia de 12 meses, consigo fazer por R$ 2.900 à vista, ou em até 12x com juros. "
+        "O que acha da proposta? Podemos ajustar condições para fecharmos hoje."
+    ),
+    max_turns=8,
+    settlement_keywords=[
+        "SIMULACAO_CONCLUIDA",
+        "ACORDO_FECHADO",
+        "[ACORDO_FECHADO]",
+    ],
+    metadata={"domain": "Retail", "currency": "BRL", "difficulty": "medium", "label_pt": "Compra de VGA",
+              "aspects": "âncora, pesquisa de preço, concessões condicionais, criação de valor, persuasão, decisão ponderada"},
+)
+
 # Registry for easy lookup
 SCENARIO_REGISTRY: dict[str, NegotiationScenario] = {
     s.name: s for s in [
-        SALARY_NEGOTIATION, COMPANY_ACQUISITION, STRATEGIC_SUPPLIER_CONTRACT, PROPERTY_BOUNDARY_DISPUTE
+        SALARY_NEGOTIATION, COMPANY_ACQUISITION, STRATEGIC_SUPPLIER_CONTRACT, PROPERTY_BOUNDARY_DISPUTE, VGA_PURCHASE
     ]
 }

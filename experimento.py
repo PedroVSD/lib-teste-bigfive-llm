@@ -187,22 +187,22 @@ def parse_context(context_dict: dict) -> SituationalContext:
 
 def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: list[str],) -> dict[str, RoleUtilityParams]:
     """
-    Lê o bloco 'utility' do config.yaml e constrói um dict role → RoleUtilityParams.
+    Lê bloco 'utility' (legado top-level ou novo dentro do agente).
 
-    Exemplo no config.yaml:
+    Novo formato (preferido, dentro do agente, após tactics):
+        models:
+          agent_1:
+            utility:
+              p_target: 18000
+              p_floor: 15500
+          agent_2:
+            utility:
+              p_target: 14000
+              p_floor: 16500
+
+    Legado ainda suportado:
         utility:
-          buyer:
-            role_type: "buyer"
-            p_target: 150000
-            p_floor: 180000
-            currency: "R$"
-            unit: "/ano"
-          seller:
-            role_type: "seller"
-            p_target: 180000
-            p_floor: 114000
-            currency: "R$"
-            unit: "/ano"
+          agent_1: {p_target, p_floor, role_type?, currency?, unit?}
     """
     if not utility_cfg:
         return {}
@@ -212,14 +212,48 @@ def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: l
     params = {}
     for key, cfg in utility_cfg.items():
         role = agent_to_role.get(key, key)
+        # role_type opcional, inferido se ausente; currency/unit removidos do yaml (legado)
+        rt = cfg.get("role_type")
+        if not rt:
+            # inferência simples: ambos os cálculos são simétricos, default seller
+            try:
+                rt = "seller" if float(cfg["p_target"]) > float(cfg["p_floor"]) else "buyer"
+            except Exception:
+                rt = "seller"
         params[role] = RoleUtilityParams(
             role=role,
-            role_type=cfg.get("role_type", "buyer"),
+            role_type=rt,
             p_target=float(cfg["p_target"]),
             p_floor=float(cfg["p_floor"]),
-            currency=cfg.get("currency", "R$"),
+            currency=cfg.get("currency", ""),
             unit=cfg.get("unit", ""),
         )
+    return params
+
+
+def parse_utility_from_agents(models_cfg: dict, chaves_agentes: list[str], papeis: list[str]) -> dict[str, RoleUtilityParams]:
+    """Novo: lê utility dentro de models.agent_x.utility (após tactics)."""
+    agent_to_role = {chave: role for chave, role in zip(chaves_agentes, papeis)}
+    params = {}
+    for chave in chaves_agentes:
+        role = agent_to_role.get(chave, chave)
+        agent_cfg = models_cfg.get(chave, {}) if isinstance(models_cfg, dict) else {}
+        util_cfg = agent_cfg.get("utility") if isinstance(agent_cfg, dict) else None
+        if isinstance(util_cfg, dict) and "p_target" in util_cfg and "p_floor" in util_cfg:
+            rt = util_cfg.get("role_type")
+            if not rt:
+                try:
+                    rt = "seller" if float(util_cfg["p_target"]) > float(util_cfg["p_floor"]) else "buyer"
+                except Exception:
+                    rt = "seller"
+            params[role] = RoleUtilityParams(
+                role=role,
+                role_type=rt,
+                p_target=float(util_cfg["p_target"]),
+                p_floor=float(util_cfg["p_floor"]),
+                currency=util_cfg.get("currency", ""),
+                unit=util_cfg.get("unit", ""),
+            )
     return params
 
 
@@ -304,12 +338,17 @@ if __name__ == "__main__":
     )
     print("✅ Simulação concluída.")
 
-    # 6. Utilidade econômica (opcional — só roda se 'utility' estiver no config.yaml)
+    # 6. Utilidade econômica (opcional — novo: dentro do agente após tactics, legado: top-level utility)
     utility_results = None
-    utility_cfg = config.get("utility", {})
-    if utility_cfg:
+    # Novo: utility dentro de models.agent_x.utility
+    utility_params = parse_utility_from_agents(config.get("models", {}), chaves_agentes_yaml, papeis_do_cenario)
+    # Fallback legado: top-level utility
+    if not utility_params:
+        legacy_cfg = config.get("utility", {})
+        if legacy_cfg:
+            utility_params = parse_utility_params(legacy_cfg, chaves_agentes_yaml, papeis_do_cenario)
+    if utility_params:
         print("📊 Calculando utilidade econômica...")
-        utility_params = parse_utility_params(utility_cfg, chaves_agentes_yaml, papeis_do_cenario)
         utility_calc    = UtilityCalculator(judge=ag_judge, role_params=utility_params)
         utility_results = utility_calc.evaluate(result)
         print("✅ Utilidade calculada.")

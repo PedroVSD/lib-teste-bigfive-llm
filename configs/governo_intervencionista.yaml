@@ -27,6 +27,9 @@ models:
       resilience: enabled
       clarity: enabled
       fact_justification: enabled
+    utility:
+      p_target: 18000
+      p_floor: 15500
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -45,6 +48,9 @@ models:
       resilience: enabled
       clarity: enabled
       fact_justification: enabled
+    utility:
+      p_target: 14000
+      p_floor: 16500
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud
@@ -64,16 +70,3 @@ models:
     - resilience
     - clarity
     - fact_justification
-utility:
-  agent_1:
-    role_type: buyer
-    p_target: 18000
-    p_floor: 15500
-    currency: R\$
-    unit: /mês
-  agent_2:
-    role_type: seller
-    p_target: 14000
-    p_floor: 16500
-    currency: R\$
-    unit: /mês

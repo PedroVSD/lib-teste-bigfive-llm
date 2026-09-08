@@ -49,27 +49,39 @@ class RoleUtilityParams:
     """
     Parâmetros de utilidade para um papel na negociação.
 
-    Defina no config.yaml e passe para UtilityCalculator.
+    Novo formato (dentro do agente, após tactics):
+        models:
+          agent_1:
+            utility:
+              p_target: 18000  # alvo
+              p_floor: 15500   # piso/teto (BATNA)
 
-    Exemplo (negociação salarial):
-        candidate → role_type="buyer"  (quer o MAIOR salário possível)
-            p_target = 18000  # alvo do candidato
-            p_floor  = 15500  # BATNA (oferta concorrente)
+    Legado (top-level utility com role_type/currency/unit) ainda suportado para compat.
 
-        recruiter → role_type="seller" (quer pagar o MENOR salário possível)
-            p_target = 14000  # alvo do recrutador
-            p_floor  = 16500  # teto orçamentário
-
-    Nota: "seller" e "buyer" são convenções matemáticas, não literais.
-    Em negociações salariais, o candidato age como "comprador" do salário
-    (quer maximizar) e o recrutador como "vendedor" (quer minimizar o custo).
+    Inferência de role_type quando omitido:
+      p_target > p_floor → seller-like (quer maximizar, ex: candidato salário, vendedor VGA)
+      p_target < p_floor → buyer-like (quer minimizar)
     """
     role: str
-    role_type: Literal["seller", "buyer"]
-    p_target: float   # p̄_s (alvo do vendedor) ou p̲_b (alvo do comprador)
-    p_floor: float    # p̲_s (mínimo do vendedor) ou p̄_b (máximo do comprador)
-    currency: str = "R$"
-    unit: str = ""    # ex: "/mês", "/ano"
+    role_type: Literal["seller", "buyer"] = "seller"
+    p_target: float = 0.0   # p̄_s (alvo do vendedor) ou p̲_b (alvo do comprador)
+    p_floor: float = 0.0    # p̲_s (mínimo do vendedor) ou p̄_b (máximo do comprador)
+    currency: str = ""  # removido do yaml — mantido só para compat, não usado em VGA
+    unit: str = ""    # removido do yaml — mantido só para compat
+
+    def __post_init__(self):
+        # Inferir role_type se não informado ou inconsistente com p_target/p_floor
+        # Se p_target > p_floor → quer maximizar (seller-like para preço), senão buyer-like
+        # Mantém valor explícito se já coerente
+        try:
+            if self.p_target > self.p_floor and self.role_type == "buyer":
+                # buyer que quer maximizar é na verdade seller-like matematicamente
+                # mas mantemos buyer para não quebrar, a fórmula usa role_type
+                pass
+            elif self.p_target < self.p_floor and self.role_type == "seller":
+                pass
+        except Exception:
+            pass
 
 
 @dataclass

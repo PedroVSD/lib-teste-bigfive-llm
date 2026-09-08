@@ -1,6 +1,6 @@
 experiment:
-  name: crise_financeira
-  scenario: salary_negotiation
+  name: experimento_VGA_crise_financeira
+  scenario: vga_purchase
   max_turns: 8
   use_system_reminder: true
 context:
@@ -27,6 +27,9 @@ models:
       resilience: enabled
       clarity: enabled
       fact_justification: enabled
+    utility:
+      p_target: 2300
+      p_floor: 2450
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -45,6 +48,9 @@ models:
       resilience: enabled
       clarity: enabled
       fact_justification: enabled
+    utility:
+      p_target: 2500
+      p_floor: 2350
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud
@@ -64,16 +70,3 @@ models:
     - resilience
     - clarity
     - fact_justification
-utility:
-  agent_1:
-    role_type: buyer
-    p_target: 18000
-    p_floor: 15500
-    currency: R\$
-    unit: /mês
-  agent_2:
-    role_type: seller
-    p_target: 14000
-    p_floor: 16500
-    currency: R\$
-    unit: /mês

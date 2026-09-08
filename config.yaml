@@ -55,6 +55,9 @@ models:
       anchor_susceptibility: 2
       loss_aversion: 1
       fact_justification: 5
+    utility:
+      p_target: 18000
+      p_floor: 15500
 
   # Segunda role
   agent_2:
@@ -79,6 +82,9 @@ models:
       anchor_susceptibility: 2
       loss_aversion: 2
       fact_justification: 5
+    utility:
+      p_target: 14000
+      p_floor: 16500
 
   judge:
     provider: "ollama"
@@ -102,17 +108,3 @@ models:
 #deepseek-v4-pro:cloud
 #provider: "lmstudio"
 #name: "google/gemma-4-e2b"
-
-utility:
-  agent_1:
-    role_type: "buyer"      # agente quer maximizar o salário
-    p_target: 18000         # salário alvo do candidato (R$/mês)
-    p_floor: 15500          # BATNA (oferta concorrente)
-    currency: "R$"
-    unit: "/mês"
-  agent_2:
-    role_type: "seller"     # agente quer minimizar o custo
-    p_target: 14000         # salário ideal para o recrutador
-    p_floor: 16500          # teto orçamentário
-    currency: "R$"
-    unit: "/mês"
