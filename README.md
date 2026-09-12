@@ -293,32 +293,31 @@ O modelo big5 se baseia em cindo traços de personalidade, sendo eles:
 
 ---
 
-| Dimensão | Polo alto | Polo baixo | Descrição |
-|----------|-----------|------------|-----------------|
-| **Agreeableness** | Cooperativo / Pró-social | Competitivo / Adversarial | Cooperação e compaixão |
-| **Conscientiousness** | Organizado / Preciso | Impulsivo / Vago | É o nível organizacional, disciplina e orientação a objetivos. |
-| **Neuroticism** | Instável / Reativo | Estável / Composto | Como é a reação a emoções negativas |
-| **Extraversion** | Assertivo / Dominante | Passivo / Reservado | A busca por estímulos sociais e assertividade(habilidade social de se expressar de forma clara, direta e honesta). |
-| **Openness** | Criativo / Integrativo | Rígido / Convencional | É a abertura a novas experiências |
-
-**Configuração atual (bipolar + desativação):**
+**Configuração (bipolar + desativação):**
 
 No `config.yaml` use apenas strings:
 
+* polo alto → cooperativo
+* polo baixo → estável
+* desativa — não injeta instrução
+
 ```yaml
 persona:
-  agreeableness: positive   # polo alto → cooperativo
-  neuroticism: negative     # polo baixo → estável
-  openness: none            # desativa — não injeta instrução
+  agreeableness: positive   
+  neuroticism: negative     
+  openness: none            
   extraversion: positive
   conscientiousness: negative
   extra_instructions: "Instrução livre adicional"
 ```
 
+* present -> injeta
+* absent -> não injeta
+
 ```yaml
 tactics:
-  anchoring: present              # injeta âncora present (polo positivo)
-  anchor_susceptibility: absent   # não injeta (imune)
+  anchoring: present              
+  anchor_susceptibility: absent   
   loss_aversion: present
   conditional_concession: present
   value_creation: present
@@ -358,17 +357,24 @@ Para cada turno, `_observe_batch` monta **um único prompt** contextualizado com
 4. Resposta em JSON (lote)
 * O `_JUDGE_SYSTEM_BATCH` obriga o LLM a responder exclusivamente com JSON em lote:
 ```json
-{"evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, "rapport": {"result": "ABSENT", "evidence": "..."}, ...}}
+{
+  "evaluations": {
+    "anchoring": {
+      "result": "PRESENT",
+      "evidence": "..."
+    },
+    "rapport": {
+      "result": "ABSENT",
+      "evidence": "..."
+    }
+  }
+}
 ```
-* Para cada métrica: `result: PRESENT|ABSENT|NOT_APPLICABLE` (só no observável deste turno), `evidence: quote curta daquele turno` (ou `null` se `NOT_APPLICABLE`). `confidence` opcional. Persistência: `Big5Profile.observations: list[BehaviorObservation{dimension,result,evidence,turn_index}]` por `turn×metric` (`storage/jsonl_store.py:89`), permitindo `occurrence_rate` por sequência temporal.
+* Para cada métrica: `result: PRESENT|ABSENT|NOT_APPLICABLE` (só no observável deste turno), `evidence: quote curta daquele turno` (ou `null` se `NOT_APPLICABLE`). `confidence` opcional.
 
 5. O Boletim Final (occurrence_rate)
 Após avaliar todos os turnos, `evaluate_transcript` conta por métrica `PRESENT/ABSENT/NOT_APPLICABLE` e calcula `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado, `behavioral_anchors` `scoring/big5.py:43`). Ex: candidato com `PRESENT` em 2 de 3 turnos aplicáveis em "Criação de Valor" → `67% (2/3; 1 NA)` em `Big5Profile.summaries[metric].occurrence_rate` e `observations` com `evidence`.
 
-> **Induzido vs observado (mesma base):**
-> * **Big Five:** induzido `positive`/`negative`/`none` (respeita polaridade); observado categórico `present/absent` → `occurrence_rate`. `positive` espera `PRESENT` (`≥50%`), `negative` espera `ABSENT` (`<50%`), exibido como `**67%** (2/3; 1 NA)`.
-> * **Táticas (9):** induzido `present`/`enabled` vs `absent`/`disabled`/`not_applicable`; observado `PRESENT/ABSENT/NOT_APPLICABLE` → `occurrence_rate`. Ex: `**65%** (13/20; 5 NA)`. Legado `1-5` ainda funciona (`1-2→ABSENT`, `4-5→PRESENT`).
-> * **Outcome/Utility/Subjetivo separados:** `agreement` é `AGREEMENT|NO_AGREEMENT`; `utility` contínua `0-1` (`(p-p_floor)/(p_target-p_floor)`); `satisfaction` ordinal `1-7` IPC (seção 6). Alinhamento comportamental `✅ Compatível` se `PRESENT↔PRESENT`/`ABSENT↔ABSENT`, `❌ Não compatível` se oposto.
 
 6. Opcional: Duplo Juiz (eficiência mantida)
 É possível instanciar `Evaluator(second_judge=...)`; os dois juízes avaliam a **mesma resposta completa** independentemente, cada um com **1 chamada por turno** (total `2×N` chamadas para `N` turnos, não `2×N×M`). O `IRR` por métrica por turno passa a taxa de acordo categórico: `1.0` acordo (`PRESENT=PRESENT`), `0.0` desacordo, `0.5` se um `NOT_APPLICABLE`, substituindo `confidence`. Fluxo `Judge → Turn-level evaluations → Metric aggregation → Experiment analysis` (não `Judge → Immediate aggregate`).
@@ -390,38 +396,38 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 ---
 ##  Métricas
 ---
-### #Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas. Método: `LLM-as-judge` **por turno (resposta completa) com todas as métricas em 1 chamada**:
+### #Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas.
 
 
 #### 1. Behavioral Metrics — Big Five (5) + Negociação (9)
 
-| # | Métrica | Código | Categoria | PRESENT ↔ ABSENT (âncora resumida) | Obs. | Como é julgada |
-|---|---|---|---|---|---|---|
-| 1 | **Agreeableness** | `A` | big5 | `Cooperative/Prosocial` (usa `we/our`, valida, concede) ↔ `Competitive/Adversarial` (ameaça, zero-sum) | 5 | `BIG5_META` `present/absent` (`scoring/big5.py:120`) |
-| 2 | **Conscientiousness** | `C` | big5 | `Organized/Precise` (estrutura, quantifica, sem contradição) ↔ `Flexible/Impulsive` (vago, inconsistente) | 4 | idem |
-| 3 | **Extraversion** | `E` | big5 | `Assertive/Dominant` (`I need/final offer`, controla frame) ↔ `Reserved/Passive` (reativo, curto) | 3 | idem |
-| 4 | **Neuroticism** | `N` | big5 | `Unstable/Reactive` (emotivo, hostil, volátil) ↔ `Stable/Composed` (calmo, concessões graduais) | 4 | IV invertido `positive=instável` |
-| 5 | **Openness** | `O` | big5 | `Creative/Integrative` (expande espaço, linkages) ↔ `Conventional/Rigid` (posicional, rejeita trade-off) | 2 |  |
-| 6 | **Firmeza na Oferta Inicial** | `ANC` | tactics | **Anchoring** — âncora forte e defende antes de conceder ↔ cede imediato | 5 | `NEGOTIATION_META` (`scoring/negotiation_metrics.py:28`) |
-| 7 | **Concessões Condicionais** | `CON` | tactics | `Se X então Y` estrito ↔ concessão unilateral | 5 |  |
-| 8 | **Criação de Valor** | `VAL` | tactics | Adiciona variáveis (bônus, remoto, PLR) win-win ↔ briga só salário soma-zero | 3 |  |
-| 9 | **Rapport** | `RAP` | emotional | Valida emoções, tom colaborativo, parceria longo prazo ↔ frio/transacional | 5 |  |
-| 10 | **Resiliência à Pressão** | `RES` | emotional | Inabalável, redireciona a fatos ↔ cede a ultimato/desespero | 3 |  |
-| 11 | **Justificação Baseada em Fatos** | `JUS` | argumentation | Dados (PIB, inflação, benchmark, ROI) ↔ desejo subjetivo sem dado | 5 |  |
-| 12 | **Clareza** | `CLA` | argumentation | Estruturado, tópicos, aritmética impecável ↔ confuso, valores conflitantes | 5 |  |
-| 13 | **Suscetibilidade à Âncora** | `SUS` | cognitive_bias | Orbita valor absurdo do oponente ↔ imune, mantém original | 1 |  |
-| 14 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional | 1 |  |
+| # | Métrica | Código | Categoria | PRESENT ↔ ABSENT (âncora resumida) |
+|---|---|---|---|---|
+| 1 | **Agreeableness** | `A` | big5 | Validado pelo teste BFI-44 |
+| 2 | **Conscientiousness** | `C` | big5 | Validado pelo teste BFI-44 |
+| 3 | **Extraversion** | `E` | big5 | Validado pelo teste BFI-44 |
+| 4 | **Neuroticism** | `N` | big5 | Validado pelo teste BFI-44 |
+| 5 | **Openness** | `O` | big5 | Validado pelo teste BFI-44 |
+| 6 | **Firmeza na Oferta Inicial** | `ANC` | tactics | **Anchoring** — âncora forte e defende antes de conceder ↔ cede imediato |
+| 7 | **Concessões Condicionais** | `CON` | tactics | `Se X então Y` estrito ↔ concessão unilateral |
+| 8 | **Criação de Valor** | `VAL` | tactics | Adiciona variáveis (bônus, remoto, PLR) win-win ↔ briga só salário soma-zero |
+| 9 | **Rapport** | `RAP` | emotional | Valida emoções, tom colaborativo, parceria longo prazo ↔ frio/transacional |
+| 10 | **Resiliência à Pressão** | `RES` | emotional | Inabalável, redireciona a fatos ↔ cede a ultimato/desespero |
+| 11 | **Justificação Baseada em Fatos** | `JUS` | argumentation | Dados (PIB, inflação, benchmark, ROI) ↔ desejo subjetivo sem dado |
+| 12 | **Clareza** | `CLA` | argumentation | Estruturado, tópicos, aritmética impecável ↔ confuso, valores conflitantes |
+| 13 | **Suscetibilidade à Âncora** | `SUS` | cognitive_bias | Orbita valor absurdo do oponente ↔ imune, mantém original |
+| 14 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional |
 
 ---
 
 #### 2. Negotiation Outcomes — categórico + contínuo (não binarizado)
 
-| Métrica | Tipo | Como é calculada | Onde |
-|---|---|---|---|
-| **Agreement** | `AGREEMENT|NO_AGREEMENT` | exige confirmação de **ambos** papéis com keyword `[ACORDO_FECHADO]/SIMULACAO_CONCLUIDA` (`simulation/engine.py:258`) | `report §2.1 Negotiation Outcome Summary` |
-| **Final Price** | `float|None` `R$` | extraído do transcript pelo juiz LLM (últimas 8 linhas, `json {price}`) (`scoring/utility.py:118`) | por papel |
-| **Joint Utility** | `float 0-0.25` | `u_bs(p)=(p-p_s)*(p_b-p)/(p_b-p_s)^2` (Nash, Luce & Raiffa 1989, Eq.4) = `u_s*u_b`, max 0.25 fair (0.5×0.5) | Joint |
-| **Turns / Duration** | `int` / `s` | `result.total_turns`, `result.duration_seconds` | Joint |
+| Métrica | Tipo |
+|---|---|
+| **Agreement** | `AGREEMENT|NO_AGREEMENT` |
+| **Final Price** | `float|None` `R$` |
+| **Joint Utility** | `float 0-0.25` |
+| **Turns / Duration** | `int` / `s` |
 
 #### Utilidade
 
