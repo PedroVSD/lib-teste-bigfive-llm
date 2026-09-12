@@ -136,6 +136,7 @@ def generate_report(
     output_path: str | Path | None = None,
     utility_results: Optional[dict] = None,
     satisfaction_results: Optional[dict] = None,
+    bfi_results: Optional[dict] = None,
 ) -> str:
     lines: list[str] = []
     a = lines.append
@@ -368,6 +369,66 @@ def generate_report(
                 if na_count:
                     a(f"| — | *{na_count}× NOT_APPLICABLE* | — | _Turnos sem oportunidade suficiente (ignorados no %)_ |")
                 a("")
+
+        # ── BFI-44 — logo após a última tabela do agente (Foco em Criação de Valor)
+        if bfi_results:
+            # Lookup por agent_id ou role
+            bfi = bfi_results.get(agent_id)
+            if not bfi:
+                # tenta por role
+                bfi = bfi_results.get(role)
+            if bfi:
+                # bfi pode ser BFIResult ou dict
+                scores = getattr(bfi, "scores", None)
+                if scores is None and isinstance(bfi, dict):
+                    scores = bfi.get("scores") or bfi.get("Scores")
+                raw = getattr(bfi, "raw_answers", None)
+                if raw is None and isinstance(bfi, dict):
+                    raw = bfi.get("raw_answers") or bfi.get("rawAnswers")
+                if scores:
+                    a(f"#### BFI-44 — {agent_id} ({role})")
+                    a("")
+                    a("_Questionário Big Five Inventory aplicado logo após o condicionamento da persona, antes da negociação. Escala 1=Discordo totalmente — 5=Concordo totalmente. Scores são médias por dimensão (itens reversos invertidos: 6 - resposta)._")
+                    a("")
+                    a("| Dimensão BFI | Score (1-5) | Interpretação | Itens |")
+                    a("|--------------|-------------|---------------|-------|")
+                    # Map BFI dimensions to Portuguese and interpretation
+                    bfi_labels = {
+                        "extraversion": "Extraversion",
+                        "agreeableness": "Agreeableness",
+                        "conscientiousness": "Conscientiousness",
+                        "neuroticism": "Neuroticism",
+                        "openness": "Openness",
+                    }
+                    for dim_key in ["extraversion", "agreeableness", "conscientiousness", "neuroticism", "openness"]:
+                        sc = scores.get(dim_key)
+                        if sc is None:
+                            sc_str = "—"
+                            interp = "—"
+                        else:
+                            sc_str = f"{sc:.2f}"
+                            if sc >= 3.5:
+                                interp = "Alto"
+                            elif sc <= 2.5:
+                                interp = "Baixo"
+                            else:
+                                interp = "Médio"
+                        # Itens por dimensão para referência
+                        from ..scoring.bfi import BFI_SCALES
+                        scale = BFI_SCALES.get(dim_key, {})
+                        itens = f"F:{','.join(str(x) for x in scale.get('forward', []))} R:{','.join(str(x) for x in scale.get('reverse', []))}"
+                        a(f"| {bfi_labels.get(dim_key, dim_key)} | {sc_str} | {interp} | {itens} |")
+                    a("")
+                    if raw and isinstance(raw, dict):
+                        # Mostra respostas brutas resumidas (1-44)
+                        # Formata como linha compacta
+                        raw_str = ", ".join(f"{k}:{v}" for k, v in sorted(raw.items())[:10])
+                        if len(raw) > 10:
+                            raw_str += f" ... (+{len(raw)-10} itens)"
+                        a(f"_Respostas brutas (amostra): {raw_str}_")
+                        a("")
+                    a(f"_BFI aplicado via `{getattr(bfi, 'model_identifier', agent_id)}` logo após `Big5Persona` e `SituationalContext`, antes de `Turn 0`._")
+                    a("")
 
     # ── 4. COMPARAÇÃO ENTRE AGENTES ──────────────────────────────────
     e(["## 4. Comparação Entre Agentes (Behavioral)", ""])

@@ -346,10 +346,10 @@ class SimulationEngine:
                     kw_hit = next((kw for kw in scenario.settlement_keywords if kw.lower() in content.lower()), "")
                     logger.info("Confirmação de acordo por '%s' no turno %d (keyword: %s) [%d/%d]",
                                 role, turn_index, kw_hit, len(confirmed_roles), len(agents))
-                    print(f"📝 Confirmação de {role} ({len(confirmed_roles)}/{len(agents)}) — keyword: {kw_hit}")
+                    print(f"[Confirmacao] {role} ({len(confirmed_roles)}/{len(agents)}) — keyword: {kw_hit}")
                     if len(confirmed_roles) >= len(agents):
                         settled = True
-                        print(f"✅ Acordo confirmado por AMBOS no turno {turn_index}")
+                        print(f"[Acordo] confirmado por AMBOS no turno {turn_index}")
                         logger.info("Acordo confirmado por ambos no turno %d", turn_index)
                         break
                     # não encerra ainda — aguarda confirmação do outro lado

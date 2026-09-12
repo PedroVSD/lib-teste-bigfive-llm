@@ -1,0 +1,9 @@
+SCALES
+The BFI yields five primary scales. Descriptions of the scales and item loadings are listed below. Scale scores are calculated as the sum of respective items. Bold items are reverse scored.
+
+SCALE NAME (ABBR.)	DESCRIPTION	ITEM LOADINGS
+BFI_EXT	Extraversion Subscale	1, 6, 11, 16, 21, 26, 31, 36
+BFI_AGR	Aggreeableness Subscale	2, 7, 12, 17, 22, 27, 32, 37, 42
+BFI_CON	Conscientiousness Subscale	3, 8, 13, 18, 23, 28, 33, 38, 43
+BFI_NEU	Neuroticism Subscale	4, 9, 14, 19, 24, 29, 34, 39
+BFI_OPEN	Openness Subscale	5, 10, 15, 20, 25, 30, 35, 40, 41, 44

@@ -1,4 +1,5 @@
 import os
+import pathlib
 import yaml
 from dotenv import load_dotenv
 
@@ -318,6 +319,21 @@ if __name__ == "__main__":
     metricas_textos = config["models"]["judge"].get("metrics", [])
     config_juiz = EvaluatorConfig.from_strings(metricas_textos) if metricas_textos else None
 
+    # 4.1 BFI — questionário logo após condicionamento (antes da negociação)
+    bfi_results = None
+    try:
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_all
+        print("📝 Aplicando BFI-44 aos agentes (após condicionamento, antes da negociação)...")
+        bfi_results = run_bfi_all(agents_dict, personas_dict, macro_context)
+        for rid, res in bfi_results.items():
+            if "_" in rid and res.scores:
+                print(f"  BFI {rid}: " + ", ".join(f"{k}={v:.2f}" for k,v in res.scores.items()))
+        print("✅ BFI concluído.")
+    except Exception as e:
+        print(f"⚠️ BFI falhou (continuando sem BFI): {e}")
+        import traceback; traceback.print_exc()
+        bfi_results = None
+
     # 5. Simulação principal
     experiment_name = exp.get("name")
     display_name = exp.get("display_name") or exp.get("title") or exp.get("yaml_name")
@@ -359,22 +375,54 @@ if __name__ == "__main__":
     satisfaction_results = sat_evaluator.evaluate_all(result)
     print("✅ Satisfação avaliada.")
 
-    # 8. Regera o relatório com as novas seções (usa display_name + experiment_name no nome do arquivo)
+    # 8. Salva BFI se houver (para relatório e persistência)
+    if 'bfi_results' in locals() and bfi_results:
+        try:
+            import json
+            # Filtra apenas agent_id (com '_') e deduplica
+            bfi_to_save = {}
+            for k, v in bfi_results.items():
+                if "_" in k and k not in bfi_to_save:
+                    try:
+                        bfi_to_save[k] = v.to_dict()
+                    except Exception:
+                        bfi_to_save[k] = {"scores": getattr(v, "scores", {}), "raw_answers": getattr(v, "raw_answers", {})}
+            result.metadata["bfi"] = bfi_to_save
+            # Prefix para salvar BFI (mesmo prefix do relatório)
+            exp_name_tmp = result.metadata.get("experiment_name") or experiment_name or result.scenario_name
+            display_tmp = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
+            if display_tmp:
+                safe_tmp = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display_tmp)).strip()
+                prefix_tmp = f"{safe_tmp}_{exp_name_tmp}_{result.scenario_name}" if exp_name_tmp else f"{safe_tmp}_{result.scenario_name}"
+            else:
+                prefix_tmp = f"{exp_name_tmp}_{result.scenario_name}" if exp_name_tmp else result.scenario_name
+            bfi_path = f"results/{prefix_tmp}_{result.run_id}_bfi.json"
+            pathlib.Path("results").mkdir(parents=True, exist_ok=True)
+            with open(bfi_path, "w", encoding="utf-8") as f:
+                json.dump(bfi_to_save, f, ensure_ascii=False, indent=2)
+            print(f"📝 BFI salvo: {bfi_path}")
+        except Exception as e:
+            print(f"⚠️ Falha ao salvar BFI: {e}")
+            import traceback; traceback.print_exc()
+
+    # 9. Regera o relatório com as novas seções (usa display_name + experiment_name no nome do arquivo)
     exp_name = result.metadata.get("experiment_name") or experiment_name or result.scenario_name
     display = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
     if display:
         safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display)).strip()
-        # keep spaces for readability but filesystem-safe (spaces allowed); also keep file_stem
         prefix = f"{safe_display}_{exp_name}_{result.scenario_name}" if exp_name else f"{safe_display}_{result.scenario_name}"
     else:
         prefix = f"{exp_name}_{result.scenario_name}" if exp_name else result.scenario_name
     report_path = f"results/{prefix}_{result.run_id}_report.md"
+    # bfi_results pode ser dict agent_id -> BFIResult
+    bfi_for_report = locals().get("bfi_results")
     generate_report(
         result=result,
         profiles=profiles,
         output_path=report_path,
         utility_results=utility_results,
         satisfaction_results=satisfaction_results,
+        bfi_results=bfi_for_report,
     )
 
     print(f"\n🎉 Experimento concluído! Relatório: {report_path}")
