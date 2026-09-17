@@ -302,10 +302,12 @@ class SimulationEngine:
                 agent = agents[role]
                 if self.use_system_reminder:
                     system_reminder = (
-                        "\n\n[SYSTEM REMINDER: Se um acordo definitivo acabou de ser alcançado por AMBAS as partes, "
-                        "você DEVE OBRIGATORIAMENTE terminar sua resposta com o código exato: [ACORDO_FECHADO] "
-                        "ou SIMULACAO_CONCLUIDA. A simulação só encerra quando os dois confirmarem. "
-                        "Não prolongue a conversa com gentilezas.]"
+                        "\n\n[SYSTEM REMINDER — regras de encerramento:\n"
+                        "• Se neste turno VOCÊ e o oponente ACABARAM de fechar um acordo definitivo (ambos concordaram nos termos), "
+                        "você DEVE terminar sua resposta com EXATAMENTE \"[ACORDO_FECHADO]\" ou \"SIMULACAO_CONCLUIDA\" na última linha, sem texto após. A simulação só encerra quando AMBOS confirmarem com o código.\n"
+                        "• Se NÃO há acordo ainda (proposta pendente, contraproposta ou discordância), NÃO inclua nenhum código. Apenas continue negociando normalmente.\n"
+                        "• Se o limite de turnos for atingido sem acordo, a simulação encerrará automaticamente como NO_AGREEMENT — não invente acordo e não inclua código.\n"
+                        "• Nunca prolongue com gentilezas após o acordo.]"
                     )
                     current_hint = scenario.shared_context + system_reminder if turn_index <= 1 else system_reminder
                 else:

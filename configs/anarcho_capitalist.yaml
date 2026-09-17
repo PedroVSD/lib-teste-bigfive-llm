@@ -1,5 +1,5 @@
 experiment:
-  name: experimento_VGA_ancap_well_adjusted
+  name: experimento_VGA_ancap_resiliente_reservado
   scenario: vga_purchase
   max_turns: 8
   use_system_reminder: true
@@ -12,11 +12,11 @@ models:
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: negative
-      neuroticism: negative
-      extraversion: negative
-      openness: negative
-      conscientiousness: negative
+      agreeableness: positive
+      neuroticism: positive
+      extraversion: positive
+      openness: positive
+      conscientiousness: positive
     tactics:
       anchoring: enabled
       anchor_susceptibility: enabled
@@ -36,10 +36,10 @@ models:
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: positive
-      neuroticism: negative
-      extraversion: positive
-      openness: positive
+      agreeableness: none
+      neuroticism: positive
+      extraversion: negative
+      openness: negative
       conscientiousness: positive
     tactics:
       anchoring: enabled
