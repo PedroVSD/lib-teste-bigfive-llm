@@ -315,8 +315,7 @@ persona:
 
 ```yaml
 tactics:
-  anchoring: present              
-  anchor_susceptibility: absent   
+  anchoring: present
   loss_aversion: present
   conditional_concession: present
   value_creation: present
@@ -395,10 +394,10 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 ---
 ##  Métricas
 ---
-### #Há **14 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas.
+### #Há **13 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas.
 
 
-#### 1. Behavioral Metrics — Big Five (5) + Negociação (9)
+#### 1. Behavioral Metrics — Big Five (5) + Negociação (8)
 
 | # | Métrica | Código | Categoria | PRESENT ↔ ABSENT (âncora resumida) |
 |---|---|---|---|---|
@@ -414,8 +413,7 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 | 10 | **Resiliência à Pressão** | `RES` | emotional | Inabalável, redireciona a fatos ↔ cede a ultimato/desespero |
 | 11 | **Justificação Baseada em Fatos** | `JUS` | argumentation | Dados (PIB, inflação, benchmark, ROI) ↔ desejo subjetivo sem dado |
 | 12 | **Clareza** | `CLA` | argumentation | Estruturado, tópicos, aritmética impecável ↔ confuso, valores conflitantes |
-| 13 | **Suscetibilidade à Âncora** | `SUS` | cognitive_bias | Orbita valor absurdo do oponente ↔ imune, mantém original |
-| 14 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional |
+| 13 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional |
 
 ---
 

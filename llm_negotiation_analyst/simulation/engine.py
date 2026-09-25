@@ -164,7 +164,7 @@ class NegotiationAgent:
         # keep only the final proposal part after the last Portuguese draft marker
         markers = ["Drafting the actual text (Portuguese):", "Proposta de Pacote de Valor:", "Minha contraproposta"]
         # Heuristic: if content is very long and contains persona leakage, truncate to last proposal
-        leaked_tokens = ["Low Openness", "Low Conscientiousness", "High Neuroticism", "Suscetibilidade à Âncora", "*   *Step", "Internal Monologue"]
+        leaked_tokens = ["Low Openness", "Low Conscientiousness", "High Neuroticism", "*   *Step", "Internal Monologue"]
         if any(tok in content for tok in leaked_tokens) and len(content) > 1500:
             # try to extract final proposal after last marker
             for m in reversed(markers):

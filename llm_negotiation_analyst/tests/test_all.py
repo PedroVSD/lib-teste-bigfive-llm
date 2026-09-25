@@ -44,7 +44,7 @@ class MockJudge(LLMAdapter):
         # Build evaluations for all possible metrics so any subset is covered
         all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
                    "anchoring","conditional_concession","value_creation","rapport","resilience",
-                   "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+                   "fact_justification","clarity","loss_aversion"]
         evals = {mid: {"result": self._result, "evidence": f"Mock evidence for {self._result} on {mid}"} for mid in all_ids}
         return json.dumps({"evaluations": evals})
 
@@ -63,7 +63,7 @@ class SequenceJudge(LLMAdapter):
         # Return batch with agreeableness varying, others as PRESENT (to not affect that metric's counts)
         all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
                    "anchoring","conditional_concession","value_creation","rapport","resilience",
-                   "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+                   "fact_justification","clarity","loss_aversion"]
         evals = {}
         for mid in all_ids:
             if mid == "agreeableness":
@@ -86,7 +86,7 @@ class CountingJudge(LLMAdapter):
         self.prompts.append(messages[-1]["content"])
         all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
                    "anchoring","conditional_concession","value_creation","rapport","resilience",
-                   "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+                   "fact_justification","clarity","loss_aversion"]
         evals = {mid: {"result": self.result, "evidence": f"ev {mid}"} for mid in all_ids}
         return json.dumps({"evaluations": evals})
 
@@ -436,7 +436,7 @@ class TestBatchEvaluator:
             def complete(self, messages, **kwargs):
                 all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
                            "anchoring","conditional_concession","value_creation","rapport","resilience",
-                           "fact_justification","clarity","anchor_susceptibility","loss_aversion"]
+                           "fact_justification","clarity","loss_aversion"]
                 evals = {mid: {"result": "PRESENT", "evidence": f"ev {mid}"} for mid in all_ids}
                 return json.dumps({"evaluations": evals})
         judge = AllMetricsJudge(model="all")

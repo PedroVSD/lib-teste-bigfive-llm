@@ -15,7 +15,7 @@ Organização:
   TÁTICAS            anchoring, conditional_concession, value_creation
   EMOCIONAL          rapport, resilience
   ARGUMENTAÇÃO       fact_justification, clarity
-  VIESES             anchor_susceptibility, loss_aversion
+  VIESES             loss_aversion
 """
 
 from enum import Enum
@@ -32,7 +32,6 @@ class NegotiationMetric(str, Enum):
     RESILIENCE             = "resilience"
     FACT_JUSTIFICATION     = "fact_justification"
     CLARITY                = "clarity"
-    ANCHOR_SUSCEPTIBILITY  = "anchor_susceptibility"
     LOSS_AVERSION          = "loss_aversion"
 
 
@@ -171,25 +170,6 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
         },
     ),
 
-    NegotiationMetric.ANCHOR_SUSCEPTIBILITY: DimensionMeta(
-        name="Suscetibilidade à Âncora",
-        abbreviation="SUS",
-        high_pole="Facilmente Influenciado",
-        low_pole="Imune / Objetivo",
-        observability=1,
-        category="cognitive_bias",
-        behavioral_anchors={
-            "present": (
-                "Abandona sua estratégia original e passa a orbitar quase inteiramente "
-                "o valor absurdo que o oponente propôs."
-            ),
-            "absent": (
-                "Totalmente imune. Ignora valores extremos jogados pelo oponente "
-                "e contrapropõe seu valor original planejado sem ajustes."
-            ),
-        },
-    ),
-
     NegotiationMetric.LOSS_AVERSION: DimensionMeta(
         name="Aversão à Perda",
         abbreviation="LSS",
@@ -226,7 +206,6 @@ METRICS_BY_CATEGORY: dict[str, list[NegotiationMetric]] = {
         NegotiationMetric.CLARITY,
     ],
     "cognitive_bias": [
-        NegotiationMetric.ANCHOR_SUSCEPTIBILITY,
         NegotiationMetric.LOSS_AVERSION,
     ],
 }

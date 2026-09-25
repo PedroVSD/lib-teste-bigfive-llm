@@ -108,7 +108,6 @@ models:
       extra_instructions: "Texto livre adicional"
     tactics:                   # binário enabled/disabled (legado 1-5 ainda ok)
       anchoring: enabled
-      anchor_susceptibility: enabled
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
@@ -144,8 +143,7 @@ models:
       - "resilience"
       - "clarity"              # Argumentação: fact_justification, clarity
       - "fact_justification"
-      - "anchor_susceptibility" # Vieses: anchor_susceptibility, loss_aversion
-      - "loss_aversion"
+      - "loss_aversion"        # Vieses: loss_aversion
       - "value_creation"
 ```
 
@@ -182,11 +180,10 @@ Guias em `_GUIDANCE:76`; nomes em `_DIM_NAMES`. `none`/`null`/`nil`/`~`/omitir =
 | `rapport` | não injeta | Altamente empático | — |
 | `resilience` | não injeta | Calmo/inabalável | — |
 | `clarity` | não injeta | Estruturado/matemático | — |
-| `anchor_susceptibility` | não injeta (imune) | Facilmente influenciado | — |
 | `loss_aversion` | não injeta (imune) | Reativo à perda | — |
 | `fact_justification` | não injeta | Altamente embasado | — |
 
-`PRESENT` = comportamento observado no turno; `ABSENT` = oportunidade havia mas ausente; `NOT_APPLICABLE` = turno sem oportunidade suficiente (não entra no denominador) e deve ter `evidence` curta. Alias `enabled→PRESENT`, `disabled/absent→ABSENT`, `none/not_applicable→ignorado`. Legado `1-5` ainda funciona (`1-2→ABSENT`, `4-5→PRESENT`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 9 métricas `present`/`enabled` em ambos agentes e `judge.metrics` com as 14 dimensões, e `experimento.py:272` avalia **utilidade** (`utility` contínua 0-1) e **satisfação** (IPC 1-7) separadamente.
+`PRESENT` = comportamento observado no turno; `ABSENT` = oportunidade havia mas ausente; `NOT_APPLICABLE` = turno sem oportunidade suficiente (não entra no denominador) e deve ter `evidence` curta. Alias `enabled→PRESENT`, `disabled/absent→ABSENT`, `none/not_applicable→ignorado`. Legado `1-5` ainda funciona (`1-2→ABSENT`, `4-5→PRESENT`) para compatibilidade. Todos os 10 `configs/*.yaml` já com as 8 métricas `present`/`enabled` em ambos agentes e `judge.metrics` com as 13 dimensões, e `experimento.py:272` avalia **utilidade** (`utility` contínua 0-1) e **satisfação** (IPC 1-7) separadamente.
 
 **Observação categórica em lote (mesma base):** mesmo `NEGOTIATION_META` usado para induzir é usado para julgar. O juiz (`scoring/evaluator.py:62` `_JUDGE_SYSTEM_BATCH`) recebe **por turno, em 1 chamada**, a **resposta completa** do agente + **histórico da negociação** (janela 8 turnos, `_format_history`) + `anchor_present/absent` de **todas** as métricas listadas em `judge.metrics`. Retorna em lote `{"evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, ...}}` (`N` turnos = `N` chamadas, antes `N×M`). Agregação posterior: `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado) → `65% (13/20; 5 NA)`, permitindo `persistence_rate/first/last_occurrence` por sequência temporal `Turn 1:0, Turn 2:N/A...`. Big Five respeita polaridade: `positive→PRESENT`, `negative→ABSENT`; táticas `enabled→PRESENT`. Ex: `Induzido PRESENT` vs `Observado 65%` → `✅ Compatível` (`≥50%`), `20%` → `❌` (`report/generator.py:250`).
 

@@ -19,7 +19,6 @@ models:
       conscientiousness: positive
     tactics:
       anchoring: enabled
-      anchor_susceptibility: enabled
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
@@ -40,7 +39,6 @@ models:
       neuroticism: negative
     tactics:
       anchoring: enabled
-      anchor_susceptibility: enabled
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
@@ -62,7 +60,6 @@ models:
     - openness
     - conscientiousness
     - anchoring
-    - anchor_susceptibility
     - loss_aversion
     - conditional_concession
     - value_creation
