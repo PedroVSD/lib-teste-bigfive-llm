@@ -5,6 +5,7 @@ experiment:
   use_system_reminder: true
 context:
   preset: recessao
+
 models:
   agent_1:
     provider: ollama
@@ -30,6 +31,7 @@ models:
     utility:
       p_target: 18000
       p_floor: 15500
+
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -51,6 +53,7 @@ models:
     utility:
       p_target: 14000
       p_floor: 16500
+
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud

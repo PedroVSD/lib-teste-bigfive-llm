@@ -5,6 +5,7 @@ experiment:
   use_system_reminder: true
 context:
   preset: anarcho_capitalist
+
 models:
   agent_1:
     provider: ollama
@@ -30,6 +31,7 @@ models:
     utility:
       p_target: 2300
       p_floor: 2450
+
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -54,6 +56,7 @@ models:
     utility:
       p_target: 2500
       p_floor: 2350
+
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud

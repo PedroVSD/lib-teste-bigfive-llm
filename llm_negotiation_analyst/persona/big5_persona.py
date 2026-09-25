@@ -82,93 +82,93 @@ def _level_label(polarity: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Behavioral guidance — two poles only
+# Behavioral guidance — two poles only (frases exatas, 5 por polo)
 # ---------------------------------------------------------------------------
 
 _GUIDANCE: dict[str, dict[str, str]] = {
 
     "openness": {
         "positive": (
-            "Have a vivid imagination."
-            "Need a creative outlet."
-            "Have a very good imagination."
-            "Am an original thinker."
+            "Have a vivid imagination.\n"
+            "Need a creative outlet.\n"
+            "Have a very good imagination.\n"
+            "Am an original thinker.\n"
             "Make insightful remarks."
         ),
         "negative": (
-            "Have difficulty understanding abstract ideas."
-            "Do not have a good imagination."
-            "Often have illogical thoughts."
-            "Am poorly informed."
+            "Have difficulty understanding abstract ideas.\n"
+            "Do not have a good imagination.\n"
+            "Often have illogical thoughts.\n"
+            "Am poorly informed.\n"
             "Have a poor vocabulary."
         ),
     },
 
     "conscientiousness": {
         "positive": (
-            "Take precautions."
-            "Have an eye for detail."
-            "Am careful to avoid making mistakes."
-            "Make careful choices."
+            "Take precautions.\n"
+            "Have an eye for detail.\n"
+            "Am careful to avoid making mistakes.\n"
+            "Make careful choices.\n"
             "Behave properly."
         ),
         "negative": (
-            "Come up with unworkable plans."
-            "Make careless mistakes."
-            "Do improper things."
-            "Mess things up."
+            "Come up with unworkable plans.\n"
+            "Make careless mistakes.\n"
+            "Do improper things.\n"
+            "Mess things up.\n"
             "Make mistakes."
         ),
     },
 
     "extraversion": {
         "positive": (
-            "Like taking risks."
-            "Am an energetic person."
-            "Speak rapidly."
-            "Take deviant positions."
+            "Like taking risks.\n"
+            "Am an energetic person.\n"
+            "Speak rapidly.\n"
+            "Take deviant positions.\n"
             "Take risks."
         ),
         "negative": (
-            "Seek quiet."
-            "Retreat from others."
-            "Avoid eye contact."
-            "Ammore of a loner than most people."
+            "Seek quiet.\n"
+            "Retreat from others.\n"
+            "Avoid eye contact.\n"
+            "Am more of a loner than most people.\n"
             "Rarely overindulge."
         ),
     },
 
     "agreeableness": {
         "positive": (
-            "Reassure others."
-            "Sense others' wishes."
-            "Show my gratitude."
-            "Care about others."
+            "Reassure others.\n"
+            "Sense others' wishes.\n"
+            "Show my gratitude.\n"
+            "Care about others.\n"
             "Like to help others."
         ),
         "negative": (
-            "Distrust people."
-            "Try not to do favors for others."
-            "Am upset by the misfortunes of strangers."
-            "Try not to think about the needy."
+            "Distrust people.\n"
+            "Try not to do favors for others.\n"
+            "Am upset by the misfortunes of strangers.\n"
+            "Try not to think about the needy.\n"
             "Tend to give others a hard time."
         ),
     },
 
     "neuroticism": {
         "positive": (
-            "Act without ulterior motives."
-            "Overlook things."
-            "Feel hollow, empty, or bored."
-            "Act as if some laws do not apply to me."
+            "Act without ulterior motives.\n"
+            "Overlook things.\n"
+            "Feel hollow, empty, or bored.\n"
+            "Act as if some laws do not apply to me.\n"
             "Chatter away aimlessly."
         ),
         "negative": (
-            "Become anxious in new situations."
-            "Notice my emotions."
-            "Worry about being embarrassed."
-            "Worry about things."
-            "Have difficulty feeling happy. "
+            "Become anxious in new situations.\n"
+            "Notice my emotions.\n"
+            "Worry about being embarrassed.\n"
+            "Worry about things.\n"
+            "Have difficulty feeling happy."
         ),
     },
 }
@@ -275,16 +275,19 @@ class Big5Persona:
 class PersonaPromptBuilder:
     """
     Converts Big5Persona into an instruction block for an LLM system prompt.
+    Emits exactly the _GUIDANCE phrases for the selected pole, without high/low labels
+    and without negotiation tactic instructions. Metrics are observational (Judge).
     """
 
-    HEADER = "--- Personality Profile ---"
+    HEADER = "--- Personality Guidance ---"
     FOOTER = "---------------------------"
 
     def build(self, persona: Big5Persona) -> str:
         """
         Generate the personality instruction block.
 
-        Only positive and negative behavioral poles are generated.
+        Only the exact _GUIDANCE phrases for the selected pole are emitted,
+        grouped by factor, without high/low labels and without negotiation instructions.
         """
 
         dims = persona.specified_dimensions()
@@ -299,17 +302,9 @@ class PersonaPromptBuilder:
 
         for dim in dims:
             polarity = getattr(persona, dim)  # already normalized
-
-            name = _DIM_NAMES[dim]
-            label = _level_label(polarity)
             guidance = _GUIDANCE[dim][polarity]
-
-            lines.append(f"You have {label} {name}.")
-
-            lines.append(f"Behavioral pole: {polarity.upper()}")
-
-            lines.append(f"Behavioral guidance: {guidance}")
-
+            # guidance já contém \n entre frases — emite exatamente como definido
+            lines.append(guidance)
             lines.append("")
 
         if persona.extra_instructions:

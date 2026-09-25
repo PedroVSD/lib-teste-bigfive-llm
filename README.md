@@ -259,7 +259,6 @@ roles={
     “modelo_2“:(“O que faz o modelo”),
 }
 opening_role="Quem vai iniciar a conversa",
-opening_prompt=(""),
 max_turns=Quantas rodadas, uma rodada é composta pela fala de ambos,
 metadata={"domain": "Tech Freelance", "currency": "BRL", "difficulty": "medium"}->informações extras do cenário,
 )

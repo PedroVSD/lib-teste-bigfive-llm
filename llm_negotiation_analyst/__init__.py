@@ -45,6 +45,7 @@ def run_negotiation(
     tactics=None,
     experiment_name=None,
     experiment_display_name=None,
+    anchor_hints=None,
 ):
     import logging
     if verbose:
@@ -65,6 +66,7 @@ def run_negotiation(
         tactics=tactics,
         experiment_name=experiment_name,
         experiment_display_name=experiment_display_name,
+        anchor_hints=anchor_hints,
     )
     result = engine.run()
     # Se engine não tinha nome mas result tem, propaga

@@ -28,8 +28,8 @@ models:
       clarity: enabled
       fact_justification: enabled
     utility:
-      p_target: 2300
-      p_floor: 2450
+      p_target: 2450
+      p_floor: 2300
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -49,8 +49,8 @@ models:
       clarity: enabled
       fact_justification: enabled
     utility:
-      p_target: 2500
-      p_floor: 2350
+      p_target: 2350
+      p_floor: 2500
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud

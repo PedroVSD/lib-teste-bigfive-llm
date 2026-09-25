@@ -196,25 +196,27 @@ Lista livre de Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:4
 
 ---
 
-## 4. Bloco `utility` — Utilidade econômica (opcional)
+## 4. Bloco `utility` — dentro do agente, após `tactics` (sem `currency`/`unit`/`role_type`)
 
 ```yaml
-utility:
+models:
   agent_1:
-    role_type: "buyer"   # buyer = quer maximizar (u_b), seller = minimizar (u_s)
-    p_target: 18000      # alvo (R$/mês)
-    p_floor: 15500       # piso (buyer teto, seller piso)
-    currency: "R$"
-    unit: "/mês"
+    tactics:
+      anchoring: present
+    utility:
+      p_target: 18000   # alvo
+      p_floor: 15500    # limite (BATNA)
   agent_2:
-    role_type: "seller"
-    p_target: 14000
-    p_floor: 16500
-    currency: "R$"
-    unit: "/mês"
+    tactics:
+      anchoring: absent   # sem âncora → negocia livremente
+    utility:
+      p_target: 14000
+      p_floor: 16500
 ```
 
 Fórmulas `scoring/utility.py:8`: `u_s(p)=(p-p_s)/(p̄_s-p_s)`, `u_b(p)=(p̄_b-p)/(p̄_b-p_b)`. Se ausente, seção `5. Utilidade` omitida.
+
+> Âncora condicional (`experimento.py`, `simulation/engine.py`): cenários `salary_negotiation`, `company_acquisition` e `vga_purchase` **não contêm valores** nos prompts. Valores (`p_target`/`p_floor`) só são injetados no `system` do agente cujo `tactics.anchoring` está ativo (`present`/`enabled`, legado `>=4`) — bloco `[SUAS REFERÊNCIAS PRIVADAS DE VALOR]`. Com `anchoring: absent/disabled`, o agente negocia livremente, sem números.
 
 ---
 
@@ -222,13 +224,15 @@ Fórmulas `scoring/utility.py:8`: `u_s(p)=(p-p_s)/(p̄_s-p_s)`, `u_b(p)=(p̄_b-p
 
 | `scenario` | Descrição | `roles` (ordem) | `settlement_keywords` | `max_turns` |
 |---|---|---|---|---|
-| `salary_negotiation` | Negociação salarial: engenheiro vs empresa (R$12k vs R$16k + bônus/férias) | `candidate` → `recruiter` | `SIMULACAO_CONCLUIDA`, `ACORDO_FECHADO` | 8 |
-| `company_acquisition` | Aquisição de empresa: fundador vs compradora (R$8M vs R$5-7M, earn-out, IP) | `seller` → `buyer` | `SIMULACAO_CONCLUIDA`, `ACORDO_FECHADO` | 10 |
+| `salary_negotiation` | Negociação salarial: engenheiro vs empresa (valores via `utility.p_target/p_floor`, bônus/férias) | `candidate` → `recruiter` | `SIMULACAO_CONCLUIDA`, `ACORDO_FECHADO` | 8 |
+| `company_acquisition` | Aquisição de empresa: fundador vs compradora (valores via `utility`, earn-out, IP) | `seller` → `buyer` | `SIMULACAO_CONCLUIDA`, `ACORDO_FECHADO` | 10 |
 | `strategic_supplier_contract` | Contrato fornecedor: comprador vs fornecedor (R$1.200 vs R$950, volume/prazo) | `buyer` → `supplier` | `SIMULACAO_CONCLUIDA`, `ACORDO_FECHADO` | 10 |
 | `property_boundary_dispute` | Disputa propriedade: owner_a vs owner_b (12m², R$80k, muro) | `owner_a` → `owner_b` | `SIMULACAO_CONCLUIDA`, `ACORDO_FECHADO` | 10 |
 | *custom* | Criar em `scenarios/__init__.py:228` `NegotiationScenario(name=..., roles={...}, opening_role=..., max_turns=...)` e registrar em `SCENARIO_REGISTRY:175` | — | — | — |
 
 Encerramento só quando **ambos** confirmarem acordo (`simulation/engine.py:271`).
+
+> Sem prompt inicial fixo: não há `opening_prompt` nos cenários. O `opening_role` gera o `Turn 0` livremente a partir de `roles[role]` + persona + contexto.
 
 ---
 

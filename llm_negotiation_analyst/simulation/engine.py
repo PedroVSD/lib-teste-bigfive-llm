@@ -106,6 +106,7 @@ class NegotiationAgent:
         adapter: LLMAdapter,
         persona: Optional[Big5Persona] = None,
         context: Optional[SituationalContext] = None,
+        anchor_hint: Optional[dict] = None,
     ):
         self.agent_id = agent_id
         self.role = role
@@ -124,6 +125,25 @@ class NegotiationAgent:
             prompt = _context_builder.inject(prompt, context)
             if context.is_active():
                 logger.debug("Context injected for agent '%s'", agent_id)
+
+        # Inject valores de âncora SOMENTE se anchoring ativo no YAML (anchor_hint).
+        # Sem anchor_hint, o agente negocia livremente (sem números no prompt).
+        if anchor_hint is not None:
+            try:
+                p_target = anchor_hint.get("p_target")
+                p_floor = anchor_hint.get("p_floor")
+                if p_target is not None and p_floor is not None:
+                    def _fmt(v: float) -> str:
+                        return f"R$ {float(v):,.0f}".replace(",", ".")
+                    prompt += (
+                        "\n\n[SUAS REFERÊNCIAS PRIVADAS DE VALOR — não revele números exatos sem estratégia: "
+                        f"valor de referência (alvo): {_fmt(p_target)}; "
+                        f"limite (não aceite acordo pior que este valor): {_fmt(p_floor)}. "
+                        "Você pode abrir a negociação próximo ao seu valor de referência.]"
+                    )
+                    logger.debug("Anchor values injected for agent '%s': target=%s floor=%s", agent_id, p_target, p_floor)
+            except Exception as e:
+                logger.warning("Falha ao injetar âncora para '%s': %s", agent_id, e)
 
         # Hardening: role anchoring + anti-injection + no CoT leak
         prompt += (
@@ -228,6 +248,7 @@ class SimulationEngine:
         tactics: Optional[dict[str, dict]] = None,
         experiment_name: Optional[str] = None,
         experiment_display_name: Optional[str] = None,
+        anchor_hints: Optional[dict[str, dict]] = None,
     ):
         self.scenario = scenario
         self.raw_agents = agents
@@ -239,6 +260,9 @@ class SimulationEngine:
         self.use_system_reminder = use_system_reminder
         self.experiment_name = experiment_name
         self.experiment_display_name = experiment_display_name
+        # anchor_hints: role -> {p_target, p_floor}, só para roles com anchoring ativo no YAML.
+        # Sem entrada, o agente negocia livremente (sem valores no prompt).
+        self.anchor_hints = anchor_hints or {}
 
     def run(self) -> NegotiationResult:
         if self.benchmark_turns is not None:
@@ -268,6 +292,7 @@ class SimulationEngine:
                 adapter=adapter,
                 persona=self.personas.get(role),
                 context=self.context,
+                anchor_hint=(self.anchor_hints or {}).get(role),
             )
             agent_roles[agent_id] = role
 
@@ -278,23 +303,9 @@ class SimulationEngine:
         turn_index = 0
         confirmed_roles: set[str] = set()  # para exigir confirmação de AMBOS
 
-        if scenario.opening_prompt:
-            opening_role = scenario.opening_role
-            opening_agent = agents[opening_role]
-            transcript.append(Turn(
-                turn_index=turn_index,
-                agent_id=opening_agent.agent_id,
-                role=opening_role,
-                content=scenario.opening_prompt,
-            ))
-            for role, agent in agents.items():
-                if role != opening_role:
-                    agent.receive(opening_role, scenario.opening_prompt)
-            opening_agent._history.append({"role": "assistant", "content": scenario.opening_prompt})
-            turn_index += 1
-            # Rotate order so next speaker is the other role, not opening_role again (evita T0 e T1 mesmo agente)
-            idx = role_order.index(opening_role)
-            role_order = role_order[idx+1:] + role_order[:idx+1]
+        # Sem prompt inicial fixo: o opening_role gera o Turn 0 livremente
+        # a partir de roles[role] + persona + context. A ordem já começa
+        # em opening_role (role_order acima), sem Turn pré-preenchido.
 
         for _ in range(scenario.max_turns):
             for role in role_order:
@@ -360,35 +371,25 @@ class SimulationEngine:
             if settled:
                 break
 
-        # Serialize personas + tactics for metadata (para relatório exibir Induzido)
+        # Serialize personas for metadata (para relatório exibir Induzido) — táticas NÃO são induzidas, são observacionais (Judge)
         personas_meta = {}
-        all_roles = set(self.personas.keys()) | set(self.tactics.keys())
-        for role in all_roles:
-            persona = self.personas.get(role)
+        for role, persona in self.personas.items():
             base = persona.to_dict() if persona and hasattr(persona, "to_dict") else {}
-            tact = self.tactics.get(role) or {}
-            for k, v in tact.items():
-                if v is None:
-                    continue
-                # Trata enabled/disabled (novo) e none/null
-                if isinstance(v, bool):
-                    if not v:
-                        continue
-                    base[k] = "enabled"
-                    continue
-                if isinstance(v, str):
-                    vl = v.strip().lower()
-                    if vl in ("none","null","nil","disabled","false","off","0","no","inactive"):
-                        continue
-                    if vl in ("enabled","true","on","1","yes","active"):
-                        base[k] = "enabled"
-                        continue
-                try:
-                    base[k] = int(v)
-                except Exception:
-                    base[k] = v
             if base:
                 personas_meta[role] = base
+        # Tactics são mantidas apenas para Judge, não para indução — não incluir em personas_meta
+        # Se precisar rastrear tactics configuradas, armazenar separado (não como induzido)
+        tactics_meta = {}
+        for role, tact in (self.tactics or {}).items():
+            filtered = {}
+            for k, v in (tact or {}).items():
+                if v is None:
+                    continue
+                if isinstance(v, str) and v.strip().lower() in ("none","null","nil","disabled","false","off","0","no","inactive"):
+                    continue
+                filtered[k] = v
+            if filtered:
+                tactics_meta[role] = filtered
         context_meta = self.context.to_dict() if self.context else None
 
         meta_extra = {"experiment_name": self.experiment_name}
@@ -396,6 +397,12 @@ class SimulationEngine:
             meta_extra["experiment_display_name"] = self.experiment_display_name
             meta_extra["experiment_title"] = self.experiment_display_name
             meta_extra["yaml_name"] = self.experiment_display_name
+        # Tactics são observacionais, não induzidas — armazenar separado para auditoria se houver
+        if tactics_meta:
+            meta_extra["tactics_observational"] = tactics_meta
+        # Valores de âncora injetados (só roles com anchoring ativo no YAML)
+        if getattr(self, "anchor_hints", None):
+            meta_extra["anchor_injected"] = {r: dict(v) for r, v in self.anchor_hints.items()}
         return NegotiationResult(
             run_id=run_id,
             scenario_name=scenario.name,
@@ -433,6 +440,7 @@ class SimulationEngine:
             adapter=adapter,
             persona=self.personas.get(role),
             context=self.context,
+            anchor_hint=(self.anchor_hints or {}).get(role),
         )
         opponent_role = [r for r in scenario.roles if r != role][0]
 

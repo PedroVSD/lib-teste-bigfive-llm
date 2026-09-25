@@ -134,6 +134,7 @@ class TestScenarios:
         for name, scenario in SCENARIO_REGISTRY.items():
             assert scenario.opening_role in scenario.roles
             assert scenario.max_turns > 0
+            assert not hasattr(scenario, "opening_prompt")
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +183,66 @@ class TestSimulationEngine:
         result = engine.run()
         messages = result.to_messages()
         assert all("role" in m and "content" in m for m in messages)
+
+    def test_no_fixed_opening_prompt_turn0_generated_freely(self):
+        # Sem opening_prompt fixo: Turn 0 deve ser gerado pelo opening_role
+        scenario = SALARY_NEGOTIATION
+        assert not hasattr(scenario, "opening_prompt")
+        engine = SimulationEngine(
+            scenario=scenario,
+            agents={
+                "candidate": MockAdapter("CANDIDATE free opening."),
+                "recruiter": MockAdapter("RECRUITER free opening."),
+            },
+        )
+        result = engine.run()
+        assert len(result.transcript) > 0
+        first = result.transcript[0]
+        assert first.role == scenario.opening_role
+        # Conteúdo vem do LLM, não de texto fixo
+        assert first.content in ("CANDIDATE free opening.", "RECRUITER free opening.")
+
+    def test_anchor_values_only_when_anchoring_active(self):
+        from llm_negotiation_analyst.simulation.engine import NegotiationAgent
+        from unittest.mock import Mock
+        scenario = SALARY_NEGOTIATION
+        # Sem anchor_hint: nenhum valor no prompt (negocia livremente)
+        mock = Mock()
+        mock.model = "test-model"
+        agent_free = NegotiationAgent(
+            agent_id="candidate_test",
+            role="candidate",
+            system_prompt=scenario.roles["candidate"],
+            adapter=mock,
+            persona=None,
+            context=None,
+            anchor_hint=None,
+        )
+        assert "R$" not in agent_free._system
+        assert "REFERÊNCIAS PRIVADAS" not in agent_free._system
+        # Com anchor_hint: valores injetados
+        agent_anchored = NegotiationAgent(
+            agent_id="candidate_test",
+            role="candidate",
+            system_prompt=scenario.roles["candidate"],
+            adapter=mock,
+            persona=None,
+            context=None,
+            anchor_hint={"p_target": 18000, "p_floor": 15500},
+        )
+        assert "18.000" in agent_anchored._system
+        assert "15.500" in agent_anchored._system
+        assert "REFERÊNCIAS PRIVADAS" in agent_anchored._system
+
+    def test_salary_company_vga_have_no_values_in_prompts(self):
+        from llm_negotiation_analyst.scenarios import (
+            SALARY_NEGOTIATION, COMPANY_ACQUISITION, VGA_PURCHASE,
+        )
+        import re
+        for sc in (SALARY_NEGOTIATION, COMPANY_ACQUISITION, VGA_PURCHASE):
+            assert "R$" not in sc.shared_context
+            for role, prompt in sc.roles.items():
+                assert "R$" not in prompt, f"{sc.name}/{role} contém valor"
 
 
 # ---------------------------------------------------------------------------

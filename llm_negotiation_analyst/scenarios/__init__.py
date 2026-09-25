@@ -11,7 +11,6 @@ The SimulationEngine consumes them.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -28,9 +27,9 @@ class NegotiationScenario:
                           System prompt should include the role's private goal,
                           BATNA (Best Alternative To Negotiated Agreement),
                           and any constraints.
-        opening_role:     Which role speaks first.
-        opening_prompt:   Optional fixed first message (benchmark mode).
-                          If None, the opening agent generates it freely.
+        opening_role:     Which role speaks first. The opening agent generates
+                          the first message freely from its role/persona/context —
+                          there is no fixed opening prompt.
         max_turns:        Maximum number of turns (each agent speaking once = 1 turn pair).
         settlement_keywords: Optional list of phrases that signal agreement
                              (used by engine to detect early termination).
@@ -41,7 +40,6 @@ class NegotiationScenario:
     shared_context: str
     roles: dict[str, str]                   # {"buyer": "system prompt...", "seller": "..."}
     opening_role: str
-    opening_prompt: Optional[str] = None
     max_turns: int = 8
     settlement_keywords: list[str] = field(default_factory=lambda: [
         "we have a deal", "agreed", "aceito", "fechado", "deal", "acordo"
@@ -59,35 +57,26 @@ SALARY_NEGOTIATION = NegotiationScenario(
     description="Cenário de negociação entre um profissional de tecnologia experiente e uma empresa após uma oferta de emprego. Avalia âncora salarial, justificativa, concessões, criação de valor e fatores subjetivos.",
     shared_context=(
         "Um engenheiro de software experiente recebeu uma oferta de emprego de uma empresa de tecnologia. "
-        "A empresa ofereceu inicialmente R$ 12.000 mensais. O candidato acredita que sua experiência e suas "
-        "alternativas no mercado justificam uma remuneração próxima de R$ 16.000. Ambos possuem interesse em "
-        "chegar a um acordo, mas nenhum conhece completamente o limite de negociação do outro. Além do salário, "
-        "podem ser negociados bônus, trabalho remoto, férias, benefícios, horário de trabalho e outros componentes "
-        "da remuneração. "
+        "Ambos possuem interesse em chegar a um acordo, mas nenhum conhece o limite do outro. Além do salário, "
+        "podem ser negociados bônus, trabalho remoto, férias, benefícios e horário de trabalho. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "candidate": (
             "Você é um engenheiro de software experiente negociando uma nova oportunidade. Você possui um emprego "
-            "estável e não precisa aceitar a oferta. Você acredita inicialmente que R$ 16.000 seja uma remuneração "
-            "justa, embora esteja disposto a aceitar menos dependendo das condições oferecidas. Você valoriza remuneração, "
-            "crescimento profissional, flexibilidade, reconhecimento e estabilidade, mas atribui pesos diferentes a cada um "
-            "desses fatores. Não revele seu limite mínimo de aceitação sem necessidade estratégica. Negocie de forma "
-            "assertiva e profissional."
+            "estável e não precisa aceitar qualquer oferta. Você valoriza remuneração, crescimento profissional, "
+            "flexibilidade, reconhecimento e estabilidade. Não revele seu limite mínimo sem necessidade estratégica. "
+            "Negocie de forma assertiva e profissional."
         ),
         "recruiter": (
-            "Você é o responsável pela contratação. A oferta inicial é de R$ 12.000 mensais. Existe alguma flexibilidade "
-            "no orçamento, mas aumentos precisam ser justificados. Você considera remuneração, equidade salarial interna, "
-            "retenção do funcionário e custo de contratar outro profissional. Você possui um limite máximo de orçamento, "
-            "mas não deve revelá-lo diretamente. Negocie de forma profissional buscando fechar a contratação dentro do possível."
+            "Você é o responsável pela contratação. Existe alguma flexibilidade no orçamento, mas aumentos precisam "
+            "ser justificados. Você considera remuneração, equidade salarial interna, retenção do funcionário e custo "
+            "de contratar outro profissional. Você possui um limite máximo, mas não deve revelá-lo diretamente. "
+            "Negocie de forma profissional buscando fechar a contratação dentro do possível."
         ),
     },
     opening_role="recruiter",
-    opening_prompt=(
-        "Olá! Temos o prazer de oferecer R$ 12.000 mensais mais os benefícios padrão da empresa. "
-        "Gostaríamos de saber como essa proposta se alinha às suas expectativas e o que poderíamos ajustar para chegarmos a um acordo."
-    ),
     max_turns=8,
     settlement_keywords=[
         "SIMULACAO_CONCLUIDA",
@@ -104,33 +93,27 @@ COMPANY_ACQUISITION = NegotiationScenario(
     description="Negociação entre o fundador de uma pequena empresa de tecnologia e uma empresa maior interessada em adquiri-la. Explora âncoras financeiras, informação assimétrica, risco, utilidade e criação de valor via estrutura do acordo.",
     shared_context=(
         "O fundador de uma pequena empresa de tecnologia está negociando sua venda com uma empresa maior do mesmo setor. "
-        "O vendedor acredita que sua empresa vale aproximadamente R$ 8 milhões. O comprador estima internamente que o negócio "
-        "tenha um valor entre R$ 5 milhões e R$ 7 milhões, dependendo de seu desempenho futuro. A empresa possui propriedade "
-        "intelectual valiosa e clientes importantes, mas existe incerteza sobre seu crescimento futuro. Além do preço, podem ser "
-        "negociados pagamento inicial, pagamentos condicionados ao desempenho futuro (earn-out), permanência do fundador, "
-        "participação na gestão e direitos sobre a propriedade intelectual. "
+        "A empresa possui propriedade intelectual valiosa e clientes importantes, mas existe incerteza sobre seu crescimento futuro. "
+        "Além do preço, podem ser negociados pagamento inicial, pagamentos condicionados ao desempenho futuro (earn-out), "
+        "permanência do fundador, participação na gestão e direitos sobre a propriedade intelectual. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "seller": (
-            "Você é o fundador da empresa. Sua âncora inicial é R$ 8 milhões. Você valoriza receber uma grande parte do "
-            "dinheiro imediatamente e gostaria de manter alguma influência sobre o futuro da empresa. Você acredita que o potencial "
-            "tecnológico da empresa é maior do que seus resultados financeiros atuais demonstram. Você possui um valor mínimo aceitável, "
-            "mas não deve revelá-lo. Negocie defendendo seu valuation mas demonstrando flexibilidade na estrutura do acordo."
+            "Você é o fundador da empresa. Você valoriza receber uma boa parte do dinheiro imediatamente e gostaria de manter "
+            "alguma influência sobre o futuro da empresa. Você acredita que o potencial tecnológico é maior do que os resultados "
+            "financeiros atuais demonstram. Você possui um valor mínimo aceitável, mas não deve revelá-lo. Negocie defendendo seu "
+            "valuation mas demonstrando flexibilidade na estrutura do acordo."
         ),
         "buyer": (
-            "Você representa uma empresa maior interessada na aquisição. Sua avaliação interna está entre R$ 5 milhões e R$ 7 milhões. "
-            "Você está preocupado com integração, retenção de clientes e desempenho futuro. Possui maior flexibilidade para negociar a "
-            "estrutura do acordo do que para aumentar o pagamento inicial. Pode utilizar bônus de desempenho, earn-outs ou contratos de "
-            "permanência para aumentar o valor total da transação. Negocie buscando reduzir risco e justificar seu valuation."
+            "Você representa uma empresa maior interessada na aquisição. Você está preocupado com integração, retenção de clientes "
+            "e desempenho futuro. Possui maior flexibilidade para negociar a estrutura do acordo do que para aumentar o pagamento inicial. "
+            "Pode utilizar bônus de desempenho, earn-outs ou contratos de permanência para compor o valor total. Negocie buscando reduzir "
+            "risco e justificar seu valuation."
         ),
     },
     opening_role="seller",
-    opening_prompt=(
-        "Considerando a tecnologia, os clientes e o potencial de crescimento da empresa, estou pedindo R$ 8 milhões pela venda. "
-        "Acredito que esse valor reflete o potencial tecnológico que ainda não aparece totalmente nos resultados financeiros."
-    ),
     max_turns=10,
     settlement_keywords=[
         "SIMULACAO_CONCLUIDA",
@@ -167,10 +150,6 @@ STRATEGIC_SUPPLIER_CONTRACT = NegotiationScenario(
         ),
     },
     opening_role="supplier",
-    opening_prompt=(
-        "Apresentamos R$ 1.200 por unidade como nossa proposta inicial, afirmando que esse é nosso preço mais competitivo diante "
-        "dos custos atuais de produção e logística. Estamos abertos a discutir condições para encontrar um equilíbrio."
-    ),
     max_turns=10,
     settlement_keywords=[
         "SIMULACAO_CONCLUIDA",
@@ -209,10 +188,6 @@ PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
         ),
     },
     opening_role="owner_a",
-    opening_prompt=(
-        "Considerando o valor da área envolvida, exijo R$ 80.000 para resolver a disputa sobre os 12 metros quadrados ocupados pelo muro. "
-        "Acredito que essa compensação reflete o valor da área e o desrespeito demonstrado."
-    ),
     max_turns=10,
     settlement_keywords=[
         "SIMULACAO_CONCLUIDA",
@@ -228,36 +203,29 @@ VGA_PURCHASE = NegotiationScenario(
     name="vga_purchase",
     description="Negociação de compra de placa de vídeo (VGA) entre vendedor experiente e jovem comprador. Avalia persuasão, pesquisa de preço, ancoragem, concessões e decisão ponderada.",
     shared_context=(
-        "Uma loja de informática está negociando a venda de uma placa de vídeo (VGA) RTX 4060 Ti 8GB, muito procurada para jogos e trabalho. "
-        "O preço médio de mercado para este modelo varia entre R$ 2.200 e R$ 2.800 em grandes varejistas. "
-        "A loja tem a VGA em estoque pronta entrega, com garantia de 12 meses e possibilidade de parcelamento. "
-        "O comprador precisa da peça para montar seu novo PC e usá-la no trabalho como desenvolvedor. Ambos querem fechar, "
-        "mas divergem no preço e nas condições. Além do preço, podem ser negociados garantia estendida, parcelamento, desconto à vista, "
-        "kit com SSD/memória, frete e prazo de entrega. "
+        "Uma loja de informática está negociando a venda de uma placa de vídeo (VGA) muito procurada para jogos e trabalho. "
+        "A loja tem a VGA em estoque pronta entrega, com garantia e possibilidade de parcelamento. "
+        "O comprador precisa da peça para montar seu PC e usá-la no trabalho como desenvolvedor. Ambos querem fechar, "
+        "mas divergem no preço e nas condições. Além do preço, podem ser negociados garantia estendida, parcelamento, "
+        "desconto à vista, kit, frete e prazo de entrega. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "seller": (
-            "Você é o vendedor da loja, com 10 anos de experiência em vendas de hardware. Você é um bom vendedor: conhece profundamente "
-            "o produto, sabe argumentar. Você valoriza fechar a venda com boa"
-            "margem, mas prefere conceder benefícios (garantia estendida, frete grátis) a baixar muito o preço à vista. Você tem limite mínimo "
-            "de preço, mas não deve revelá-lo. Seja persuasivo, profissional e empático, mas firme na defesa do valor."
+            "Você é o vendedor da loja, com 10 anos de experiência em vendas de hardware. Você conhece profundamente "
+            "o produto e sabe argumentar. Você valoriza fechar a venda com boa margem, mas prefere conceder benefícios "
+            "a baixar muito o preço. Você tem um limite mínimo, mas não deve revelá-lo. Seja persuasivo, profissional "
+            "e empático, mas firme na defesa do valor."
         ),
         "buyer": (
-            "Você é o comprador: um jovem montando seu novo PC, desenvolvedor júnior recém-contratado. Você sempre faz boa pesquisa de "
-            "preço e pensa bem antes de decidir. Você sabe que a média da RTX 4060 Ti é R$ 2.200-2.800 "
-            "e já viu ofertas por R$ 2.300 à vista. Seu orçamento é limitado (primeiro salário) e você precisa de custo-benefício e parcelamento "
-            "sem juros. Você valoriza preço justo, garantia, procedência e parcelamento. Não revele seu limite máximo sem estratégia. Negocie "
-            "de forma ponderada, pedindo dados, comparando ofertas e propondo trocas condicionais ('se baixar para X, fecho à vista')."
+            "Você é o comprador: um jovem montando seu PC, desenvolvedor júnior recém-contratado. Você sempre pesquisa "
+            "preços e pensa bem antes de decidir. Seu orçamento é limitado e você precisa de custo-benefício e parcelamento. "
+            "Você valoriza preço justo, garantia, procedência e parcelamento. Não revele seu limite máximo sem estratégia. "
+            "Negocie de forma ponderada, pedindo dados, comparando ofertas e propondo trocas condicionais."
         ),
     },
     opening_role="seller",
-    opening_prompt=(
-        "Olá! Esta RTX 4060 Ti 8GB é excelente para jogos em 1440p e para seu trabalho como dev. "
-        "Por ser um modelo com alta procura e estoque imediato com garantia de 12 meses, consigo fazer por R$ 2.900 à vista, ou em até 12x com juros. "
-        "O que acha da proposta? Podemos ajustar condições para fecharmos hoje."
-    ),
     max_turns=8,
     settlement_keywords=[
         "SIMULACAO_CONCLUIDA",

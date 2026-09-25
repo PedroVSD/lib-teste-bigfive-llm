@@ -91,9 +91,8 @@ def create_adapter(config_dict: dict):
 
 def parse_persona(agent_config: dict) -> Big5Persona | None:
     persona_dict = agent_config.get("persona") or {}
-    tactics_dict = agent_config.get("tactics") or {}
 
-    if not persona_dict and not tactics_dict:
+    if not persona_dict:
         return None
 
     chaves_big5 = {"openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"}
@@ -107,12 +106,14 @@ def parse_persona(agent_config: dict) -> Big5Persona | None:
         filtered_persona[k] = v
 
     instrucoes_originais = persona_dict.get("extra_instructions", "")
-    builder      = TacticsPromptBuilder()
-    texto_taticas = builder.build(tactics_dict)
-    texto_final  = f"{instrucoes_originais}\n\n{texto_taticas}".strip() if texto_taticas else instrucoes_originais
+    # Táticas NÃO são injetadas no Agent Prompt — são apenas observacionais (Judge).
+    # Não mesclar tactics em extra_instructions.
+    if instrucoes_originais:
+        filtered_persona["extra_instructions"] = instrucoes_originais
 
-    if texto_final:
-        filtered_persona["extra_instructions"] = texto_final
+    # Se só tinha extra_instructions vazia e nenhum Big Five, retorna None
+    if not filtered_persona:
+        return None
 
     return Big5Persona(**filtered_persona)
 
@@ -315,6 +316,42 @@ if __name__ == "__main__":
     # 3. Contexto macroeconômico
     macro_context = parse_context(config.get("context", {}))
 
+    # 3.1 Utilidade (novo: dentro do agente após tactics) — parse ANTES da simulação
+    # para injetar valores de âncora no prompt quando anchoring ativo.
+    utility_params = parse_utility_from_agents(config.get("models", {}), chaves_agentes_yaml, papeis_do_cenario)
+    if not utility_params:
+        legacy_cfg = config.get("utility", {})
+        if legacy_cfg:
+            utility_params = parse_utility_params(legacy_cfg, chaves_agentes_yaml, papeis_do_cenario)
+
+    # 3.2 Anchor hints: só roles com tactics.anchoring ativo recebem p_target/p_floor.
+    def _is_anchor_active(v) -> bool:
+        if v is None:
+            return False
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return float(v) >= 4
+        s = str(v).strip().lower()
+        if s in ("present", "enabled", "true", "on", "1", "yes", "active"):
+            return True
+        if s in ("absent", "disabled", "false", "off", "0", "no", "none", "inactive", "not_applicable", "null", "nil"):
+            return False
+        try:
+            return float(s) >= 4
+        except Exception:
+            return False
+
+    anchor_hints: dict[str, dict] = {}
+    for role_name in papeis_do_cenario:
+        tact = (tactics_dict.get(role_name) or {})
+        if _is_anchor_active(tact.get("anchoring")) and role_name in utility_params:
+            up = utility_params[role_name]
+            anchor_hints[role_name] = {"p_target": float(up.p_target), "p_floor": float(up.p_floor)}
+            print(f"⚓ Âncora ATIVA para '{role_name.upper()}': alvo={up.p_target:g}, limite={up.p_floor:g}")
+        else:
+            print(f"⚓ Âncora inativa para '{role_name.upper()}': negocia livremente (sem valores no prompt)")
+
     # 4. Configuração do avaliador (métricas Big Five + negociação)
     metricas_textos = config["models"]["judge"].get("metrics", [])
     config_juiz = EvaluatorConfig.from_strings(metricas_textos) if metricas_textos else None
@@ -351,18 +388,12 @@ if __name__ == "__main__":
         use_system_reminder=exp.get("use_system_reminder", False),
         experiment_name=experiment_name,
         experiment_display_name=display_name,
+        anchor_hints=anchor_hints,
     )
     print("✅ Simulação concluída.")
 
-    # 6. Utilidade econômica (opcional — novo: dentro do agente após tactics, legado: top-level utility)
+    # 6. Utilidade econômica (usa utility_params já parseado em 3.1)
     utility_results = None
-    # Novo: utility dentro de models.agent_x.utility
-    utility_params = parse_utility_from_agents(config.get("models", {}), chaves_agentes_yaml, papeis_do_cenario)
-    # Fallback legado: top-level utility
-    if not utility_params:
-        legacy_cfg = config.get("utility", {})
-        if legacy_cfg:
-            utility_params = parse_utility_params(legacy_cfg, chaves_agentes_yaml, papeis_do_cenario)
     if utility_params:
         print("📊 Calculando utilidade econômica...")
         utility_calc    = UtilityCalculator(judge=ag_judge, role_params=utility_params)
