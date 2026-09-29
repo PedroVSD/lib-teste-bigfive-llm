@@ -169,6 +169,47 @@ Return JSON only with an entry for every metric:
 
 
 # ---------------------------------------------------------------------------
+# Prompt templates — round (2 turns, no history resent)
+# ---------------------------------------------------------------------------
+
+_JUDGE_SYSTEM_ROUND = """You are an expert researcher in behavioral economics, psychology, and negotiation science. Your task is to evaluate ONE ROUND of a negotiation (two consecutive turns, one per agent — each agent has taken its turn) according to multiple behavioral metrics.
+
+You will be given:
+  - The negotiation context (scenario description)
+  - The two turns of the round, each with speaker role and complete response (no history is resent — the other turn in the round is the context)
+  - The list of metrics to evaluate. Big Five traits follow Goldberg: Openness to Experience; Conscientiousness; Extraversion; Agreeableness; Neuroticism. Each metric has its poles and behavioral anchors for PRESENT and ABSENT.
+
+Rules:
+  - Evaluate EACH turn in this round as a single unit, considering the other turn in the round as context.
+  - For each turn and each metric, return PRESENT (trait/behavior recognized in that turn), ABSENT (not recognized), or NOT_APPLICABLE (insufficient opportunity to observe in that turn — e.g., empty or irrelevant response). NOT_APPLICABLE must NOT be treated as ABSENT.
+  - Evidence must come ONLY from the turn being evaluated: a short plain text paraphrase (1 sentence, max 120 chars, no double quotes, no newlines). Use "" if NOT_APPLICABLE.
+  - Respond ONLY with a valid JSON object. No markdown fences, no preamble. Ensure JSON is valid: double quotes around keys/values, no trailing commas.
+
+Example:
+{"turn_evaluations": [{"turn_index": 4, "evaluations": {"anchoring": {"result": "PRESENT", "evidence": "proposes firm initial offer"}, "rapport": {"result": "ABSENT", "evidence": "no empathetic language"}}}, {"turn_index": 5, "evaluations": {"anchoring": {"result": "ABSENT", "evidence": "cedes without defending"}}} ]}
+
+JSON schema:
+{
+  "turn_evaluations": [
+    {"turn_index": <int>, "evaluations": {"<metric_id>": {"result": "PRESENT" | "ABSENT" | "NOT_APPLICABLE", "evidence": "<short evidence>"}, ...}},
+    ...
+  ]
+}
+You must provide one entry per turn given, with an entry for EVERY metric listed in each turn. Do not omit turns or metrics."""
+
+_JUDGE_USER_ROUND = """## Negotiation Context
+{scenario_context}
+
+## Round — Turns to Evaluate (evaluate EACH turn below; the other turn is its context)
+{turns_block}
+
+## Metrics to Evaluate ({n_metrics} metrics)
+{metrics_block}
+Evaluate the CURRENT turn response as a single unit, considering the history/context above.
+Return JSON only: {{"turn_evaluations": [{{"turn_index": <int>, "evaluations": {{"<metric_id>": {{"result": "PRESENT|ABSENT|NOT_APPLICABLE", "evidence": "..."}}, ...}}}}, ...]}}"""
+
+
+# ---------------------------------------------------------------------------
 # EvaluatorConfig
 # ---------------------------------------------------------------------------
 
@@ -208,13 +249,15 @@ class EvaluatorConfig:
 
 class Evaluator:
     """
-    Usa um LLM-juiz para observar respostas completas por turno (uma chamada por turno para todas as métricas).
+    Usa um LLM-juiz para observar respostas completas por rodada (uma chamada por rodada
+    de 2 turnos para todas as métricas, sem histórico reenviado).
 
     Args:
         judge: LLMAdapter do juiz (separado dos agentes negociadores).
         config: EvaluatorConfig — define quais métricas avaliar.
         second_judge: Segundo juiz opcional para cálculo de IRR por turno (agreement).
-        history_window: Número de turnos prévios incluídos como contexto (default 8).
+        history_window: Legado — usado só por evaluate_turn (API por turno); o fluxo
+            principal evaluate_transcript avalia por rodada sem histórico.
     """
 
     def __init__(
@@ -295,7 +338,8 @@ class Evaluator:
     ) -> dict[str, Big5Profile]:
         """
         Pontua o transcript completo e retorna um Big5Profile por agente.
-        Para cada turno, faz UMA chamada ao juiz com todas as métricas + histórico.
+        Uma chamada ao juiz por RODADA (2 turnos consecutivos, um por agente),
+        sem reenviar histórico: cada rodada contém só as duas respostas.
         Agregação: occurrence_rate = PRESENT / (PRESENT+ABSENT).
         """
         profiles: dict[str, Big5Profile] = {}
@@ -306,22 +350,51 @@ class Evaluator:
                 model_identifier=agent_id,
             )
 
-        for i, turn in enumerate(transcript):
-            role = turn.get("role")
-            content = turn.get("content", "")
-            agent_id = turn.get("agent_id", role)
-            if agent_id not in profiles:
+        # Agrupa turnos em rodadas de 2 (último ímpar sozinho)
+        rounds: list[list[tuple[int, dict]]] = []
+        for i in range(0, len(transcript), 2):
+            chunk = [(i + j, transcript[i + j]) for j in range(2) if i + j < len(transcript)]
+            rounds.append(chunk)
+
+        for chunk in rounds:
+            # Monta itens da rodada com agent_id/role resolvidos
+            items = []
+            for idx, turn in chunk:
+                role = turn.get("role")
+                content = turn.get("content", "")
+                agent_id = turn.get("agent_id", role)
+                if agent_id not in profiles:
+                    continue
+                agent_role = agent_roles.get(agent_id, role)
+                items.append({"turn_index": idx, "agent_id": agent_id, "role": agent_role, "content": content})
+            if not items:
                 continue
-            agent_role = agent_roles.get(agent_id, role)
-            # One call per turn for all metrics, with history
-            turn_obs = self.evaluate_turn(
-                utterance=content,
-                role=agent_role,
+            # Uma chamada por rodada para todas as métricas (por juiz)
+            round_obs = self._observe_round(
+                items=items,
                 scenario_context=scenario_context,
-                turn_index=i,
-                transcript=transcript,
+                metrics=self.config.dimensions,
+                judge=self.judge,
             )
-            profiles[agent_id].observations.extend(turn_obs)
+            if self.second_judge:
+                round_obs2 = self._observe_round(
+                    items=items,
+                    scenario_context=scenario_context,
+                    metrics=self.config.dimensions,
+                    judge=self.second_judge,
+                )
+                map2 = {(o.turn_index, o.dimension): o for o in round_obs2}
+                for obs in round_obs:
+                    obs2 = map2.get((obs.turn_index, obs.dimension))
+                    if obs2:
+                        obs.confidence = self._irr(obs.result, obs2.result)
+            # Distribui observations por agente
+            idx_to_item = {it["turn_index"]: it for it in items}
+            for obs in round_obs:
+                item = idx_to_item.get(obs.turn_index)
+                if item is None:
+                    continue
+                profiles[item["agent_id"]].observations.extend([obs])
 
         # Agrega: counts + occurrence_rate por métrica
         for agent_id, profile in profiles.items():
@@ -466,6 +539,124 @@ class Evaluator:
                     confidence=0.0,
                 ) for m in metrics
             ]
+
+    def _observe_round(
+        self,
+        items: list[dict],
+        scenario_context: str,
+        metrics: list[AnyMetric],
+        judge: LLMAdapter,
+    ) -> list[BehaviorObservation]:
+        """
+        Avalia uma RODADA (1-2 turnos consecutivos) em UMA chamada ao juiz.
+        Cada item: {turn_index, agent_id, role, content}. Sem histórico reenviado:
+        o outro turno da rodada é o contexto. Retorna observations por turno×métrica.
+        """
+        metrics_block = _build_metrics_block(metrics)
+        turns_lines = []
+        for it in items:
+            turns_lines.append(f"### Turn {it['turn_index']} — {it['role']}\n\"\"\"{it['content']}\"\"\"")
+        turns_block = "\n\n".join(turns_lines)
+        prompt = _JUDGE_USER_ROUND.format(
+            scenario_context=scenario_context,
+            turns_block=turns_block,
+            n_metrics=len(metrics),
+            metrics_block=metrics_block,
+        )
+        messages = [
+            {"role": "system", "content": _JUDGE_SYSTEM_ROUND},
+            {"role": "user", "content": prompt},
+        ]
+        try:
+            raw = judge.complete(messages)
+            parsed = self._parse_json(raw)
+            turn_evals = parsed.get("turn_evaluations")
+            if not isinstance(turn_evals, list):
+                # Tolerância: formato por turno único {"evaluations": {...}} com 1 item
+                if isinstance(parsed.get("evaluations"), dict) and len(items) == 1:
+                    turn_evals = [{"turn_index": items[0]["turn_index"], "evaluations": parsed["evaluations"]}]
+                else:
+                    raise ValueError(f"No turn_evaluations found in judge response: {raw[:500]}")
+            by_turn: dict[int, dict] = {}
+            for te in turn_evals:
+                if not isinstance(te, dict) or "evaluations" not in te:
+                    continue
+                try:
+                    ti = int(te.get("turn_index"))
+                except Exception:
+                    continue
+                if isinstance(te["evaluations"], dict):
+                    by_turn[ti] = te["evaluations"]
+
+            observations: list[BehaviorObservation] = []
+            for it in items:
+                ti = it["turn_index"]
+                evals = by_turn.get(ti)
+                if evals is None:
+                    logger.warning("Judge response missing turn %d — marking NOT_APPLICABLE", ti)
+                    for m in metrics:
+                        observations.append(BehaviorObservation(
+                            dimension=m, result=BehavioralResult.NOT_APPLICABLE,
+                            evidence=f"[Missing turn {ti} in judge response]",
+                            turn_index=ti, confidence=0.0,
+                        ))
+                    continue
+                for metric in metrics:
+                    mid = metric.value if hasattr(metric, "value") else str(metric)
+                    entry = evals.get(mid) or evals.get(mid.lower()) or evals.get(mid.upper())
+                    if entry is None:
+                        for k, v in evals.items():
+                            if k.lower() == mid.lower():
+                                entry = v
+                                break
+                    if entry is None:
+                        logger.warning("Judge response missing metric '%s' turn=%d — marking NOT_APPLICABLE", mid, ti)
+                        result = BehavioralResult.NOT_APPLICABLE
+                        evidence = f"[Missing metric '{mid}' in judge response]"
+                        conf = 0.0
+                    else:
+                        if not isinstance(entry, dict):
+                            raise ValueError(f"Invalid entry for metric '{mid}' turn {ti}: {entry}")
+                        result_raw = str(entry.get("result", "")).strip().upper()
+                        if result_raw not in ("PRESENT", "ABSENT", "NOT_APPLICABLE"):
+                            raise ValueError(f"Invalid result '{result_raw}' for metric '{mid}' turn {ti}")
+                        result = BehavioralResult(result_raw)
+                        evidence = entry.get("evidence")
+                        if evidence is None:
+                            evidence = ""
+                        evidence = str(evidence).strip()
+                        if not evidence and result != BehavioralResult.NOT_APPLICABLE:
+                            evidence = "(no evidence provided)"
+                        elif not evidence:
+                            evidence = ""
+                        conf = float(entry.get("confidence", 1.0)) if "confidence" in entry else 1.0
+                    observations.append(BehaviorObservation(
+                        dimension=metric, result=result, evidence=evidence,
+                        turn_index=ti, confidence=conf,
+                    ))
+            return observations
+        except Exception as e:
+            logger.warning("Judge round failed turns=%s: %s — falling back to per-turn", [it["turn_index"] for it in items], e)
+            # Fallback: lote por turno (resposta completa, sem histórico externo)
+            fallback_obs: list[BehaviorObservation] = []
+            for it in items:
+                try:
+                    obs_list = self._observe_batch(
+                        utterance=it["content"], role=it["role"],
+                        scenario_context=scenario_context, turn_index=it["turn_index"],
+                        metrics=metrics, history_text="(No prior history — evaluated in round context.)",
+                        judge=judge,
+                    )
+                    fallback_obs.extend(obs_list)
+                except Exception as e2:
+                    logger.warning("Fallback batch failed turn=%d: %s", it["turn_index"], e2)
+                    for m in metrics:
+                        fallback_obs.append(BehaviorObservation(
+                            dimension=m, result=BehavioralResult.NOT_APPLICABLE,
+                            evidence=f"[Evaluation failed: {e2}]",
+                            turn_index=it["turn_index"], confidence=0.0,
+                        ))
+            return fallback_obs
 
     def _observe_one_legacy(
         self,

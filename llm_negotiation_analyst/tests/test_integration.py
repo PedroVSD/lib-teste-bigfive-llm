@@ -17,15 +17,20 @@ class MockAdapter(LLMAdapter):
         self.response_text = response_text
 
     def complete(self, messages, **kwargs):
-        # judge system prompt contains "evaluations" and history
+        # judge prompts contain "turn_evaluations"/"evaluations"; agents get negotiation text
         content = messages[0].get("content", "").lower()
-        if "evaluations" in content or "result" in content or "evidence" in content:
-            # Batch response for all metrics requested (anchoring, value_creation)
+        if "turn_evaluations" in content or "evaluations" in content or "result" in content:
+            import re
+            # Round prompt: one entry per turn found in the prompt
+            full = messages[-1].get("content", "")
+            indices = [int(x) for x in re.findall(r"### Turn (\d+)", full)] or [0]
             return json.dumps({
-                "evaluations": {
-                    "anchoring": {"result": "PRESENT", "evidence": "Avaliação simulada anchoring."},
-                    "value_creation": {"result": "PRESENT", "evidence": "Avaliação simulada value."}
-                }
+                "turn_evaluations": [
+                    {"turn_index": i, "evaluations": {
+                        "anchoring": {"result": "PRESENT", "evidence": "Avaliação simulada anchoring."},
+                        "value_creation": {"result": "PRESENT", "evidence": "Avaliação simulada value."}
+                    }} for i in indices
+                ]
             })
         return self.response_text
 

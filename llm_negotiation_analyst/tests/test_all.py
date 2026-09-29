@@ -91,6 +91,31 @@ class CountingJudge(LLMAdapter):
         return json.dumps({"evaluations": evals})
 
 
+class RoundJudge(LLMAdapter):
+    """Round judge: parses turn indices from the round prompt and returns turn_evaluations."""
+    def __init__(self, results: list[str] | str = "PRESENT"):
+        super().__init__(model="round-judge")
+        self.results = [results] if isinstance(results, str) else results
+        self.idx = 0
+        self.call_count = 0
+        self.prompts = []
+    def complete(self, messages: list[dict], **kwargs) -> str:
+        import re
+        self.call_count += 1
+        prompt = messages[-1]["content"]
+        self.prompts.append(prompt)
+        indices = [int(x) for x in re.findall(r"### Turn (\d+)", prompt)] or [0]
+        all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
+                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "fact_justification","clarity","loss_aversion"]
+        out = []
+        for i in indices:
+            r = self.results[self.idx % len(self.results)]
+            self.idx += 1
+            out.append({"turn_index": i, "evaluations": {mid: {"result": r, "evidence": f"ev {mid} t{i}"} for mid in all_ids}})
+        return json.dumps({"turn_evaluations": out})
+
+
 # ---------------------------------------------------------------------------
 # Adapter tests
 # ---------------------------------------------------------------------------
@@ -422,14 +447,10 @@ class TestBatchEvaluator:
     def test_one_call_per_turn_not_per_metric(self):
         judge = CountingJudge(result="PRESENT")
         evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS, Dimension.EXTRAVERSION, Dimension.OPENNESS]))
-        transcript = [
-            {"role": "candidate", "agent_id": "c", "content": f"turn {i}"} for i in range(3)
-        ]
-        profiles = evaluator.evaluate_transcript(transcript, {"c": "candidate"}, "ctx")
-        # 3 turns × 1 call per turn = 3, not 3×3=9
-        assert judge.call_count == 3
-        # Each profile should have 3 turns × 3 metrics = 9 observations
-        assert len(profiles["c"].observations) == 9
+        # Single-turn API still batches all metrics in one call
+        obs = evaluator.evaluate_turn(utterance="turn text", role="candidate", scenario_context="ctx", turn_index=0)
+        assert judge.call_count == 1
+        assert len(obs) == 3  # all 3 metrics in one call, not 3 calls
 
     def test_all_metrics_in_one_response(self):
         class AllMetricsJudge(LLMAdapter):
@@ -470,6 +491,90 @@ class TestBatchEvaluator:
         assert profiles["c"].summaries[Dimension.AGREEABLENESS].present == 2
         assert profiles["c"].summaries[Dimension.AGREEABLENESS].absent == 1
         assert profiles["c"].summaries[Dimension.AGREEABLENESS].occurrence_rate == 2/3
+
+
+class TestRoundEvaluator:
+    """Verifies round flow: one judge call per 2-turn round, no history resent."""
+
+    def test_round_contains_both_turns_complete(self):
+        judge = RoundJudge(results="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [
+            {"role": "seller", "agent_id": "s", "content": "Seller full response with several sentences. Offer stands."},
+            {"role": "buyer", "agent_id": "b", "content": "Buyer full response. Counter proposal with conditions."},
+        ]
+        profiles = evaluator.evaluate_transcript(transcript, {"s": "seller", "b": "buyer"}, "ctx")
+        assert judge.call_count == 1
+        prompt = judge.prompts[0]
+        # Both complete responses in a single prompt, not split
+        assert "Seller full response with several sentences. Offer stands." in prompt
+        assert "Buyer full response. Counter proposal with conditions." in prompt
+        assert "### Turn 0 — seller" in prompt
+        assert "### Turn 1 — buyer" in prompt
+
+    def test_no_history_resent(self):
+        judge = RoundJudge(results="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [{"role": "seller" if i % 2 == 0 else "buyer", "agent_id": "s" if i % 2 == 0 else "b", "content": f"content turn {i}"} for i in range(6)]
+        profiles = evaluator.evaluate_transcript(transcript, {"s": "seller", "b": "buyer"}, "ctx")
+        # 6 turns = 3 rounds = 3 calls
+        assert judge.call_count == 3
+        for prompt in judge.prompts:
+            assert "Negotiation History" not in prompt
+            assert "earlier turns omitted" not in prompt
+        # Second round prompt contains only turns 2 and 3
+        assert "content turn 2" in judge.prompts[1]
+        assert "content turn 3" in judge.prompts[1]
+        assert "content turn 0" not in judge.prompts[1]
+        assert "content turn 4" not in judge.prompts[1]
+
+    def test_one_call_per_round(self):
+        judge = RoundJudge(results="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS, Dimension.OPENNESS]))
+        transcript = [{"role": "c", "agent_id": "c", "content": f"t{i}"} for i in range(4)]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "c"}, "ctx")
+        # 4 turns = 2 rounds = 2 calls, not 4 and not 4×2=8
+        assert judge.call_count == 2
+        assert len(profiles["c"].observations) == 8  # 4 turns × 2 metrics
+
+    def test_odd_turn_last_round_single(self):
+        judge = RoundJudge(results="PRESENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [{"role": "c", "agent_id": "c", "content": f"t{i}"} for i in range(3)]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "c"}, "ctx")
+        # 3 turns = rounds (0,1) + (2,) = 2 calls
+        assert judge.call_count == 2
+        assert sorted(o.turn_index for o in profiles["c"].observations) == [0, 1, 2]
+
+    def test_all_metrics_both_turns(self):
+        judge = RoundJudge(results="ABSENT")
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS, Dimension.OPENNESS, NegotiationMetric.ANCHORING]))
+        transcript = [
+            {"role": "seller", "agent_id": "s", "content": "seller says"},
+            {"role": "buyer", "agent_id": "b", "content": "buyer says"},
+        ]
+        profiles = evaluator.evaluate_transcript(transcript, {"s": "seller", "b": "buyer"}, "ctx")
+        assert len(profiles["s"].observations) == 3
+        assert len(profiles["b"].observations) == 3
+        assert all(o.result == BehavioralResult.ABSENT for o in profiles["s"].observations + profiles["b"].observations)
+        assert all(o.evidence for o in profiles["s"].observations + profiles["b"].observations)
+
+    def test_persistence_per_turn_per_agent_round(self):
+        judge = RoundJudge(results=["PRESENT", "ABSENT", "PRESENT"])
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [
+            {"role": "seller", "agent_id": "s", "content": "A"},
+            {"role": "buyer", "agent_id": "b", "content": "B"},
+            {"role": "seller", "agent_id": "s", "content": "C"},
+        ]
+        profiles = evaluator.evaluate_transcript(transcript, {"s": "seller", "b": "buyer"}, "ctx")
+        s_obs = sorted(o.turn_index for o in profiles["s"].observations)
+        b_obs = sorted(o.turn_index for o in profiles["b"].observations)
+        assert s_obs == [0, 2]
+        assert b_obs == [1]
+        # Aggregation still works: s has PRESENT(t0)+PRESENT(t2), b has ABSENT(t1)
+        assert profiles["s"].summaries[Dimension.AGREEABLENESS].occurrence_rate == 1.0
+        assert profiles["b"].summaries[Dimension.AGREEABLENESS].occurrence_rate == 0.0
 
 
 # ---------------------------------------------------------------------------

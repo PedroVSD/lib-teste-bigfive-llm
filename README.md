@@ -336,46 +336,33 @@ Como mencionado antes, a avaliação da negociação é feita por uma ou duas LL
 
 Abaixo segue como é feita a avaliação realizada pelo juiz.
 
-1. Avaliação por Turno (Resposta Completa, não frase)
-O motor avalia a **resposta completa do agente naquele turno** como unidade única — não divide em frases. `evaluate_transcript` itera `Turn 1..N`; para cada `Turn i` chama `evaluate_turn(utterance=resposta_completa, history=Turns 0..i-1)` **uma única vez** para todas as métricas aplicáveis. Se um agente falou 5 vezes, são 5 chamadas (não 5×M). O histórico da negociação (janela `history_window=8`, `evaluator.py:98` `_format_history`) é enviado junto para interpretar comportamentos dependentes de contexto (`anchoring`, `conditional_concession`).
+1. Avaliação por Rodada (2 turnos, sem histórico reenviado)
+O motor avalia a **resposta completa de cada agente em sua vez** como unidade única — não divide em frases. `evaluate_transcript` agrupa o transcript em rodadas `(Turn 0, Turn 1), (Turn 2, Turn 3)...` (último ímpar sozinho) e faz **uma única chamada ao juiz por rodada** para todas as métricas: `N` turnos = `N/2` chamadas (não `N×M`). **Nada de resumo e nada de histórico reenviado**: cada chamada contém só as duas respostas da rodada (cada turno é o contexto do outro). Um turno é analisado, os dados registrados, e só então a próxima rodada é passada, até o final.
 
 2. O "Gabarito" de Correção (Behavioral Anchors)
 Para que o juiz não use critérios subjetivos, o sistema injeta um "gabarito" estrito no prompt (`BIG5_META`/`NEGOTIATION_META` `behavioral_anchors={"present":..., "absent":...}`).
 Quando o juiz avalia "Firmeza na Oferta Inicial" (Anchoring), o código extrai as âncoras `PRESENT` (âncora forte) e `ABSENT` (cede rapidamente) e envia para o modelo, explicando exatamente o que significa cada categoria. `NOT_APPLICABLE` é reservado para turno sem oportunidade suficiente.
 
-3. A Construção do Prompt (_JUDGE_USER_BATCH)
-Para cada turno, `_observe_batch` monta **um único prompt** contextualizado com todas as métricas. O juiz recebe:
+3. A Construção do Prompt (_JUDGE_USER_ROUND)
+Para cada rodada, `_observe_round` monta **um único prompt** com todas as métricas. O juiz recebe **apenas o que cada modelo disse em sua vez**:
 
 * O contexto do cenário (para entender o que está sendo negociado).
-* O histórico da negociação (turnos anteriores, janela 8) — explicitamente `A resposta atual deve ser avaliada considerando o contexto e o histórico fornecidos`.
-* O papel de quem está falando no turno atual.
-* A resposta completa do turno atual (`Turn i`).
-* A lista de todas as métricas a avaliar, cada uma com `PRESENT`/`ABSENT` e âncoras.
+* Os dois turnos da rodada, cada um com papel e resposta completa (`### Turn 4 — seller` + `### Turn 5 — buyer`) — sem histórico de rodadas anteriores.
+* A lista de todas as métricas a avaliar: Big Five por Goldberg (`Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism`) + 8 táticas com seus polos (`Âncora Forte/Inflexível ↔ Cede Rapidamente`, etc.), cada uma com `PRESENT`/`ABSENT` e âncoras.
 
-4. Resposta em JSON (lote)
-* O `_JUDGE_SYSTEM_BATCH` obriga o LLM a responder exclusivamente com JSON em lote:
+4. Resposta em JSON (lote por rodada)
+* O `_JUDGE_SYSTEM_ROUND` obriga o LLM a responder exclusivamente com JSON em lote, um bloco por turno:
 ```json
-{
-  "evaluations": {
-    "anchoring": {
-      "result": "PRESENT",
-      "evidence": "..."
-    },
-    "rapport": {
-      "result": "ABSENT",
-      "evidence": "..."
-    }
-  }
-}
+{"turn_evaluations": [{"turn_index": 4, "evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, "rapport": {"result": "ABSENT", "evidence": "..."}}}, {"turn_index": 5, "evaluations": {...}}]}
 ```
-* Para cada métrica: `result: PRESENT|ABSENT|NOT_APPLICABLE` (só no observável deste turno), `evidence: quote curta daquele turno` (ou `null` se `NOT_APPLICABLE`). `confidence` opcional.
+* Para cada turno e cada métrica: `result: PRESENT` (reconhecido) `|ABSENT` (não reconhecido) `|NOT_APPLICABLE` (sem oportunidade, mantido), `evidence` só daquele turno. `Evaluate the CURRENT turn response as a single unit, considering the history/context above` — aqui, o "contexto" é o outro turno da rodada.
 
 5. O Boletim Final (occurrence_rate)
 Após avaliar todos os turnos, `evaluate_transcript` conta por métrica `PRESENT/ABSENT/NOT_APPLICABLE` e calcula `occurrence_rate = PRESENT / (PRESENT + ABSENT)` nos turnos aplicáveis (`NOT_APPLICABLE` ignorado, `behavioral_anchors` `scoring/big5.py:43`). Ex: candidato com `PRESENT` em 2 de 3 turnos aplicáveis em "Criação de Valor" → `67% (2/3; 1 NA)` em `Big5Profile.summaries[metric].occurrence_rate` e `observations` com `evidence`.
 
 
 6. Opcional: Duplo Juiz (eficiência mantida)
-É possível instanciar `Evaluator(second_judge=...)`; os dois juízes avaliam a **mesma resposta completa** independentemente, cada um com **1 chamada por turno** (total `2×N` chamadas para `N` turnos, não `2×N×M`). O `IRR` por métrica por turno passa a taxa de acordo categórico: `1.0` acordo (`PRESENT=PRESENT`), `0.0` desacordo, `0.5` se um `NOT_APPLICABLE`, substituindo `confidence`. Fluxo `Judge → Turn-level evaluations → Metric aggregation → Experiment analysis` (não `Judge → Immediate aggregate`).
+É possível instanciar `Evaluator(second_judge=...)`; os dois juízes avaliam a **mesma rodada** independentemente, cada um com **1 chamada por rodada** (total `2×N/2` chamadas para `N` turnos). O `IRR` por métrica por turno passa a taxa de acordo categórico: `1.0` acordo (`PRESENT=PRESENT`), `0.0` desacordo, `0.5` se um `NOT_APPLICABLE`, substituindo `confidence`. Fluxo `Judge → Turn-level evaluations → Metric aggregation → Experiment analysis` (não `Judge → Immediate aggregate`).
 
 #### Confiabilidade inter-avaliadores (IRR)
 

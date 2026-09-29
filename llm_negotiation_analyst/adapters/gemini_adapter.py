@@ -147,8 +147,8 @@ class GeminiAdapter(LLMAdapter):
                         print(f"[{self.model}] Retry {attempt+1}/{max_attempts} em {wait}s")
                         time.sleep(wait)
                         continue
-                if "503" in error:
-                    print(f"[{self.model}] 503 Indisponível ({tempo:.2f}s)")
+                if "503" in error or "500" in error or "INTERNAL" in error:
+                    print(f"[{self.model}] 500/503 Erro interno/indisponível ({tempo:.2f}s)")
                     if attempt < max_attempts - 1:
                         wait = 40 * (attempt + 1)
                         print(f"[{self.model}] Retry {attempt+1}/{max_attempts} em {wait}s")
