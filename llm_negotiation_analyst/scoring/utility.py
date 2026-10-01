@@ -1,28 +1,28 @@
 """
 scoring/utility.py
 ==================
-Calcula a Utilidade Econômica de cada agente com base no preço final acordado.
+Computes each agent's Economic Utility from the final agreed price.
 
-Fórmulas
+Formulas
 --------
-Vendedor:   u_s(p) = (p − p̲_s) / (p̄_s − p̲_s)
-Comprador:  u_b(p) = (p̄_b − p) / (p̄_b − p̲_b)
+Seller:   u_s(p) = (p − p̲_s) / (p̄_s − p̲_s)
+Buyer:    u_b(p) = (p̄_b − p) / (p̄_b − p̲_b)
 
-Variáveis:
-  p      preço final acordado (extraído do transcript pelo juiz LLM)
-  p̄_s   preço alvo do vendedor  (melhor resultado esperado — máximo desejável)
-  p̲_s   preço mínimo aceitável do vendedor (piso / BATNA)
-  p̄_b   preço máximo aceitável do comprador (teto / BATNA)
-  p̲_b   preço alvo do comprador  (melhor resultado esperado — mínimo desejável)
+Variables:
+  p      final agreed price (extracted from the transcript by the LLM judge)
+  p̄_s   seller target price  (best expected outcome — most desirable)
+  p̲_s   seller minimum acceptable price (floor / BATNA)
+  p̄_b   buyer maximum acceptable price (ceiling / BATNA)
+  p̲_b   buyer target price  (best expected outcome — most desirable)
 
-Interpretação do resultado:
-  u = 1.0   → obteve exatamente o valor alvo
-  u = 0.0   → obteve exatamente o valor mínimo aceitável (piso/teto)
-  u > 1.0   → superou o valor alvo (muito bom)
-  u < 0.0   → ficou abaixo do piso / acima do teto (inaceitável)
-  u = None  → não houve acordo ou não foi possível extrair o preço
+Result interpretation:
+  u = 1.0   → obtained exactly the target value
+  u = 0.0   → obtained exactly the minimum acceptable value (floor/ceiling)
+  u > 1.0   → beat the target value (very good)
+  u < 0.0   → fell below the floor / above the ceiling (unacceptable)
+  u = None  → no agreement or price could not be extracted
 
-Referências
+References
 -----------
   Raiffa, H. (1982). The Art and Science of Negotiation.
   Lax, D. A., & Sebenius, J. K. (1986). The Manager as Negotiator.
@@ -41,42 +41,42 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Parâmetros e resultado
+# Params and result
 # ---------------------------------------------------------------------------
 
 @dataclass
 class RoleUtilityParams:
     """
-    Parâmetros de utilidade para um papel na negociação.
+    Utility params for one negotiation role.
 
-    Novo formato (dentro do agente, após tactics):
+    New format (inside the agent, after tactics):
         models:
           agent_1:
             utility:
-              p_target: 18000  # alvo
-              p_floor: 15500   # piso/teto (BATNA)
+              p_target: 18000  # target
+              p_floor: 15500   # floor/ceiling (BATNA)
 
-    Legado (top-level utility com role_type/currency/unit) ainda suportado para compat.
+    Legacy (top-level utility with role_type/currency/unit) still supported for compat.
 
-    Inferência de role_type quando omitido:
-      p_target > p_floor → seller-like (quer maximizar, ex: candidato salário, vendedor VGA)
-      p_target < p_floor → buyer-like (quer minimizar)
+    role_type inference when omitted:
+      p_target > p_floor → seller-like (wants to maximize, e.g., salary candidate, VGA seller)
+      p_target < p_floor → buyer-like (wants to minimize)
     """
     role: str
     role_type: Literal["seller", "buyer"] = "seller"
-    p_target: float = 0.0   # p̄_s (alvo do vendedor) ou p̲_b (alvo do comprador)
-    p_floor: float = 0.0    # p̲_s (mínimo do vendedor) ou p̄_b (máximo do comprador)
-    currency: str = ""  # removido do yaml — mantido só para compat, não usado em VGA
-    unit: str = ""    # removido do yaml — mantido só para compat
+    p_target: float = 0.0   # p̄_s (seller target) or p̲_b (buyer target)
+    p_floor: float = 0.0    # p̲_s (seller minimum) or p̄_b (buyer maximum)
+    currency: str = "$"  # removed from yaml — kept for compat only (all prices in USD)
+    unit: str = ""    # removed from yaml — kept for compat only
 
     def __post_init__(self):
-        # Inferir role_type se não informado ou inconsistente com p_target/p_floor
-        # Se p_target > p_floor → quer maximizar (seller-like para preço), senão buyer-like
-        # Mantém valor explícito se já coerente
+        # Infer role_type when missing or inconsistent with p_target/p_floor
+        # p_target > p_floor → wants to maximize (seller-like for price), else buyer-like
+        # Keep explicit value when already coherent
         try:
             if self.p_target > self.p_floor and self.role_type == "buyer":
-                # buyer que quer maximizar é na verdade seller-like matematicamente
-                # mas mantemos buyer para não quebrar, a fórmula usa role_type
+                # a maximizing buyer is mathematically seller-like,
+                # but keep buyer to avoid breaking; the formula uses role_type
                 pass
             elif self.p_target < self.p_floor and self.role_type == "seller":
                 pass
@@ -86,29 +86,29 @@ class RoleUtilityParams:
 
 @dataclass
 class UtilityResult:
-    """Resultado do cálculo de utilidade para um agente."""
+    """Utility calculation result for one agent."""
     role: str
     role_type: str
     agreed_price: Optional[float]
-    utility: Optional[float]        # None se não houve acordo
+    utility: Optional[float]        # None when there was no agreement
     params: RoleUtilityParams
     settled: bool
-    extraction_raw: str = ""        # resposta bruta do juiz ao extrair o preço
+    extraction_raw: str = ""        # judge raw response when extracting the price
     note: str = ""
 
     @property
     def interpretation(self) -> str:
         if self.utility is None:
-            return "Sem acordo — utilidade não calculável."
+            return "No agreement — utility not calculable."
         if self.utility >= 1.0:
-            return f"Superou o valor alvo (u={self.utility:.3f} ≥ 1.0). Excelente resultado."
+            return f"Beat the target value (u={self.utility:.3f} ≥ 1.0). Excellent result."
         if self.utility >= 0.7:
-            return f"Próximo ao valor alvo (u={self.utility:.3f}). Bom resultado."
+            return f"Close to the target value (u={self.utility:.3f}). Good result."
         if self.utility >= 0.3:
-            return f"Resultado mediano (u={self.utility:.3f}). Aceitável mas distante do alvo."
+            return f"Median result (u={self.utility:.3f}). Acceptable but far from target."
         if self.utility >= 0.0:
-            return f"Próximo ao piso (u={self.utility:.3f}). Resultado fraco."
-        return f"Abaixo do piso aceitável (u={self.utility:.3f}). Acordo desvantajoso."
+            return f"Close to the floor (u={self.utility:.3f}). Weak result."
+        return f"Below the acceptable floor (u={self.utility:.3f}). Disadvantageous agreement."
 
     def to_dict(self) -> dict:
         return {
@@ -124,7 +124,7 @@ class UtilityResult:
 
 
 # ---------------------------------------------------------------------------
-# Prompt para extração do preço acordado
+# Agreed-price extraction prompt
 # ---------------------------------------------------------------------------
 
 _EXTRACT_SYSTEM = """You are a precise data extraction assistant.
@@ -158,15 +158,15 @@ Extract the final agreed price. If no agreement was reached, set settled=false a
 
 class UtilityCalculator:
     """
-    Calcula utilidade econômica para cada papel da negociação.
+    Computes economic utility for each negotiation role.
 
-    Fluxo:
-      1. Usa um LLM-juiz para extrair o preço final acordado do transcript.
-      2. Aplica as fórmulas matemáticas com os parâmetros do cenário.
+    Flow:
+      1. Uses an LLM judge to extract the final agreed price from the transcript.
+      2. Applies the math formulas with the scenario params.
 
     Args:
-        judge:       LLMAdapter para extração do preço (pode ser o mesmo juiz de scoring).
-        role_params: Dict role → RoleUtilityParams com os valores alvo e piso/teto.
+        judge:       LLMAdapter for price extraction (may be the same scoring judge).
+        role_params: Dict role → RoleUtilityParams with target and floor/ceiling values.
     """
 
     def __init__(
@@ -179,15 +179,15 @@ class UtilityCalculator:
 
     def evaluate(self, result: NegotiationResult) -> dict[str, UtilityResult]:
         """
-        Avalia a utilidade de todos os papéis configurados.
+        Evaluate utility for all configured roles.
 
         Returns:
             Dict role → UtilityResult
         """
-        # 1. Extrai o preço acordado do transcript
+        # 1. Extract the agreed price from the transcript
         agreed_price, settled, raw = self._extract_price(result)
 
-        # 2. Calcula utilidade para cada papel
+        # 2. Compute utility for each role
         results: dict[str, UtilityResult] = {}
         for role, params in self.role_params.items():
             utility = None
@@ -196,8 +196,8 @@ class UtilityCalculator:
                 try:
                     utility = self._calculate(agreed_price, params)
                 except ZeroDivisionError:
-                    note = "Divisão por zero: p_target == p_floor."
-                    logger.warning("Utilidade de '%s': p_target == p_floor.", role)
+                    note = "Division by zero: p_target == p_floor."
+                    logger.warning("Utility of '%s': p_target == p_floor.", role)
 
             results[role] = UtilityResult(
                 role=role,
@@ -213,12 +213,12 @@ class UtilityCalculator:
         return results
 
     # ------------------------------------------------------------------
-    # Fórmulas matemáticas
+    # Math formulas
     # ------------------------------------------------------------------
 
     @staticmethod
     def _calculate(p: float, params: RoleUtilityParams) -> float:
-        """Aplica a fórmula de utilidade conforme o tipo de papel."""
+        """Apply the utility formula for the role type."""
         if params.role_type == "seller":
             # u_s(p) = (p − p̲_s) / (p̄_s − p̲_s)
             return (p - params.p_floor) / (params.p_target - params.p_floor)
@@ -227,19 +227,19 @@ class UtilityCalculator:
             return (params.p_floor - p) / (params.p_floor - params.p_target)
 
     # ------------------------------------------------------------------
-    # Extração do preço via LLM
+    # Price extraction via LLM
     # ------------------------------------------------------------------
 
     def _extract_price(
         self, result: NegotiationResult
     ) -> tuple[Optional[float], bool, str]:
         """
-        Pede ao juiz para extrair o preço final do transcript.
+        Ask the judge to extract the final price from the transcript.
 
         Returns:
             (agreed_price, settled, raw_response)
         """
-        # Monta versão resumida do transcript (últimos 8 turnos são mais relevantes)
+        # Build a summarized transcript version (last 8 turns are most relevant)
         turns = result.transcript[-8:] if len(result.transcript) > 8 else result.transcript
         transcript_text = "\n\n".join(
             f"[Turn {t.turn_index} | {t.role.upper()}]\n{t.content}"
@@ -257,12 +257,12 @@ class UtilityCalculator:
             start = clean.find('{')
             end   = clean.rfind('}')
             if start == -1 or end == -1 or end <= start:
-                raise ValueError("Nenhum JSON encontrado na resposta.")
+                raise ValueError("No JSON found in the response.")
             parsed = json.loads(clean[start:end+1])
             settled = bool(parsed.get("settled", False))
             price_raw = parsed.get("price")
             price = float(price_raw) if price_raw is not None else None
             return price, settled, raw
         except Exception as e:
-            logger.warning("UtilityCalculator: falha ao extrair preço: %s", e)
+            logger.warning("UtilityCalculator: failed to extract price: %s", e)
             return None, result.settled, ""

@@ -14,7 +14,7 @@ __all__ = [
     # Big Five
     "Dimension", "DimensionMeta", "DimensionScore", "Big5Profile", "BIG5_META",
     "BehavioralResult", "BehaviorObservation", "BehaviorSummary",
-    # Métricas de negociação
+    # Negotiation metrics
     "NegotiationMetric", "NEGOTIATION_META", "METRICS_BY_CATEGORY",
     # Evaluator
     "Evaluator", "EvaluatorConfig", "AnyMetric", "ALL_METRICS_META",

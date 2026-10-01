@@ -11,9 +11,9 @@ from llm_negotiation_analyst.adapters.base import (
 
 class LMStudioAdapter(LLMAdapter):
     """
-    Adapter para integrar modelos locais rodando no LM Studio.
+    Adapter to integrate local models running on LM Studio.
 
-    O LM Studio expõe uma API compatível com a OpenAI.
+    LM Studio exposes an OpenAI-compatible API.
     """
 
     def __init__(
@@ -45,26 +45,27 @@ class LMStudioAdapter(LLMAdapter):
                     **self.config.extra,
                 )
                 tempo = time.perf_counter() - inicio
-                print(f"[{self.model}] OK | {tempo:.2f}s")
+                if not self.config.quiet:
+                    print(f"[{self.model}] OK | {tempo:.2f}s")
                 return response.choices[0].message.content
             except openai.APITimeoutError as e:
                 tempo = time.perf_counter() - inicio
                 if attempt < max_attempts - 1:
                     wait = 10 * (attempt + 1)
-                    print(f"[{self.model}] TIMEOUT {tempo:.2f}s | retry {attempt+1}/{max_attempts} em {wait}s")
+                    print(f"[{self.model}] TIMEOUT {tempo:.2f}s | retry {attempt+1}/{max_attempts} in {wait}s")
                     time.sleep(wait)
                     continue
-                raise RuntimeError(f"O modelo '{self.model}' excedeu o tempo limite de {self.config.timeout}s.") from e
+                raise RuntimeError(f"Model '{self.model}' exceeded the {self.config.timeout}s timeout.") from e
             except openai.APIConnectionError as e:
                 if attempt < max_attempts - 1:
                     wait = 10 * (attempt + 1)
-                    print(f"[{self.model}] CONEXÃO falhou | retry {attempt+1}/{max_attempts} em {wait}s")
+                    print(f"[{self.model}] CONNECTION failed | retry {attempt+1}/{max_attempts} in {wait}s")
                     time.sleep(wait)
                     continue
-                raise RuntimeError("Não foi possível conectar ao servidor do LM Studio.") from e
+                raise RuntimeError("Could not connect to the LM Studio server.") from e
             except openai.APIStatusError as e:
                 print(f"[{self.model}] HTTP {e.status_code}")
-                raise RuntimeError(f"LM Studio retornou HTTP {e.status_code}.") from e
+                raise RuntimeError(f"LM Studio returned HTTP {e.status_code}.") from e
             except Exception:
                 import traceback
                 traceback.print_exc()

@@ -1,6 +1,6 @@
 """
-Seções de relatório para Utilidade e Satisfação.
-Importar e chamar no generator.py.
+Report sections for Utility and Satisfaction.
+Import and call from generator.py.
 """
 
 from .utility import UtilityResult
@@ -9,8 +9,8 @@ from .satisfaction import SatisfactionScores, CATEGORY_LABELS, IPC_QUESTIONS
 
 def render_utility_section(utility_results: dict[str, UtilityResult]) -> list[str]:
     """
-    Gera a seção Markdown de Utilidade Econômica para o relatório.
-    Retorna lista de linhas para append no generator.
+    Generate the Economic Utility Markdown section for the report.
+    Returns a list of lines to append in the generator.
     """
     if not utility_results:
         return []
@@ -18,24 +18,24 @@ def render_utility_section(utility_results: dict[str, UtilityResult]) -> list[st
     lines = []
     a = lines.append
 
-    a("## Utilidade Econômica")
+    a("## Economic Utility")
     a("")
     a(
-        "_A utilidade mede o quão bem cada agente se saiu em relação aos seus valores privados "
-        "(alvo e piso/teto). Escala: 0.0 = obteve o mínimo aceitável; 1.0 = obteve o valor alvo; "
-        "> 1.0 = superou o alvo; < 0.0 = ficou abaixo do piso._"
+        "_Utility measures how well each agent did relative to their private "
+        "values (target and floor/ceiling). Scale: 0.0 = obtained the minimum acceptable; 1.0 = obtained the target value; "
+        "> 1.0 = beat the target; < 0.0 = fell below the floor._"
     )
     a("")
 
-    # Verifica se algum resultado tem preço extraído
+    # Check whether any result has an extracted price
     any_settled = any(r.settled for r in utility_results.values())
     if not any_settled:
-        a("_Não foi detectado acordo com preço definido. Utilidade não calculável._")
+        a("_No agreement with a defined price detected. Utility not calculable._")
         a("")
         return lines
 
-    # Tabela comparativa
-    a("| Papel | Tipo | Preço Acordado | Preço Alvo | Piso / Teto | Utilidade | Interpretação |")
+    # Comparison table
+    a("| Role | Type | Agreed Price | Target Price | Floor / Ceiling | Utility | Interpretation |")
     a("|-------|------|----------------|------------|-------------|-----------|---------------|")
 
     for role, res in utility_results.items():
@@ -43,18 +43,18 @@ def render_utility_section(utility_results: dict[str, UtilityResult]) -> list[st
         target_str = f"{res.params.currency}{res.params.p_target:,.2f}{res.params.unit}"
         floor_str  = f"{res.params.currency}{res.params.p_floor:,.2f}{res.params.unit}"
         util_str   = f"**{res.utility:.3f}**" if res.utility is not None else "—"
-        interp     = res.interpretation.split(".")[0]  # primeira frase apenas
+        interp     = res.interpretation.split(".")[0]  # first sentence only
         a(f"| {role} | {res.role_type} | {price_str} | {target_str} | {floor_str} | {util_str} | {interp} |")
 
     a("")
 
-    # Detalhe por papel
+    # Per-role detail
     for role, res in utility_results.items():
         if res.utility is not None:
             a(f"**{role}** — {res.interpretation}")
             if res.note:
                 a(f"> ⚠️ {res.note}")
-    # Joint Utility (Nash, Luce & Raiffa Eq.4) — dentro do bloco Utility, logo abaixo de candidate/recruiter
+    # Joint Utility (Nash, Luce & Raiffa Eq.4) — inside the Utility block, right below candidate/recruiter
     try:
         if len(utility_results) >= 2 and any_settled:
             # p_s = seller reservation (min), p_b = buyer reservation (max)
@@ -90,7 +90,7 @@ def render_utility_section(utility_results: dict[str, UtilityResult]) -> list[st
 
 def render_satisfaction_section(satisfaction_results: dict[str, SatisfactionScores]) -> list[str]:
     """
-    Gera a seção Markdown de Satisfação (IPC) para o relatório.
+    Generate the Satisfaction (PSI) Markdown section for the report.
     """
     if not satisfaction_results:
         return []
@@ -98,30 +98,30 @@ def render_satisfaction_section(satisfaction_results: dict[str, SatisfactionScor
     lines = []
     a = lines.append
 
-    a("## Satisfação Pós-negociação (IPC)")
+    a("## Post-negotiation Satisfaction (PSI)")
     a("")
     a(
-        "_Índice de Satisfação Pós-negociação baseado em Barry & Friedman (1998). "
-        "16 questões em escala 1–7, organizadas em 4 sub-escalas. "
-        "Itens 3 (a3) e 5 (a5) são invertidos pois indicam sentimentos negativos._"
+        "_Post-negotiation Satisfaction Index based on Barry & Friedman (1998). "
+        "16 questions on a 1–7 scale, organized into 4 subscales. "
+        "Items 3 (a3) and 5 (a5) are reversed as they indicate negative feelings._"
     )
     a("")
 
-    # ── Tabela de sub-escalas por agente ──
+    # ── Subscale table per agent ──
     agent_ids = list(satisfaction_results.keys())
-    a("### Scores por Sub-escala")
+    a("### Scores per Subscale")
     a("")
-    header = "| Sub-escala |" + "".join(f" {aid} |" for aid in agent_ids)
+    header = "| Subscale |" + "".join(f" {aid} |" for aid in agent_ids)
     sep    = "|------------|" + "".join("------------|" for _ in agent_ids)
     a(header)
     a(sep)
 
     subscales = [
-        ("Resultado (aOutcome)",        "a_outcome"),
-        ("Si Mesmo (aSelf)",            "a_self"),
-        ("Processo (aProcess)",         "a_process"),
-        ("Relacionamento (aRelationship)", "a_relationship"),
-        ("**Geral (média)**",           "overall"),
+        ("Outcome (aOutcome)",        "a_outcome"),
+        ("Self (aSelf)",            "a_self"),
+        ("Process (aProcess)",         "a_process"),
+        ("Relationship (aRelationship)", "a_relationship"),
+        ("**Overall (mean)**",           "overall"),
     ]
 
     for label, attr in subscales:
@@ -133,17 +133,17 @@ def render_satisfaction_section(satisfaction_results: dict[str, SatisfactionScor
         a(row)
     a("")
 
-    # ── Respostas brutas por agente ──
-    a("### Respostas Brutas (1–7 por questão)")
+    # ── Raw answers per agent ──
+    a("### Raw Answers (1–7 per question)")
     a("")
     a(
-        "_Os valores abaixo são as respostas originais do juiz antes da inversão dos itens 3 e 5. "
-        "A inversão é aplicada automaticamente nas fórmulas acima._"
+        "_Values below are the judge's original answers before reversing items 3 and 5. "
+        "Reversal is applied automatically in the formulas above._"
     )
     a("")
 
-    # Monta tabela com todas as questões
-    q_header = "| ID | Categoria | Questão (resumo) | Invertido |" + "".join(f" {aid} |" for aid in agent_ids)
+    # Build table with all questions
+    q_header = "| ID | Category | Question (summary) | Reversed |" + "".join(f" {aid} |" for aid in agent_ids)
     q_sep    = "|----|-----------|-----------------|-----------|" + "".join("-----------|" for _ in agent_ids)
     a(q_header)
     a(q_sep)
@@ -152,7 +152,7 @@ def render_satisfaction_section(satisfaction_results: dict[str, SatisfactionScor
         qid      = q["id"]
         cat      = CATEGORY_LABELS[q["category"]].split("(")[0].strip()
         inv_mark = "✅" if q["inverted"] else ""
-        # Resumo da pergunta (primeiras 60 chars)
+        # Question summary (first 60 chars)
         resumo = q["text"][:60].rstrip() + ("…" if len(q["text"]) > 60 else "")
         row = f"| {qid} | {cat} | {resumo} | {inv_mark} |"
         for aid in agent_ids:
@@ -163,7 +163,7 @@ def render_satisfaction_section(satisfaction_results: dict[str, SatisfactionScor
 
     a("")
     a(
-        "_Referência: Barry, B., & Friedman, R. A. (1998). Bargainer Characteristics "
+        "_Reference: Barry, B., & Friedman, R. A. (1998). Bargainer Characteristics "
         "in Distributive and Integrative Negotiation. "
         "Journal of Personality and Social Psychology, 74(2), 345–359._"
     )

@@ -1,24 +1,24 @@
 """
 context/situational.py
 ======================
-Define e injeta contexto macroeconômico e situacional no system prompt
-dos agentes negociadores.
+Defines and injects macroeconomic and situational context into the
+negotiator agents' system prompt.
 
-Propósito
----------
-Permite simular como condições externas (inflação, taxa de juros, crises,
-governo, etc.) influenciam o comportamento dos agentes durante a negociação.
+Purpose
+-------
+Simulates how external conditions (inflation, interest rates, crises,
+government, etc.) influence agent behavior during the negotiation.
 
-O mecanismo é opcional e pode ser desligado por agente ou globalmente,
-passando enabled=False no SituationalContext ou simplesmente não fornecendo
-um contexto ao SimulationEngine.
+The mechanism is optional and can be turned off per agent or globally by
+passing enabled=False in the SituationalContext or simply not providing
+a context to the SimulationEngine.
 
 Design
 ------
-- SituationalContext é um dataclass com campos opcionais por categoria.
-- ContextPromptBuilder transforma os campos em um bloco instrucional.
-- O bloco é ANEXADO ao system prompt (após a persona, se houver).
-- Tudo que está em SituationalContext é salvo em metadata do NegotiationResult.
+- SituationalContext is a dataclass with optional fields per category.
+- ContextPromptBuilder turns the fields into an instruction block.
+- The block is APPENDED to the system prompt (after the persona, if any).
+- Everything in SituationalContext is saved to NegotiationResult metadata.
 
 Exemplo de output gerado
 ------------------------
@@ -271,11 +271,11 @@ class SituationalContext:
     ------
     enabled             : Master switch. False = no injection at all.
     inflation           : InflationLevel enum or None.
-    interest_rates      : InterestRateLevel enum or None Taxa de juros.
+    interest_rates      : InterestRateLevel enum or None.
     government          : GovernmentOrientation enum or None.
     crises              : List of active CrisisType (can be multiple simultaneous).
-    gdp_growth          : Free-text GDP growth description é o PIB (e.g., "GDP contracted 2%").
-    unemployment        : Free-text unemployment description(Nível de desemprego).
+    gdp_growth          : Free-text GDP growth description (e.g., "GDP contracted 2%").
+    unemployment        : Free-text unemployment description.
     custom_conditions   : List of free-text strings for any condition not covered above.
 
     Example
@@ -432,13 +432,13 @@ class ContextPromptBuilder:
 
 
 # ---------------------------------------------------------------------------
-# Presets — 10 contextos solicitados + legados
+# Presets — 10 requested contexts + legacy
 # ---------------------------------------------------------------------------
 
 class ContextPresets:
     """Ready-made situational contexts for common experimental scenarios."""
 
-    # --- Legados ---
+    # --- Legacy ---
 
     @staticmethod
     def brazil_2015_crisis() -> SituationalContext:
@@ -452,180 +452,180 @@ class ContextPresets:
             unemployment="Unemployment rising sharply, reaching double digits.",
         )
 
-    # --- 1. Crescimento econômico forte ---
+    # --- 1. Strong economic growth ---
     @staticmethod
     def crescimento_forte() -> SituationalContext:
-        """Expansão: inflação baixa/média, juros baixos, governo expansionista, PIB alto, desemprego baixo, sem crises. Trabalhador com alto poder de barganha."""
+        """Expansion: low/moderate inflation, low rates, expansionist government, high GDP, low unemployment, no crises. Worker with high bargaining power."""
         return SituationalContext(
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.LOW,
             government=GovernmentOrientation.MARKET_FRIENDLY,
             crises=[],
-            gdp_growth="PIB em crescimento alto, 4-5% ao ano.",
-            unemployment="Desemprego baixo, 4-5% — pleno emprego. Mercado de trabalho aquecido.",
+            gdp_growth="GDP growing fast, 4-5% per year.",
+            unemployment="Low unemployment, 4-5% — full employment. Hot labor market.",
             custom_conditions=[
-                "Mercado de trabalho aquecido: empresas competem por mão de obra, baixo risco de desemprego.",
-                "Trabalhador possui maior poder de barganha.",
+                "Hot labor market: companies compete for workers, low unemployment risk.",
+                "Worker holds greater bargaining power.",
             ],
         )
 
-    # --- 2. Recessão econômica ---
+    # --- 2. Economic recession ---
     @staticmethod
     def recessao() -> SituationalContext:
-        """Inflação baixa/média, juros altos/em queda, governo austeridade, PIB negativo, desemprego alto. Empregador com maior poder."""
+        """Low/moderate inflation, high/falling rates, austerity government, negative GDP, high unemployment. Employer with greater power."""
         return SituationalContext(
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.HIGH,
             government=GovernmentOrientation.POPULIST,
             crises=[CrisisType.ECONOMIC_RECESSION, CrisisType.GEOPOLITICAL],
-            gdp_growth="PIB negativo, contração de -2% a -3%.",
-            unemployment="Desemprego alto, 10-12%. Mercado de trabalho fraco.",
+            gdp_growth="Negative GDP, contraction of -2% to -3%.",
+            unemployment="High unemployment, 10-12%. Weak labor market.",
             custom_conditions=[
-                "Empregador possui maior poder de barganha; trabalhador com maior risco de desemprego.",
-                "Austeridade fiscal em curso.",
+                "Employer holds greater bargaining power; worker faces higher unemployment risk.",
+                "Ongoing fiscal austerity.",
             ],
         )
 
-    # --- 3. Estagflação ---
+    # --- 3. Stagflation ---
     @staticmethod
     def estagflacao() -> SituationalContext:
-        """Inflação muito alta, juros altos, governo restritivo, PIB estagnado/negativo, desemprego alto. Conflito: trabalhador precisa reajuste vs empresa com demanda em queda."""
+        """Very high inflation, high rates, restrictive government, stagnant/negative GDP, high unemployment. Conflict: worker needs raise vs company with falling demand."""
         return SituationalContext(
             inflation=InflationLevel.VERY_HIGH,
             interest_rates=InterestRateLevel.HIGH,
             government=GovernmentOrientation.INTERVENTIONIST,
             crises=[CrisisType.ECONOMIC_RECESSION],
-            gdp_growth="PIB estagnado/negativo, -1,5%.",
-            unemployment="Desemprego alto, 10%.",
+            gdp_growth="Stagnant/negative GDP, -1.5%.",
+            unemployment="High unemployment, 10%.",
             custom_conditions=[
-                "Estagflação: inflação alta (12%) com estagnação e custo de capital elevado (juros 18%).",
-                "Trabalhador: 'Meu salário perdeu poder de compra.' Empresa: 'Custos financeiros e receita em queda.'",
-                "Negociação muito difícil: conflito distributivo agudo.",
+                "Stagflation: high inflation (12%) with stagnation and high cost of capital (18% rates).",
+                "Worker: 'My salary lost purchasing power.' Company: 'Financial costs and falling revenue.'",
+                "Very hard negotiation: acute distributive conflict.",
             ],
         )
 
-    # --- 4. Boom inflacionário ---
+    # --- 4. Inflationary boom ---
     @staticmethod
     def boom_inflacionario() -> SituationalContext:
-        """Inflação alta, juros subindo, governo expansionista, PIB alto, desemprego muito baixo, pressão inflacionária. Bom para negociação salarial."""
+        """High inflation, rising rates, expansionist government, high GDP, very low unemployment, inflationary pressure. Good for salary negotiation."""
         return SituationalContext(
             inflation=InflationLevel.HIGH,
             interest_rates=InterestRateLevel.HIGH,
             government=GovernmentOrientation.MARKET_FRIENDLY,
             crises=[],
-            gdp_growth="PIB em alto crescimento, 4-6%.",
-            unemployment="Desemprego muito baixo, 3-4%.",
+            gdp_growth="GDP growing fast, 4-6%.",
+            unemployment="Very low unemployment, 3-4%.",
             custom_conditions=[
-                "Pressão inflacionária persistente corroendo salários, mas economia crescendo e contratando.",
-                "Trabalhador: alto poder de barganha + necessidade de reajuste. Empresa: capacidade financeira maior mas preocupação com custos futuros.",
-                "Juros em trajetória de alta.",
+                "Persistent inflationary pressure eroding wages, but the economy is growing and hiring.",
+                "Worker: high bargaining power + need for raise. Company: greater financial capacity but worried about future costs.",
+                "Rates on a rising path.",
             ],
         )
 
-    # --- 5. Crise financeira ---
+    # --- 5. Financial crisis ---
     @staticmethod
     def crise_financeira() -> SituationalContext:
-        """Inflação variável, juros muito altos, governo intervencionista, PIB forte contração, desemprego alto, crise bancária, crédito restrito. Patrimônio ≠ liquidez."""
+        """Variable inflation, very high rates, interventionist government, strongly contracting GDP, high unemployment, banking crisis, restricted credit. Equity != liquidity."""
         return SituationalContext(
             inflation=InflationLevel.MODERATE,
             interest_rates=InterestRateLevel.VERY_HIGH,
             government=GovernmentOrientation.INTERVENTIONIST,
             crises=[CrisisType.FINANCIAL_CRISIS],
-            gdp_growth="PIB em forte contração, -4% a -5%.",
-            unemployment="Desemprego alto, 11-13%.",
+            gdp_growth="GDP in strong contraction, -4% to -5%.",
+            unemployment="High unemployment, 11-13%.",
             custom_conditions=[
-                "Crise bancária/financeira: crédito restrito, liquidez escassa.",
-                "Empresa lucrativa mas sem acesso a crédito — distinguir patrimônio vs liquidez.",
-                "Mercados de crédito congelados, risco de contraparte elevado.",
+                "Banking/financial crisis: restricted credit, scarce liquidity.",
+                "Profitable company but with no credit access — distinguish equity vs liquidity.",
+                "Frozen credit markets, high counterparty risk.",
             ],
         )
 
-    # --- 6. Crise política ---
+    # --- 6. Political crisis ---
     @staticmethod
     def crise_politica() -> SituationalContext:
-        """Inflação alta, juros altos, governo instável, PIB baixo, desemprego alto, incerteza muito alta. Negociação envolve risco futuro."""
+        """High inflation, high rates, unstable government, low GDP, high unemployment, very high uncertainty. Negotiation involves future risk."""
         return SituationalContext(
             inflation=InflationLevel.HIGH,
             interest_rates=InterestRateLevel.HIGH,
             government=GovernmentOrientation.TRANSITIONAL,
             crises=[CrisisType.POLITICAL_INSTABILITY],
-            gdp_growth="PIB baixo crescimento, ~1%.",
-            unemployment="Desemprego alto, 10%.",
+            gdp_growth="Low GDP growth, ~1%.",
+            unemployment="High unemployment, 10%.",
             custom_conditions=[
-                "Instabilidade política, incerteza institucional muito alta.",
-                "Existe ~40% de probabilidade de nova reforma tributária — negociação de longo prazo sob risco.",
-                "Contrato pode precisar prever salário fixo vs bônus vs stock options vs reajuste automático vs cláusula de revisão.",
+                "Political instability, very high institutional uncertainty.",
+                "Roughly 40% chance of a new tax reform — long-term negotiation under risk.",
+                "Contract may need to cover base salary vs bonus vs stock options vs automatic raise vs review clause.",
             ],
         )
 
-    # --- 7. Governo intervencionista ---
+    # --- 7. Interventionist government ---
     @staticmethod
     def governo_intervencionista() -> SituationalContext:
-        """Inflação média, juros médios, governo intervencionista, PIB moderado, regulação/impostos altos. Útil para empresa×governo, sindicato×empresa."""
+        """Moderate inflation, moderate rates, interventionist government, moderate GDP, high regulation/taxes. Useful for company-vs-government, union-vs-company."""
         return SituationalContext(
             inflation=InflationLevel.MODERATE,
             interest_rates=InterestRateLevel.MODERATE,
             government=GovernmentOrientation.INTERVENTIONIST,
             crises=[],
-            gdp_growth="PIB moderado, ~2%.",
-            unemployment="Desemprego moderado, 7-8%.",
+            gdp_growth="Moderate GDP, ~2%.",
+            unemployment="Moderate unemployment, 7-8%.",
             custom_conditions=[
-                "Alta regulação e impostos altos; governo pode estabelecer salário mínimo, subsídios, tarifas, controle de preços.",
-                "Negociação sensível a intervenção estatal.",
+                "High regulation and high taxes; government may set minimum wage, subsidies, tariffs, price controls.",
+                "Negotiation sensitive to state intervention.",
             ],
         )
 
-    # --- 8. Governo liberal / pró-mercado ---
+    # --- 8. Liberal / pro-market government ---
     @staticmethod
     def governo_liberal() -> SituationalContext:
-        """Inflação baixa, juros moderados, governo liberal, PIB crescimento, desemprego baixo, regulação/impostos baixos. Competição de mercado em foco."""
+        """Low inflation, moderate rates, liberal government, growing GDP, low unemployment, low regulation/taxes. Market competition in focus."""
         return SituationalContext(
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.MODERATE,
             government=GovernmentOrientation.LIBERAL_ON_MARKET,
             crises=[],
-            gdp_growth="PIB em crescimento, ~3%.",
-            unemployment="Desemprego baixo, 5%.",
+            gdp_growth="Growing GDP, ~3%.",
+            unemployment="Low unemployment, 5%.",
             custom_conditions=[
-                "Baixa regulação e impostos baixos; competição de mercado aumentada, menor intervenção estatal.",
-                "Ambiente pró-mercado, favorável a iniciativa privada.",
+                "Low regulation and low taxes; increased market competition, less state intervention.",
+                "Pro-market environment, favorable to private initiative.",
             ],
         )
 
-    # --- 9. Crise de desemprego ---
+    # --- 9. Unemployment crisis ---
     @staticmethod
     def crise_desemprego() -> SituationalContext:
-        """Inflação baixa, juros baixos, PIB estagnado, desemprego muito alto (16%), oferta de mão de obra alta. Ótimo para negociação trabalhista."""
+        """Low inflation, low rates, stagnant GDP, very high unemployment (16%), high labor supply. Great for labor negotiation."""
         return SituationalContext(
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.LOW,
             government=GovernmentOrientation.TECHNOCRATIC,
             crises=[CrisisType.ECONOMIC_RECESSION],
-            gdp_growth="PIB estagnado, 0,5%.",
-            unemployment="Desemprego muito alto, 16%. Vagas disponíveis poucas, oferta de mão de obra muito alta.",
+            gdp_growth="Stagnant GDP, 0.5%.",
+            unemployment="Very high unemployment, 16%. Few openings, very high labor supply.",
             custom_conditions=[
-                "Crise de emprego: pedir aumento de 15% tem dinâmica completamente diferente vs desemprego de 3%.",
+                "Jobs crisis: asking for a 15% raise has completely different dynamics vs 3% unemployment.",
             ],
         )
 
     # --- 10. Anarcho-Capitalist Free Market ---
     @staticmethod
     def anarcho_capitalist() -> SituationalContext:
-        """Mercado radicalmente livre, intervenção mínima, sem banco central, tributação muito baixa, competição muito alta."""
+        """Radically free market, minimal intervention, no central bank, very low taxation, very high competition."""
         return SituationalContext(
             inflation=InflationLevel.LOW,
             interest_rates=InterestRateLevel.LOW,
             government=GovernmentOrientation.ANCAP,
             crises=[],
-            gdp_growth="PIB em crescimento alto, tendência de alta. 5% para mais",
-            unemployment="Desemprego baixo, estável. 4%",
+            gdp_growth="GDP growing fast, upward trend. 5% and above",
+            unemployment="Low, stable unemployment. 4%",
             custom_conditions=[
-                "Intervenção mínima, regulação muito baixa, tributação muito baixa, política monetária descentralizada e fiscal limitada.",
-                "Banco central: NONE — sistema monetário competitivo, crédito privado, regulação bancária mínima.",
-                "Institucional: fragmentação e dependência de segurança privada.",
-                "Mercado: competição muito alta, barreiras de entrada baixas, sem controle de preços, alta mobilidade de capital.",
-                "Contratos e arbitragem privada são os mecanismos primários de resolução de disputas.",
-                "Empresas competem intensamente por mão de obra e capital; resultados dependem de instituições privadas.",
+                "Minimal intervention, very low regulation, very low taxation, decentralized monetary and limited fiscal policy.",
+                "Central bank: NONE — competitive monetary system, private credit, minimal banking regulation.",
+                "Institutional: fragmentation and dependence on private security.",
+                "Market: very high competition, low entry barriers, no price controls, high capital mobility.",
+                "Private contracts and arbitration are the primary dispute-resolution mechanisms.",
+                "Companies compete intensely for labor and capital; outcomes depend on private institutions.",
             ],
         )
 

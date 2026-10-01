@@ -37,8 +37,8 @@ def run_negotiation(
     output_dir: str = "results",
     evaluator_config=None,
     second_judge=None,
-    personas=None,#parte referente à customização da personalidade
-    context=None,#parte referente à customização do contexto
+    personas=None,#persona customization
+    context=None,#context customization
     turn_delay_seconds = 0.0,
     verbose: bool = True,
     use_system_reminder: bool = True,
@@ -51,9 +51,9 @@ def run_negotiation(
     if verbose:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 
-    # Usa experiment_name do YAML (file stem) se não fornecido
+    # Use the YAML experiment_name (file stem) when not provided
     if not experiment_name:
-        # tenta inferir de result depois, mas passa para engine para metadata
+        # try to infer from result later, but pass to engine for metadata
         experiment_name = None
 
     engine = SimulationEngine(
@@ -69,7 +69,7 @@ def run_negotiation(
         anchor_hints=anchor_hints,
     )
     result = engine.run()
-    # Se engine não tinha nome mas result tem, propaga
+    # If the engine had no name but the result does, propagate it
     if not experiment_name:
         experiment_name = result.metadata.get("experiment_name")
     if not experiment_display_name:
@@ -88,7 +88,7 @@ def run_negotiation(
     storage.save_result(result)
     storage.save_scores(result, profiles)
 
-    # Nome do arquivo inclui display_name (com espaços) + experiment_name (file stem) se disponível
+    # Filename includes display_name (with spaces) + experiment_name (file stem) when available
     display = experiment_display_name or result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
     if display:
         safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display)).strip()

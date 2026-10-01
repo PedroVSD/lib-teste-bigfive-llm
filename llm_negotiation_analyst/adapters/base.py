@@ -10,6 +10,7 @@ class AdapterConfig:
     max_tokens: int = 4096  # aumentado para evitar respostas cortadas (era 1024)
     timeout: float = 300.0
     extra: dict = field(default_factory=dict)
+    quiet: bool = False  # True = skip per-call status line (engine already prints the turn block)
 
 
 
@@ -45,6 +46,6 @@ class LLMAdapter(ABC):
         return f"<{self.identifier}>"
 
     def _debug_request(self, messages: list[dict], **extra) -> None:
-        # Log minimalista — detalhado apenas se necessário via logging DEBUG
-        # Mantido como no-op para não poluir o terminal (engine já loga turno/mensagem)
+        # Minimal log — detailed only when needed via logging DEBUG
+        # Kept as no-op to avoid polluting the terminal (engine already logs turn/message)
         pass

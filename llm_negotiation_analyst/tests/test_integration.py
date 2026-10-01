@@ -12,7 +12,7 @@ from llm_negotiation_analyst.scoring.big5 import Dimension
 from llm_negotiation_analyst.scoring.negotiation_metrics import NegotiationMetric
 
 class MockAdapter(LLMAdapter):
-    def __init__(self, model="mock-model", response_text="Concordo com a proposta."):
+    def __init__(self, model="mock-model", response_text="I agree with the proposal."):
         super().__init__(model)
         self.response_text = response_text
 
@@ -27,8 +27,8 @@ class MockAdapter(LLMAdapter):
             return json.dumps({
                 "turn_evaluations": [
                     {"turn_index": i, "evaluations": {
-                        "anchoring": {"result": "PRESENT", "evidence": "Avaliação simulada anchoring."},
-                        "value_creation": {"result": "PRESENT", "evidence": "Avaliação simulada value."}
+                        "anchoring": {"result": "PRESENT", "evidence": "Mock anchoring evaluation."},
+                        "value_creation": {"result": "PRESENT", "evidence": "Mock value evaluation."}
                     }} for i in indices
                 ]
             })
@@ -67,13 +67,13 @@ def test_full_pipeline_integration():
         assert any("candidate" in key for key in profiles.keys())
         assert any("recruiter" in key for key in profiles.keys())
 
-        # verificar categorical: occurrence_rate
+        # verify categorical occurrence_rate
         for p in profiles.values():
             for summ in p.summaries.values():
                 assert summ.occurrence_rate is None or 0.0 <= summ.occurrence_rate <= 1.0
                 assert summ.present + summ.absent == summ.total_applicable
 
-        assert "Negotiation Analysis Report" in report_md or "Relatório de Análise" in report_md
+        assert "Negotiation Analysis Report" in report_md
 
         saved_files = os.listdir(tmp_dir)
         assert any(f.endswith(".jsonl") for f in saved_files)

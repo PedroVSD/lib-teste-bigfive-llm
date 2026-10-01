@@ -1,16 +1,16 @@
 """
-LLM-as-judge evaluator — categorical, one call per turn.
+LLM-as-judge evaluator — categorical, one call per round.
 
-Behavioral metrics (Big Five + NegotiationMetric) são avaliadas por turno como:
+Behavioral metrics (Big Five + NegotiationMetric) are evaluated per turn as:
   PRESENT | ABSENT | NOT_APPLICABLE  + evidence
 
-Unidade de avaliação: resposta completa do agente em um turno (não frase).
-Para cada turno, o juiz recebe: contexto do cenário + histórico da negociação
-+ resposta completa do turno + rubricas de TODAS as métricas aplicáveis.
-Em uma única chamada, retorna avaliações para todas as métricas.
+Evaluation unit: each agent's complete response on its turn (not sentences).
+Per round (2 consecutive turns, one per agent), the judge receives: scenario
+context + both complete round responses + rubrics for ALL applicable metrics.
+In a single call, it returns evaluations for all metrics of both turns.
 
-Agregação: occurrence_rate = PRESENT / (PRESENT + ABSENT)  (NOT_APPLICABLE ignorado)
-Utility (0-1) e Satisfaction (1-7) permanecem separados.
+Aggregation: occurrence_rate = PRESENT / (PRESENT + ABSENT)  (NOT_APPLICABLE ignored)
+Utility (0-1) and Satisfaction (1-7) stay separate.
 Agreement = AGREEMENT | NO_AGREEMENT.
 """
 
@@ -45,9 +45,9 @@ def resolve_metric(value: str) -> AnyMetric:
     except ValueError:
         pass
     raise ValueError(
-        f"Métrica desconhecida: '{value}'. "
-        f"Big Five válidos: {[d.value for d in Dimension]}. "
-        f"Métricas de negociação válidas: {[m.value for m in NegotiationMetric]}."
+        f"Unknown metric: '{value}'. "
+        f"Valid Big Five: {[d.value for d in Dimension]}. "
+        f"Valid negotiation metrics: {[m.value for m in NegotiationMetric]}."
     )
 
 
@@ -60,7 +60,7 @@ def is_negotiation_metric(metric: AnyMetric) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Prompt templates — batch per turn with history
+# Prompt templates — legacy per-turn batch with history
 # ---------------------------------------------------------------------------
 
 _JUDGE_SYSTEM_BATCH = """You are an expert researcher in behavioral economics, psychology, and negotiation science. Your task is to evaluate a single TURN response (complete agent utterance, not individual sentences) from a negotiation transcript according to multiple behavioral metrics.
@@ -231,7 +231,7 @@ class EvaluatorConfig:
             try:
                 resolved.append(resolve_metric(s))
             except ValueError as e:
-                logger.warning("EvaluatorConfig.from_strings: %s — ignorando.", e)
+                logger.warning("EvaluatorConfig.from_strings: %s — ignoring.", e)
         return cls(dimensions=resolved or list(Dimension), **kwargs)
 
     @property
@@ -249,15 +249,15 @@ class EvaluatorConfig:
 
 class Evaluator:
     """
-    Usa um LLM-juiz para observar respostas completas por rodada (uma chamada por rodada
-    de 2 turnos para todas as métricas, sem histórico reenviado).
+    Uses an LLM judge to observe complete per-round responses (one call per
+    2-turn round for all metrics, no history resent).
 
     Args:
-        judge: LLMAdapter do juiz (separado dos agentes negociadores).
-        config: EvaluatorConfig — define quais métricas avaliar.
-        second_judge: Segundo juiz opcional para cálculo de IRR por turno (agreement).
-        history_window: Legado — usado só por evaluate_turn (API por turno); o fluxo
-            principal evaluate_transcript avalia por rodada sem histórico.
+        judge: LLMAdapter for the judge (separate from negotiating agents).
+        config: EvaluatorConfig — defines which metrics to evaluate.
+        second_judge: Optional second judge for per-turn IRR (agreement).
+        history_window: Legacy — used only by evaluate_turn (per-turn API); the main
+            evaluate_transcript flow evaluates per round without history.
     """
 
     def __init__(
@@ -273,7 +273,7 @@ class Evaluator:
         self.history_window = history_window
 
     # ------------------------------------------------------------------
-    # API pública — batch per turn
+    # Public API — legacy per-turn batch
     # ------------------------------------------------------------------
 
     def evaluate_turn(
@@ -287,8 +287,8 @@ class Evaluator:
         transcript: Optional[list[dict]] = None,
     ) -> list[BehaviorObservation]:
         """
-        Avalia a resposta completa de um turno em todas as métricas configuradas com UMA chamada ao juiz.
-        `history` ou `transcript` fornecem contexto; se ambos forem None, avalia sem histórico.
+        Evaluate one turn's complete response on all configured metrics with ONE judge call.
+        `history` or `transcript` provide context; when both are None, evaluate without history.
         """
         metrics = dimensions or self.config.dimensions
         # Build history_text
@@ -337,10 +337,10 @@ class Evaluator:
         scenario_context: str,
     ) -> dict[str, Big5Profile]:
         """
-        Pontua o transcript completo e retorna um Big5Profile por agente.
+        Score the full transcript and return one Big5Profile per agent.
         Uma chamada ao juiz por RODADA (2 turnos consecutivos, um por agente),
-        sem reenviar histórico: cada rodada contém só as duas respostas.
-        Agregação: occurrence_rate = PRESENT / (PRESENT+ABSENT).
+        without resending history: each round holds only the two responses.
+        Aggregation: occurrence_rate = PRESENT / (PRESENT+ABSENT).
         """
         profiles: dict[str, Big5Profile] = {}
 
@@ -350,7 +350,7 @@ class Evaluator:
                 model_identifier=agent_id,
             )
 
-        # Agrupa turnos em rodadas de 2 (último ímpar sozinho)
+        # Group turns into 2-turn rounds (lone odd turn stands alone)
         rounds: list[list[tuple[int, dict]]] = []
         for i in range(0, len(transcript), 2):
             chunk = [(i + j, transcript[i + j]) for j in range(2) if i + j < len(transcript)]
@@ -369,7 +369,7 @@ class Evaluator:
                 items.append({"turn_index": idx, "agent_id": agent_id, "role": agent_role, "content": content})
             if not items:
                 continue
-            # Uma chamada por rodada para todas as métricas (por juiz)
+            # One call per round for all metrics (per judge)
             round_obs = self._observe_round(
                 items=items,
                 scenario_context=scenario_context,
@@ -396,7 +396,7 @@ class Evaluator:
                     continue
                 profiles[item["agent_id"]].observations.extend([obs])
 
-        # Agrega: counts + occurrence_rate por métrica
+        # Aggregate: counts + occurrence_rate per metric
         for agent_id, profile in profiles.items():
             for metric in self.config.dimensions:
                 obs_for_metric = [o for o in profile.observations if o.dimension == metric]
@@ -419,7 +419,7 @@ class Evaluator:
         return profiles
 
     # ------------------------------------------------------------------
-    # Helpers internos — batch
+    # Internal helpers — batch
     # ------------------------------------------------------------------
 
     def _observe_batch(
@@ -548,9 +548,9 @@ class Evaluator:
         judge: LLMAdapter,
     ) -> list[BehaviorObservation]:
         """
-        Avalia uma RODADA (1-2 turnos consecutivos) em UMA chamada ao juiz.
-        Cada item: {turn_index, agent_id, role, content}. Sem histórico reenviado:
-        o outro turno da rodada é o contexto. Retorna observations por turno×métrica.
+        Evaluate one ROUND (1-2 consecutive turns) in ONE judge call.
+        Each item: {turn_index, agent_id, role, content}. No history resent:
+        the round's other turn is the context. Returns per-turn×metric observations.
         """
         metrics_block = _build_metrics_block(metrics)
         turns_lines = []
@@ -572,7 +572,7 @@ class Evaluator:
             parsed = self._parse_json(raw)
             turn_evals = parsed.get("turn_evaluations")
             if not isinstance(turn_evals, list):
-                # Tolerância: formato por turno único {"evaluations": {...}} com 1 item
+                # Tolerance: single-turn {"evaluations": {...}} shape with 1 item
                 if isinstance(parsed.get("evaluations"), dict) and len(items) == 1:
                     turn_evals = [{"turn_index": items[0]["turn_index"], "evaluations": parsed["evaluations"]}]
                 else:
@@ -637,7 +637,7 @@ class Evaluator:
             return observations
         except Exception as e:
             logger.warning("Judge round failed turns=%s: %s — falling back to per-turn", [it["turn_index"] for it in items], e)
-            # Fallback: lote por turno (resposta completa, sem histórico externo)
+            # Fallback: per-turn batch (complete response, no external history)
             fallback_obs: list[BehaviorObservation] = []
             for it in items:
                 try:

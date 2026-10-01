@@ -1,5 +1,5 @@
 """
-Testes para o módulo persona/ — categorical PRESENT/ABSENT.
+Tests for the persona/ module — categorical PRESENT/ABSENT.
 """
 
 from llm_negotiation_analyst.persona import Big5Persona, PersonaPromptBuilder
@@ -105,11 +105,11 @@ class TestPersonaPromptBuilder:
     def test_bloco_nao_contem_dimensao_nao_especificada(self):
         p = Big5Persona(agreeableness="positive")
         block = self.builder.build(p)
-        # Não deve conter frases de openness
+        # Must not contain openness phrases
         assert "Have a vivid imagination." not in block
         assert "Have difficulty understanding abstract ideas." not in block
-        # Também não deve conter rótulos explícitos
-        assert "Openness" not in block or "Have a vivid" not in block  # openness não especificada
+        # Must not contain explicit labels either
+        assert "Openness" not in block or "Have a vivid" not in block  # openness not specified
 
     def test_negative_gera_polo_negativo_sem_rotulo(self):
         p = Big5Persona(neuroticism="negative")
@@ -165,21 +165,21 @@ class TestPersonaPromptBuilder:
     def test_multiplas_dimensoes(self):
         p = Big5Persona(openness="positive", agreeableness="negative", neuroticism="positive")
         block = self.builder.build(p)
-        # Deve conter frases de cada dimensão especificada
+        # Must contain phrases for each specified dimension
         assert "Have a vivid imagination." in block
         assert "Distrust people." in block
         assert "Act without ulterior motives." in block
-        # Não deve conter frases de dimensões não especificadas
+        # Must not contain phrases from unspecified dimensions
         assert "Take precautions." not in block  # conscientiousness
         assert "Like taking risks." not in block  # extraversion
-        # Frases devem estar separadas por \n, não concatenadas
+        # Phrases must be separated by \n, not concatenated
         assert "Have a vivid imagination.\nNeed a creative outlet." in block
         assert "Have a vivid imagination.Need a creative outlet." not in block
 
     def test_frases_separadas_corretamente(self):
         p = Big5Persona(openness="positive")
         block = self.builder.build(p)
-        # Verifica que não há concatenação direta sem separação
+        # Verify there is no direct concatenation without separation
         assert "Have a vivid imagination.Need" not in block
         assert "Have a vivid imagination.\nNeed a creative outlet." in block
 
@@ -191,14 +191,14 @@ class TestTacticsBuilder:
 
     def test_tactics_present(self):
         block = self.builder.build({"anchoring": "present"})
-        assert "Firmeza" in block or "Anchoring" in block
+        assert "Firmness" in block or "Anchoring" in block
         # alias enabled still works
         block2 = self.builder.build({"rapport": "enabled"})
         assert len(block2) > 0
 
     def test_tactics_enabled_alias(self):
         block = self.builder.build({"anchoring": "enabled"})
-        assert "Firmeza" in block
+        assert "Anchoring" in block
 
     def test_tactics_absent_nao_gera_bloco(self):
         block = self.builder.build({"anchoring": "absent"})
@@ -214,7 +214,7 @@ class TestTacticsBuilder:
         assert self.builder.build({"anchoring": 1}) == ""
         assert self.builder.build({"anchoring": 2}) == ""
         block = self.builder.build({"anchoring": 5})
-        assert "Firmeza" in block
+        assert "Anchoring" in block
 
 
 class TestAgentPromptSeparation:
@@ -234,19 +234,19 @@ class TestAgentPromptSeparation:
             persona=persona,
             context=None,
         )
-        # Agent prompt não deve conter táticas
+        # Agent prompt must not contain tactics
         assert "Negotiation Tactics & Behavioral Guidelines" not in agent._system
-        assert "Faça uma oferta extrema" not in agent._system
-        assert "Abandone sua estratégia" not in agent._system
-        assert "Lute desesperadamente" not in agent._system
-        assert "Toda concessão deve ser vinculada" not in agent._system
-        assert "Adicione novas variáveis" not in agent._system
-        assert "Valide ativamente as emoções" not in agent._system
-        assert "Seja inabalável" not in agent._system
-        assert "Seja altamente estruturado" not in agent._system
-        assert "Apoie cada oferta em dados" not in agent._system
-        # Também não deve conter versões sutis
-        assert "Tente encontrar soluções criativas" not in agent._system
+        assert "Makes an extreme offer" not in agent._system
+        assert "Abandon your original strategy" not in agent._system
+        assert "Fights desperately" not in agent._system
+        assert "Every concession is strictly tied" not in agent._system
+        assert "Proactively adds new variables" not in agent._system
+        assert "Actively validates" not in agent._system
+        assert "Completely unshakable" not in agent._system
+        assert "Highly structured" not in agent._system
+        assert "Supports every offer with solid data" not in agent._system
+        # Must not contain subtle versions either
+        assert "Try to find creative solutions" not in agent._system
 
     def test_agent_prompt_nao_contem_high_low(self):
         from llm_negotiation_analyst.simulation.engine import NegotiationAgent
@@ -267,7 +267,7 @@ class TestAgentPromptSeparation:
         assert "You have a low level of" not in agent._system
         assert "You have high" not in agent._system
         assert "You have low" not in agent._system
-        # Não deve expor polo, mas deve conter frases exatas
+        # Must not expose the pole, but must contain the exact phrases
         assert "Reassure others." in agent._system
         assert "Have a vivid imagination." in agent._system
         assert "Become anxious in new situations." in agent._system
@@ -278,7 +278,7 @@ class TestAgentPromptSeparation:
         from unittest.mock import Mock
         mock_adapter = Mock()
         mock_adapter.model = "test-model"
-        # Testa cada polo
+        # Test each pole
         p_pos = Big5Persona(agreeableness="positive")
         agent_pos = NegotiationAgent("test", "candidate", SALARY_NEGOTIATION.roles["candidate"], mock_adapter, p_pos, None)
         assert "Reassure others." in agent_pos._system
@@ -298,10 +298,10 @@ class TestAgentPromptSeparation:
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         parse_persona = mod.parse_persona
-        # parse_persona com tactics deve NÃO incluir tactics no persona
+        # parse_persona with tactics must NOT include tactics in the persona
         persona_with_tactics = parse_persona({"persona": {"agreeableness": "positive"}, "tactics": {"anchoring": "present", "value_creation": "present"}})
         assert persona_with_tactics.agreeableness == "positive"
-        # extra_instructions não deve conter tactics
+        # extra_instructions must not contain tactics
         assert "Firmeza" not in (persona_with_tactics.extra_instructions or "")
         assert "Negotiation Tactics" not in (persona_with_tactics.extra_instructions or "")
 
@@ -321,7 +321,7 @@ class TestJudgePromptSeparation:
                 self.last_messages = None
             def complete(self, messages, **kwargs):
                 self.last_messages = messages
-                # Retorna JSON válido para todas as métricas
+                # Return valid JSON for all metrics
                 evals = {mid: {"result": "PRESENT", "evidence": "test"} for mid in ["openness","agreeableness","anchoring","clarity"]}
                 return json.dumps({"evaluations": evals})
 
@@ -339,10 +339,10 @@ class TestJudgePromptSeparation:
         )
         assert judge.last_messages is not None
         prompt_text = judge.last_messages[1]["content"]
-        # Judge deve conter rubricas das métricas
+        # Judge must contain the metric rubrics
         assert "anchoring" in prompt_text.lower()
         assert "clarity" in prompt_text.lower()
         assert "agreeableness" in prompt_text.lower() or "Agreeableness" in prompt_text
-        # Judge deve conter âncoras present/absent
+        # Judge must contain present/absent anchors
         assert "PRESENT" in prompt_text
         assert "ABSENT" in prompt_text

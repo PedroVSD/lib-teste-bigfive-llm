@@ -2,14 +2,14 @@
 persona/tactics_builder.py
 ==========================
 
-Transforma métricas de negociação configuradas no YAML em instruções
-para o system prompt. Categórico: PRESENT / ABSENT / NOT_APPLICABLE (ou enabled/disabled).
+Turns negotiation metrics configured in the YAML into instructions
+for the system prompt. Categorical: PRESENT / ABSENT / NOT_APPLICABLE (or enabled/disabled).
 
-  PRESENT (enabled, true, present)  -> injeta âncora "present" (comportamento ativo)
-  ABSENT (disabled, false, absent)  -> não injeta (métrica desativada)
-  NOT_APPLICABLE / none             -> não injeta
+  PRESENT (enabled, true, present)  -> injects the "present" anchor (active behavior)
+  ABSENT (disabled, false, absent)  -> does not inject (disabled metric)
+  NOT_APPLICABLE / none             -> does not inject
 
-Legado 1-5 ainda aceito com aviso: 1-2 -> ABSENT (não injeta), 4-5 -> PRESENT.
+Legacy 1-5 still accepted with warning: 1-2 -> ABSENT (does not inject), 4-5 -> PRESENT.
 """
 
 from ..scoring.negotiation_metrics import (
@@ -63,7 +63,7 @@ class TacticsPromptBuilder:
             present = _is_present(raw_val)
             if present is not None:
                 if not present:
-                    continue  # absent/disabled = não injeta
+                    continue  # absent/disabled = do not inject
                 anchor_key = "present"
             else:
                 try:

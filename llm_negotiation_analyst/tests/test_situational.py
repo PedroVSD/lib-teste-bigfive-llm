@@ -48,7 +48,7 @@ class TestSituationalContext:
         ctx = SituationalContext(inflation=InflationLevel.HIGH)
         disabled = ctx.disable()
         assert disabled.enabled is False
-        assert ctx.enabled is True  # original não muda
+        assert ctx.enabled is True  # original unchanged
         assert disabled.inflation == InflationLevel.HIGH
 
     def test_disabled_classmethod(self):
@@ -103,7 +103,7 @@ class TestContextPromptBuilder:
         self.builder = ContextPromptBuilder()
 
     def test_contexto_inativo_retorna_vazio(self):
-        ctx = SituationalContext()  # sem condições
+        ctx = SituationalContext()  # no conditions
         assert self.builder.build(ctx) == ""
 
     def test_contexto_disabled_retorna_vazio(self):

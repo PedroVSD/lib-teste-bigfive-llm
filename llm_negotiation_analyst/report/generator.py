@@ -1,16 +1,15 @@
 """
-Gerador de Relatórios: Produz relatório Markdown estruturado de simulação.
+Report Generator: Produces a structured Markdown simulation report.
 
-Seções:
-  1. Configuração do Experimento
-  2. Resultado da Negociação (Outcomes)
-  3. Métricas Comportamentais (Behavioral Metrics — categorical)
-  4. Comparação Entre Agentes (% occurrence_rate)
-  5. Utilidade Econômica (Utility — contínua 0-1)
-  6. Satisfação Pós-negociação (Satisfaction — ordinal 1-7)
-  7. Transcrição Completa
-  8. Notas de Metodologia
-  9. Dados Brutos
+Sections:
+  1. Experiment Setup
+  3. Behavioral Metrics (categorical)
+  4. Agent Comparison (% occurrence_rate)
+  5. Economic Utility (continuous 0-1)
+  6. Post-negotiation Satisfaction (ordinal 1-7)
+  7. Full Transcript
+  8. Methodology Notes
+  9. Raw Data
 """
 
 from pathlib import Path
@@ -59,7 +58,7 @@ def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
 
 
 def _induced_expected(dim, val) -> Optional[BehavioralResult]:
-    """Converte induzido (positive/negative/enabled/disabled) para PRESENT/ABSENT esperado, respeitando polaridade."""
+    """Convert induced (positive/negative/enabled/disabled) to expected PRESENT/ABSENT, respecting polarity."""
     if val is None:
         return None
     from ..scoring.big5 import Dimension as _D
@@ -67,16 +66,16 @@ def _induced_expected(dim, val) -> Optional[BehavioralResult]:
     if isinstance(val, str):
         v = val.strip().lower()
         if v in ("none", "null", "nil", "disabled", "false", "off", "not_applicable"):
-            # disabled/none = não induzido → sem expectativa; para comparabilidade tratamos como ABSENT esperado? Retorna None para não comparar
+            # disabled/none = not induced → no expectation; return None to skip comparison
             if v in ("disabled",):
                 return BehavioralResult.ABSENT
             return None
         if is_big5:
             if v == "positive":
-                return BehavioralResult.PRESENT  # high pole esperada
+                return BehavioralResult.PRESENT  # high pole expected
             if v == "negative":
-                return BehavioralResult.ABSENT   # low pole esperada → PRESENT ausente
-            # legacy numérico como string
+                return BehavioralResult.ABSENT   # low pole expected → PRESENT absent
+            # legacy numeric as string
             try:
                 num = float(v)
                 # >=3 → positive → PRESENT
@@ -102,10 +101,10 @@ def _induced_expected(dim, val) -> Optional[BehavioralResult]:
 
 
 def _format_occurrence(summary) -> str:
-    """Formata occurrence_rate como 65% (13/20; 5 NA)."""
+    """Format occurrence_rate as 65% (13/20; 5 NA)."""
     if summary is None or summary.occurrence_rate is None:
         if summary and summary.total_applicable == 0:
-            return f"— (0 aplicáveis; {summary.not_applicable} NA)"
+            return f"— (0 applicable; {summary.not_applicable} NA)"
         return "—"
     pct = round(summary.occurrence_rate * 100)
     return f"**{pct}%** ({summary.present}/{summary.total_applicable}; {summary.not_applicable} NA)"
@@ -121,13 +120,13 @@ def _format_occurrence_compact(summary) -> str:
 def _alignment(expected: Optional[BehavioralResult], summary) -> str:
     if expected is None or summary is None or summary.occurrence_rate is None:
         return "—"
-    # expected PRESENT → alinhado se occurrence >= 50%; expected ABSENT → alinhado se <50%
+    # expected PRESENT → aligned when occurrence >= 50%; expected ABSENT → aligned when <50%
     occurred = summary.occurrence_rate >= 0.5
     expected_present = expected == BehavioralResult.PRESENT
     if occurred == expected_present:
-        return "✅ Compatível"
+        return "✅ Compatible"
     else:
-        return "❌ Não compatível"
+        return "❌ Not compatible"
 
 
 def generate_report(
@@ -150,64 +149,71 @@ def generate_report(
 
     # Agreement categorical
     agreement_label = "AGREEMENT" if settled else "NO_AGREEMENT"
+    ended_by = (result.metadata.get("ended_by") if result.metadata else None) or ("agreement" if settled else "turn_limit")
+    max_rounds = result.metadata.get("max_rounds") if result.metadata else None
 
-    # ── CABEÇALHO ─────────────────────────────────────────────────────
-    a("# Relatório de Análise de Negociação")
+    # ── HEADER ─────────────────────────────────────────────────────
+    a("# Negotiation Analysis Report")
     a("")
     if display_name and display_name != experiment_name:
-        a(f"> **Experimento:** {display_name}  ")
+        a(f"> **Experiment:** {display_name}  ")
         if experiment_name:
-            a(f"> **Arquivo:** `{experiment_name}`  ")
+            a(f"> **File:** `{experiment_name}`  ")
     elif experiment_name:
-        a(f"> **Experimento:** `{experiment_name}`  ")
-    a(f"> **Cenário:** {result.scenario_description}  ")
-    a(f"> **ID da Execução:** `{result.run_id}`  ")
-    a(f"> **Gerado em:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}  ")
-    a(f"> **Duração:** {result.duration_seconds:.1f}s | **Turnos:** {result.total_turns}")
-    a(f"> **Acordo:** `{agreement_label}`")
+        a(f"> **Experiment:** `{experiment_name}`  ")
+    a(f"> **Scenario:** {result.scenario_description}  ")
+    a(f"> **Run ID:** `{result.run_id}`  ")
+    a(f"> **Generated at:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}  ")
+    if max_rounds:
+        a(f"> **Duration:** {result.duration_seconds:.1f}s | **Turns:** {result.total_turns} ({max_rounds} rounds)")
+    else:
+        a(f"> **Duration:** {result.duration_seconds:.1f}s | **Turns:** {result.total_turns}")
+    a(f"> **Agreement:** `{agreement_label}`")
+    if ended_by == "turn_limit" and not settled:
+        a(f"> **Ending:** turn limit reached — no agreement (NO_AGREEMENT)")
     a("")
 
-    # ── 1. CONFIGURAÇÃO ────────────────────────────────
-    e(["## 1. Configuração do Experimento (Setup)", ""])
+    # ── 1. SETUP ────────────────────────────────
+    e(["## 1. Experiment Setup", ""])
 
-    e(["### 1.1 Cenário", ""])
-    a(f"**Nome:** `{result.scenario_name}`  ")
-    a(f"**Descrição:** {result.scenario_description}")
+    e(["### 1.1 Scenario", ""])
+    a(f"**Name:** `{result.scenario_name}`  ")
+    a(f"**Description:** {result.scenario_description}")
     a("")
-    a("**Contexto compartilhado enviado a ambos os agentes:**")
+    a("**Shared context sent to both agents:**")
     a("")
     a(f"> {result.scenario_context}")
     a("")
 
-    e(["### 1.2 Agentes", ""])
-    a("| Agente ID | Modelo LLM | Papel no Cenário |")
+    e(["### 1.2 Agents", ""])
+    a("| Agent ID | LLM Model | Scenario Role |")
     a("|-----------|------------|------------------|")
     for agent_id, model_id in result.agents.items():
         role = result.agent_roles.get(agent_id, "—")
         a(f"| `{agent_id}` | `{model_id}` | {role} |")
     a("")
 
-    e(["### 1.3 Personas Induzidas", ""])
+    e(["### 1.3 Induced Personas", ""])
     if personas_meta:
-        a("_Instruções de personalidade injetadas no System Prompt (Comportamento Alvo)._")
+        a("_Personality instructions injected into the System Prompt (Target Behavior)._")
         a("")
         has_any = False
         for role, scores in personas_meta.items():
             if not scores:
                 continue
             has_any = True
-            a(f"**Papel: {role}**")
+            a(f"**Role: {role}**")
             a("")
-            a("| Dimensão | Valor Induzido (Target) | Esperado (categórico) |")
+            a("| Dimension | Induced Value (Target) | Expected (categorical) |")
             a("|-----------|-------------------------|----------------------|")
             for dim_key, score in scores.items():
                 if isinstance(score, str) and score.lower() in ("none", "false", "off"):
                     continue
                 if score is None:
                     continue
-                # disabled tratado como ABSENT esperado mas ainda exibe
+                # disabled treated as expected ABSENT but still shown
                 if isinstance(score, str) and score.lower() == "disabled":
-                    # exibe como DISABLED
+                    # show as DISABLED
                     try:
                         metric = resolve_metric(dim_key)
                         meta = ALL_METRICS_META[metric]
@@ -229,17 +235,17 @@ def generate_report(
                     a(f"| {dim_key} | **{score}** | — |")
             a("")
         if not has_any:
-            a("_Personas configuradas mas todas desativadas (none)._")
+            a("_Personas configured but all disabled (none)._")
             a("")
     else:
-        a("_Nenhuma persona induzida. Modelos agiram com comportamento padrão._")
+        a("_No induced persona. Models acted with default behavior._")
         a("")
 
-    e(["### 1.4 Contexto Situacional (Macro)", ""])
+    e(["### 1.4 Situational Context (Macro)", ""])
     if context_meta and context_meta.get("enabled", True):
         active = {k: v for k, v in context_meta.items() if k != "enabled" and v not in (None, [], {}, "")}
         if active:
-            a("| Condição Externa | Valor Configurado |")
+            a("| External Condition | Configured Value |")
             a("|-------------------|-------------------|")
             for field, val in active.items():
                 if isinstance(val, list):
@@ -247,22 +253,22 @@ def generate_report(
                 a(f"| {field.replace('_', ' ').capitalize()} | {val} |")
             a("")
         else:
-            a("_Nenhuma condição macroeconômica especial ativada._")
+            a("_No special macroeconomic condition activated._")
             a("")
     else:
-        a("_Contexto situacional desativado para esta execução._")
+        a("_Situational context disabled for this run._")
         a("")
 
     a("")
 
     # ── 3. BEHAVIORAL METRICS ──────────────────────────
-    e(["## 3. Behavioral Metrics (Observação Categórica)", ""])
-    a("_Cada métrica por turno é classificada como `PRESENT` / `ABSENT` / `NOT_APPLICABLE` com evidência textual. `NOT_APPLICABLE` não entra no denominador._")
+    e(["## 3. Behavioral Metrics (Categorical Observation)", ""])
+    a("_Each per-turn metric is classified as `PRESENT` / `ABSENT` / `NOT_APPLICABLE` with textual evidence. `NOT_APPLICABLE` does not enter the denominator._")
     a("")
-    a("**Agregação:** `occurrence_rate = PRESENT / (PRESENT + ABSENT)` — percentual de ocorrência nos turnos aplicáveis.")
+    a("**Aggregation:** `occurrence_rate = PRESENT / (PRESENT + ABSENT)` — occurrence percentage over applicable turns.")
     a("")
 
-    # coletar dimensões avaliadas
+    # collect evaluated dimensions
     evaluated_dims = set()
     for profile in profiles.values():
         evaluated_dims.update(profile.summaries.keys())
@@ -286,13 +292,13 @@ def generate_report(
         role = result.agent_roles.get(agent_id, "")
         induced = personas_meta.get(role, {})
 
-        a(f"### Agente: {agent_id} ({role})")
+        a(f"### Agent: {agent_id} ({role})")
         a("")
 
-        a("| Dimensão Avaliada | Induzido | Esperado | Observado (occurrence_rate) | Alinhamento |")
+        a("| Evaluated Dimension | Induced | Expected | Observed (occurrence_rate) | Alignment |")
         a("|-------------------|----------|----------|-------------------------------|-------------|")
 
-        # dimensões a mostrar: todas avaliadas + todas induzidas
+        # dimensions to show: all evaluated + all induced
         induced_metrics = set()
         for k in induced.keys():
             try:
@@ -304,12 +310,12 @@ def generate_report(
         for dim in dims_to_show:
             meta = ALL_METRICS_META[dim]
             ind_val = induced.get(dim.value)
-            # summary pode estar em summaries (novo) ou scores (legado)
+            # summary may live in summaries (new) or scores (legacy)
             summary = profile.summaries.get(dim)
             if summary is None and dim in profile.scores:
                 # legacy: scores[metric] is float occurrence_rate
                 occ = profile.scores.get(dim)
-                # tentar reconstruir counts: não disponível
+                # cannot reconstruct counts: not available
                 summary = None
                 obs_str = f"{round(occ*100)}%" if occ is not None else "—"
                 ind_exp = _induced_expected(dim, ind_val)
@@ -326,28 +332,28 @@ def generate_report(
             a(f"| {meta.name} | {ind_str} | `{exp_str}` | {obs_str} | {status} |")
         a("")
 
-        # Observações por dimensão — legível
-        a("#### Evidências por dimensão (amostras por turno)")
+        # Per-dimension observations — readable
+        a("#### Evidence per dimension (samples per turn)")
         a("")
-        a("_Cada linha abaixo é uma observação categórica de um turno com evidência textual curta. `occurrence_rate` já resumida na tabela acima._")
+        a("_Each line below is one turn's categorical observation with short textual evidence. `occurrence_rate` already summarized in the table above._")
         a("")
         obs_by_dim = {}
         source = profile.observations
         for o in source:
             obs_by_dim.setdefault(o.dimension, []).append(o)
         if not obs_by_dim:
-            a("_Nenhuma observação registrada._")
+            a("_No observations recorded._")
             a("")
         else:
             for dim in sorted(obs_by_dim.keys(), key=_dim_sort_key):
                 meta = ALL_METRICS_META[dim]
                 summary = profile.summaries.get(dim)
                 occ = _format_occurrence(summary) if summary else "—"
-                warn = " _(⚠ baixa observabilidade)_" if meta.observability <= 2 else ""
+                warn = " _(⚠ low observability)_" if meta.observability <= 2 else ""
                 a(f"**{meta.name}** (`{meta.abbreviation}`) — {occ} — *{meta.high_pole} ↔ {meta.low_pole}*{warn}")
                 a("")
-                # Tabela por dimensão — mostra todas as observações aplicáveis, NOT_APPLICABLE colapsado
-                a("| Turno | Resultado | Conf. | Evidence |")
+                # Per-dimension table — shows all applicable observations, NOT_APPLICABLE collapsed
+                a("| Turn | Result | Conf. | Evidence |")
                 a("|-------|-----------|-------|----------|")
                 shown = 0
                 for o in sorted(obs_by_dim[dim], key=lambda x: x.turn_index):
@@ -360,25 +366,25 @@ def generate_report(
                     a(f"| T{o.turn_index} | **{o.result.value}** | {o.confidence:.2f} | {ev} |")
                     shown += 1
                 if shown == 0:
-                    # só NA — mostrar 1 exemplo
+                    # NA only — show 1 example
                     for o in sorted(obs_by_dim[dim], key=lambda x: x.turn_index)[:1]:
                         ev = o.evidence.replace("\n", " ").replace("|", "\\|").strip()
                         a(f"| T{o.turn_index} | **{o.result.value}** | {o.confidence:.2f} | {ev} |")
-                # resumo NA se houver
+                # NA summary when present
                 na_count = sum(1 for o in obs_by_dim[dim] if o.result == BehavioralResult.NOT_APPLICABLE)
                 if na_count:
-                    a(f"| — | *{na_count}× NOT_APPLICABLE* | — | _Turnos sem oportunidade suficiente (ignorados no %)_ |")
+                    a(f"| — | *{na_count}× NOT_APPLICABLE* | — | _Turns without enough opportunity (ignored in %)_ |")
                 a("")
 
-        # ── BFI-44 — logo após a última tabela do agente (Foco em Criação de Valor)
+        # ── BFI-44 — right after each agent's last table
         if bfi_results:
-            # Lookup por agent_id ou role
+            # Lookup by agent_id or role
             bfi = bfi_results.get(agent_id)
             if not bfi:
-                # tenta por role
+                # try by role
                 bfi = bfi_results.get(role)
             if bfi:
-                # bfi pode ser BFIResult ou dict
+                # bfi may be a BFIResult or a dict
                 scores = getattr(bfi, "scores", None)
                 if scores is None and isinstance(bfi, dict):
                     scores = bfi.get("scores") or bfi.get("Scores")
@@ -388,11 +394,10 @@ def generate_report(
                 if scores:
                     a(f"#### BFI-44 — {agent_id} ({role})")
                     a("")
-                    a("_Questionário Big Five Inventory aplicado logo após o condicionamento da persona, antes da negociação. Escala 1=Discordo totalmente — 5=Concordo totalmente. Scores são médias por dimensão (itens reversos invertidos: 6 - resposta)._")
+                    a("_Big Five Inventory questionnaire applied right after persona conditioning, before the negotiation. Scale 1=Strongly disagree — 5=Strongly agree. Scores are per-dimension means (reversed items: 6 - answer)._")
                     a("")
-                    a("| Dimensão BFI | Score (1-5) | Interpretação | Itens |")
+                    a("| BFI Dimension | Score (1-5) | Interpretation | Items |")
                     a("|--------------|-------------|---------------|-------|")
-                    # Map BFI dimensions to Portuguese and interpretation
                     bfi_labels = {
                         "extraversion": "Extraversion",
                         "agreeableness": "Agreeableness",
@@ -408,34 +413,34 @@ def generate_report(
                         else:
                             sc_str = f"{sc:.2f}"
                             if sc >= 3.5:
-                                interp = "Alto"
+                                interp = "High"
                             elif sc <= 2.5:
-                                interp = "Baixo"
+                                interp = "Low"
                             else:
-                                interp = "Médio"
-                        # Itens por dimensão para referência
+                                interp = "Medium"
+                        # Items per dimension for reference
                         from ..scoring.bfi import BFI_SCALES
                         scale = BFI_SCALES.get(dim_key, {})
                         itens = f"F:{','.join(str(x) for x in scale.get('forward', []))} R:{','.join(str(x) for x in scale.get('reverse', []))}"
                         a(f"| {bfi_labels.get(dim_key, dim_key)} | {sc_str} | {interp} | {itens} |")
                     a("")
                     if raw and isinstance(raw, dict):
-                        # Mostra respostas brutas resumidas (1-44)
-                        # Formata como linha compacta
+                        # Show summarized raw answers (1-44)
+                        # Format as a compact line
                         raw_str = ", ".join(f"{k}:{v}" for k, v in sorted(raw.items())[:10])
                         if len(raw) > 10:
-                            raw_str += f" ... (+{len(raw)-10} itens)"
-                        a(f"_Respostas brutas (amostra): {raw_str}_")
+                            raw_str += f" ... (+{len(raw)-10} items)"
+                        a(f"_Raw answers (sample): {raw_str}_")
                         a("")
-                    a(f"_BFI aplicado via `{getattr(bfi, 'model_identifier', agent_id)}` logo após `Big5Persona` e `SituationalContext`, antes de `Turn 0`._")
+                    a(f"_BFI applied via `{getattr(bfi, 'model_identifier', agent_id)}` right after `Big5Persona` and `SituationalContext`, before `Turn 0`._")
                     a("")
 
-    # ── 4. COMPARAÇÃO ENTRE AGENTES ──────────────────────────────────
-    e(["## 4. Comparação Entre Agentes (Behavioral)", ""])
-    a("_Percentual de ocorrência (PRESENT/(PRESENT+ABSENT)) — NOT_APPLICABLE ignorado._")
+    # ── 4. AGENT COMPARISON ──────────────────────────────────
+    e(["## 4. Agent Comparison (Behavioral)", ""])
+    a("_Occurrence percentage (PRESENT/(PRESENT+ABSENT)) — NOT_APPLICABLE ignored._")
     a("")
     agent_ids = list(profiles.keys())
-    a("| Dimensão |" + "".join(f" {aid} |" for aid in agent_ids))
+    a("| Dimension |" + "".join(f" {aid} |" for aid in agent_ids))
     a("|-----------|" + "".join("-----------|" for _ in agent_ids))
     for dim in sorted(list(evaluated_dims), key=_dim_sort_key):
         meta = ALL_METRICS_META[dim]
@@ -452,25 +457,25 @@ def generate_report(
     a("")
 
     # ── 5. UTILITY ────────────────────────────────────────
-    e(["## 5. Utility (Contínua 0–1)", ""])
+    e(["## 5. Utility (Continuous 0–1)", ""])
     if utility_results:
         e(render_utility_section(utility_results))
     else:
-        a("_Nenhum cálculo de utilidade configurado para esta execução._")
+        a("_No utility calculation configured for this run._")
         a("")
 
-    # ── 6. SATISFAÇÃO ───────────────────────────
+    # ── 6. SATISFACTION ───────────────────────────
     e(["## 6. Subjective / Perceptual Evaluation (Ordinal 1–7)", ""])
     if satisfaction_results:
         e(render_satisfaction_section(satisfaction_results))
     else:
-        a("_Nenhuma avaliação subjetiva coletada (IPC 1–7). Subjetividade permanece separada das métricas comportamentais._")
+        a("_No subjective evaluation collected (PSI 1–7). Subjectivity stays separate from behavioral metrics._")
         a("")
 
-    # ── 7. TRANSCRIÇÃO ───────────────────────────────────────
-    e(["## 7. Transcrição Completa da Negociação", ""])
+    # ── 7. TRANSCRIPT ───────────────────────────────────────
+    e(["## 7. Full Negotiation Transcript", ""])
 
-    # Lookup turno → observações daquele turno
+    # Lookup turn → that turn's observations
     score_lookup: dict[tuple, dict] = {}
     for profile in profiles.values():
         source = profile.observations
@@ -480,18 +485,18 @@ def generate_report(
 
     for turn in result.transcript:
         a("---")
-        a(f"**Turno {turn.turn_index} · {turn.role.upper()}**  `({turn.agent_id})`")
+        a(f"**Turn {turn.turn_index} · {turn.role.upper()}**  `({turn.agent_id})`")
         a("")
-        # citação da fala
+        # speech quote
         a(f"> {turn.content}")
         a("")
         dim_obs = score_lookup.get((turn.agent_id, turn.turn_index), {})
-        # separar PRESENT / ABSENT / NA
+        # split PRESENT / ABSENT / NA
         present = {d: o for d, o in dim_obs.items() if o.result == BehavioralResult.PRESENT}
         absent = {d: o for d, o in dim_obs.items() if o.result == BehavioralResult.ABSENT}
         na = {d: o for d, o in dim_obs.items() if o.result == BehavioralResult.NOT_APPLICABLE}
         if present or absent:
-            a("**Observações deste turno** _(PRESENT/ABSENT; NOT_APPLICABLE omitido)_:")
+            a("**This turn's observations** _(PRESENT/ABSENT; NOT_APPLICABLE omitted)_:")
             a("")
             for d, o in sorted(present.items(), key=lambda x: ALL_METRICS_META[x[0]].abbreviation):
                 meta = ALL_METRICS_META[d]
@@ -502,39 +507,39 @@ def generate_report(
                 ev = o.evidence.replace("\n", " ").strip()
                 a(f"- `{meta.abbreviation}` **{meta.name}** — **ABSENT** (conf. {o.confidence:.2f}) — _{ev}_")
             if na:
-                a(f"- _+ {len(na)}× NOT_APPLICABLE (sem oportunidade neste turno, ignorado no %)_")
+                a(f"- _+ {len(na)}× NOT_APPLICABLE (no opportunity on this turn, ignored in %)_")
             a("")
         elif na:
-            a(f"_Todas as {len(na)} métricas NOT_APPLICABLE neste turno (sem oportunidade)_")
+            a(f"_All {len(na)} metrics NOT_APPLICABLE on this turn (no opportunity)_")
             a("")
 
-    # ── 8. NOTAS ───────────────────────────────────────
-    e(["## 8. Notas de Metodologia", ""])
-    a("- **Behavioral Metrics:** LLM-as-judge categórico. Por turno: `PRESENT` (comportamento presente), `ABSENT` (oportunidade havia mas ausente), `NOT_APPLICABLE` (sem oportunidade; ignorado). Cada rótulo inclui `evidence` textual curta baseada apenas no comportamento observável daquele turno.")
-    a("- **Agregação:** `occurrence_rate = PRESENT / (PRESENT + ABSENT)` — percentual nos turnos aplicáveis. `NOT_APPLICABLE` não entra no denominador. Ex: `65% (13/20; 5 NA)` = 13 PRESENT em 20 aplicáveis, 5 NA ignorados.")
-    a("- **Polaridade Big Five:** Induzido `positive` → esperado `PRESENT` (polo alto); `negative` → esperado `ABSENT` (polo alto ausente = polo baixo). Alinhamento: `PRESENT≥50%` compatível com `positive`, `ABSENT≥50%` compatível com `negative`. Para táticas `enabled→PRESENT`, `disabled→ABSENT`.")
-    a("- **Negotiation Outcomes:** `agreement` categórico `AGREEMENT | NO_AGREEMENT` (exige confirmação de ambos os papéis). `final_price`, `surplus`, `reservation_distance` contínuos não são binarizados.")
-    a("- **Utility:** Contínua 0–1 por papel (`(p - p_floor)/(p_target - p_floor)`). Pode ser <0 ou >1. `joint_utility` = soma.")
-    a("- **Subjective/Perceptual:** Escala ordinal `1–7` (IPC: fairness, satisfaction, perception, relationship) — separada das métricas comportamentais.")
-    a("- **Judge independence:** Juiz separado dos agentes negociadores para evitar viés de auto-avaliação.")
-    a("- **IRR:** Quando `second_judge` é usado, `confidence` = taxa de acordo categórico por turno (1.0 acordo, 0.0 desacordo, 0.5 se um NA).")
-    a("- **Reproducibility:** Use `temperature=0` e `seed` para resultados determinísticos.")
+    # ── 8. NOTES ───────────────────────────────────────
+    e(["## 8. Methodology Notes", ""])
+    a("- **Behavioral Metrics:** categorical LLM-as-judge. Per turn: `PRESENT` (behavior present), `ABSENT` (opportunity existed but absent), `NOT_APPLICABLE` (no opportunity; ignored). Each label includes short textual `evidence` based only on that turn's observable behavior.")
+    a("- **Aggregation:** `occurrence_rate = PRESENT / (PRESENT + ABSENT)` — percentage over applicable turns. `NOT_APPLICABLE` does not enter the denominator. E.g., `65% (13/20; 5 NA)` = 13 PRESENT in 20 applicable, 5 NA ignored.")
+    a("- **Big Five polarity:** induced `positive` → expected `PRESENT` (high pole); `negative` → expected `ABSENT` (high pole absent = low pole). Alignment: `PRESENT≥50%` compatible with `positive`, `ABSENT≥50%` compatible with `negative`. For tactics `enabled→PRESENT`, `disabled→ABSENT`.")
+    a("- **Negotiation Outcomes:** categorical `agreement` `AGREEMENT | NO_AGREEMENT` (requires confirmation from both roles). Continuous `final_price` is not binarized.")
+    a("- **Utility:** continuous 0–1 per role (`(p - p_floor)/(p_target - p_floor)`). May be <0 or >1. `joint_utility` is the Nash product (Luce & Raiffa Eq.4).")
+    a("- **Subjective/Perceptual:** ordinal `1–7` scale (PSI: outcome, self, process, relationship) — separate from behavioral metrics.")
+    a("- **Judge independence:** judge separated from negotiating agents to avoid self-evaluation bias.")
+    a("- **IRR:** when `second_judge` is used, `confidence` = per-turn categorical agreement rate (1.0 agree, 0.0 disagree, 0.5 when one is NA).")
+    a("- **Reproducibility:** use `temperature=0` and `seed` for deterministic results.")
     a("")
 
-    # ── 9. DADOS BRUTOS ───────────────────────────────────────
-    e(["## 9. Dados Brutos", ""])
-    a("Os dados detalhados desta execução foram salvos em:")
+    # ── 9. RAW DATA ───────────────────────────────────────
+    e(["## 9. Raw Data", ""])
+    a("This run's detailed data was saved to:")
     if display_name:
         safe_display = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in str(display_name)).strip()
         exp_prefix = f"{safe_display}_{experiment_name}_{result.scenario_name}" if experiment_name else f"{safe_display}_{result.scenario_name}"
     else:
         exp_prefix = f"{experiment_name}_{result.scenario_name}" if experiment_name else result.scenario_name
-    a(f"- Transcrição: `results/transcripts/{exp_prefix}_{result.run_id}.jsonl`")
-    a(f"- Scores: `results/scores/{exp_prefix}_{result.run_id}_scores.jsonl` (summaries + observations categóricos)")
+    a(f"- Transcript: `results/transcripts/{exp_prefix}_{result.run_id}.jsonl`")
+    a(f"- Scores: `results/scores/{exp_prefix}_{result.run_id}_scores.jsonl` (categorical summaries + observations)")
     if display_name and display_name != experiment_name:
-        a(f"- Experimento (display): `{display_name}`")
+        a(f"- Experiment (display): `{display_name}`")
     if experiment_name:
-        a(f"- Experimento (arquivo): `{experiment_name}`")
+        a(f"- Experiment (file): `{experiment_name}`")
     a("")
 
     report_md = "\n".join(lines)

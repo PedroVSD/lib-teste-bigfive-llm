@@ -1,8 +1,8 @@
 """
 BFI — Big Five Inventory (44 items).
 
-Administrado logo após o condicionamento da persona, antes da negociação.
-Cada LLM responde ao questionário como se fosse a persona condicionada.
+Administered right after persona conditioning, before the negotiation.
+Each LLM answers the questionnaire as if it were the conditioned persona.
 
 Escala: 1=Discordo totalmente, 5=Concordo totalmente
 Itens e scoring conforme BFI/BFI.doc, scales.txt, R/SPSS Scoring Syntax.
@@ -27,7 +27,7 @@ from ..context import SituationalContext, ContextPromptBuilder
 
 logger = logging.getLogger(__name__)
 
-# Itens BFI-44 em inglês (padrão) — conforme BFI.doc
+# Standard English BFI-44 items — per BFI.doc
 # Formato: id, texto
 BFI_ITEMS = [
     (1, "Is talkative"),
@@ -76,7 +76,7 @@ BFI_ITEMS = [
     (44, "Is sophisticated in art, music, or literature"),
 ]
 
-# Scoring — forward e reverse por dimensão (SPSS/R)
+# Scoring — forward and reverse per dimension (SPSS/R)
 BFI_SCALES = {
     "extraversion": {"forward": [1, 11, 16, 26, 36], "reverse": [6, 21, 31]},
     "agreeableness": {"forward": [7, 17, 22, 32, 42], "reverse": [2, 12, 27, 37]},
@@ -100,7 +100,7 @@ class BFIResult:
     role: str
     raw_answers: dict[int, int] = field(default_factory=dict)  # item_id -> 1-5
     scores: dict[str, float] = field(default_factory=dict)  # dimension -> mean 1-5
-    # Para relatório
+    # For the report
     model_identifier: str = ""
 
     def to_dict(self) -> dict:
@@ -113,7 +113,7 @@ class BFIResult:
         }
 
 def _score_bfi(raw: dict[int, int]) -> dict[str, float]:
-    """Calcula scores por dimensão: mean de (forward + (6 - reverse))."""
+    """Compute scores per dimension: mean of (forward + (6 - reverse))."""
     scores = {}
     for dim, items in BFI_SCALES.items():
         vals = []
@@ -163,10 +163,10 @@ def run_bfi_for_agent(
     context: Optional[SituationalContext] = None,
 ) -> BFIResult:
     """
-    Questiona um LLM com o BFI-44 logo após condicionamento.
-    O persona (se houver) é injetado no system prompt, assim como contexto se ativo.
+    Quiz an LLM with the BFI-44 right after conditioning.
+    The persona (if any) is injected into the system prompt, as is context when active.
     """
-    # System prompt base = persona + contexto (mesmo de negociação, sem cenário)
+    # Base system prompt = persona + context (same as negotiation, without scenario)
     system_prompt = "You are an AI assistant participating in a personality study."
     if persona is not None:
         system_prompt = _persona_builder.inject(system_prompt, persona)
@@ -198,10 +198,10 @@ def run_bfi_for_agent(
                     raw_answers[iid] = val
             except Exception:
                 continue
-        # Se faltarem itens, tenta fallback: procura números no texto
+        # When items are missing, try fallback: look for numbers in the text
         if len(raw_answers) < 44:
             logger.warning("BFI incomplete for %s: %d/44 answers, raw=%s", agent_id, len(raw_answers), raw[:300])
-            # Preenche faltantes com 3 (neutro) para não quebrar, mas marca
+            # Fill missing items with 3 (neutral) to avoid breaking, but flag it
             for iid in range(1, 45):
                 if iid not in raw_answers:
                     raw_answers[iid] = 3
@@ -219,13 +219,13 @@ def run_bfi_all(
     personas: dict[str, Big5Persona],
     context: Optional[SituationalContext] = None,
 ) -> dict[str, BFIResult]:
-    """Roda BFI para todos os agentes (chamado logo após condicionamento, antes da negociação)."""
+    """Run BFI for all agents (called right after conditioning, before the negotiation)."""
     results = {}
     for role, adapter in agents.items():
         agent_id = f"{role}_{adapter.model.replace(':', '-')}"
         persona = personas.get(role) if personas else None
         res = run_bfi_for_agent(agent_id=agent_id, role=role, adapter=adapter, persona=persona, context=context)
         results[agent_id] = res
-        # Também indexa por role para compat
+        # Also index by role for compat
         results[role] = res
     return results

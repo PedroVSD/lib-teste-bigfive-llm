@@ -6,12 +6,12 @@ References:
   - Barry & Friedman (1998) "Bargainer Characteristics in Distributive
     and Integrative Negotiation"
 
-Design note — após migração categórica (2025):
-  Behavioral metrics (Big Five + negotiation) são avaliadas por turno como
-  PRESENT / ABSENT / NOT_APPLICABLE com evidence curta.
-  Agregação = occurrence_rate = PRESENT / (PRESENT + ABSENT).
-  NOT_APPLICABLE não entra no denominador.
-  Utility (0-1) e Satisfaction (1-7) permanecem contínuas/ordinais e separadas.
+Design note — after the categorical migration (2025):
+  Behavioral metrics (Big Five + negotiation) are evaluated per turn as
+  PRESENT / ABSENT / NOT_APPLICABLE with short evidence.
+  Aggregation = occurrence_rate = PRESENT / (PRESENT + ABSENT).
+  NOT_APPLICABLE does not enter the denominator.
+  Utility (0-1) and Satisfaction (1-7) stay continuous/ordinal and separate.
 """
 
 from dataclasses import dataclass, field

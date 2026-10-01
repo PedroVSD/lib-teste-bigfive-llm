@@ -6,8 +6,8 @@ from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
 
 class OpenAIAdapter(LLMAdapter):
     """
-    Adapter para integrar os modelos da OpenAI (GPT-4o, GPT-4-turbo, GPT-3.5)
-    à simulação de negociação.
+    Adapter to integrate OpenAI models (GPT-4o, GPT-4-turbo, GPT-3.5)
+    into the negotiation simulation.
     """
 
     def __init__(
@@ -18,15 +18,15 @@ class OpenAIAdapter(LLMAdapter):
     ):
         super().__init__(model, config)
 
-        # Busca a chave nos parâmetros ou nas variáveis de ambiente
+        # Look for the key in params or environment variables
         key = api_key or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise ValueError(
-                "API key da OpenAI não fornecida. "
-                "Passe via parâmetro ou defina a variável de ambiente OPENAI_API_KEY."
+                "OpenAI API key not provided. "
+                "Pass it as a parameter or set the OPENAI_API_KEY environment variable."
             )
 
-        # Instancia o cliente oficial da OpenAI
+        # Instantiate the official OpenAI client
         self.client = openai.OpenAI(api_key=key)
 
     def complete(self, messages: list[dict], **kwargs) -> str:
@@ -41,10 +41,11 @@ class OpenAIAdapter(LLMAdapter):
                 **self.config.extra
             )
             tempo = time.perf_counter() - inicio
-            print(f"[{self.model}] OK | {tempo:.2f}s")
+            if not self.config.quiet:
+                print(f"[{self.model}] OK | {tempo:.2f}s")
             return response.choices[0].message.content
         except Exception as e:
-            print(f"[{self.model}] ERRO: {e}")
+            print(f"[{self.model}] ERROR: {e}")
             raise
 
     @property

@@ -8,8 +8,8 @@ from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
 
 class GeminiAdapter(LLMAdapter):
     """
-    Adapter moderno para os modelos Google Gemini usando o novo SDK (google-genai).
-    Inclui sistema de retentativas para contornar limites de taxa (429) e sobrecargas (503).
+    Modern adapter for Google Gemini models using the new SDK (google-genai).
+    Includes a retry system to work around rate limits (429) and overloads (503).
     """
 
     def __init__(
@@ -22,9 +22,9 @@ class GeminiAdapter(LLMAdapter):
 
         key = api_key or os.environ.get("GEMINI_API_KEY")
         if not key:
-            raise ValueError("API key do Gemini não fornecida. Defina GEMINI_API_KEY.")
+            raise ValueError("Gemini API key not provided. Set GEMINI_API_KEY.")
 
-        # O novo SDK usa um client instanciado
+        # The new SDK uses an instantiated client
         self.client = genai.Client(api_key=key)
 
     def complete(self, messages: list[dict], **kwargs) -> str:
@@ -59,7 +59,7 @@ class GeminiAdapter(LLMAdapter):
             contents.append(
                 types.Content(
                     role="user",
-                    parts=[types.Part.from_text(text="Inicie a negociação.")]
+                    parts=[types.Part.from_text(text="Start the negotiation.")]
                 )
             )
 
@@ -68,13 +68,13 @@ class GeminiAdapter(LLMAdapter):
                 types.Content(
                     role="user",
                     parts=[types.Part.from_text(
-                        text="Continue a negociação e faça sua jogada."
+                        text="Continue the negotiation and make your move."
                     )]
                 )
             )
 
         # -------------------------------------------------------------------------
-        # Configuração
+        # Configuration
         # -------------------------------------------------------------------------
         GEMINI_PARAMS_VALIDOS = {
             "top_p",
@@ -104,7 +104,7 @@ class GeminiAdapter(LLMAdapter):
         generation_config = types.GenerateContentConfig(**config_args)
 
         # -------------------------------------------------------------------------
-        # Requisição
+        # Request
         # -------------------------------------------------------------------------
         max_attempts = 4
 
@@ -121,7 +121,8 @@ class GeminiAdapter(LLMAdapter):
                 )
 
                 tempo = time.perf_counter() - inicio
-                print(f"[{self.model}] OK | {tempo:.2f}s")
+                if not self.config.quiet:
+                    print(f"[{self.model}] OK | {tempo:.2f}s")
                 # response.text pode ser None em caso de bloqueio/safety filter
                 text = getattr(response, "text", None)
                 if text is None:
@@ -144,22 +145,22 @@ class GeminiAdapter(LLMAdapter):
                     print(f"[{self.model}] 429 Rate Limit ({tempo:.2f}s)")
                     if attempt < max_attempts - 1:
                         wait = 40 * (attempt + 1)
-                        print(f"[{self.model}] Retry {attempt+1}/{max_attempts} em {wait}s")
+                        print(f"[{self.model}] Retry {attempt+1}/{max_attempts} in {wait}s")
                         time.sleep(wait)
                         continue
                 if "503" in error or "500" in error or "INTERNAL" in error:
-                    print(f"[{self.model}] 500/503 Erro interno/indisponível ({tempo:.2f}s)")
+                    print(f"[{self.model}] 500/503 Internal error/unavailable ({tempo:.2f}s)")
                     if attempt < max_attempts - 1:
                         wait = 40 * (attempt + 1)
-                        print(f"[{self.model}] Retry {attempt+1}/{max_attempts} em {wait}s")
+                        print(f"[{self.model}] Retry {attempt+1}/{max_attempts} in {wait}s")
                         time.sleep(wait)
                         continue
                 if "timeout" in error.lower():
-                    raise RuntimeError(f"O modelo '{self.model}' excedeu o tempo limite.") from e
-                raise RuntimeError(f"Erro Gemini: {error}") from e
+                    raise RuntimeError(f"Model '{self.model}' exceeded the timeout.") from e
+                raise RuntimeError(f"Gemini error: {error}") from e
 
         raise RuntimeError(
-            f"Falha após {max_attempts} tentativas."
+            f"Failed after {max_attempts} attempts."
         )
 
     @property

@@ -60,8 +60,9 @@ class OllamaAdapter(LLMAdapter):
 
             tempo = time.perf_counter() - inicio
 
-            # Log minimalista: status + modelo + latência (engine loga turno/mensagem)
-            print(f"[{self.model}] Status {response.status_code} | {tempo:.2f}s")
+            # Minimal log: status + model + latency (engine logs turn/message)
+            if not self.config.quiet:
+                print(f"[{self.model}] Status {response.status_code} | {tempo:.2f}s")
 
             response.raise_for_status()
 
@@ -70,10 +71,10 @@ class OllamaAdapter(LLMAdapter):
 
         except httpx.ReadTimeout as e:
             tempo = time.perf_counter() - inicio
-            print(f"[{self.model}] TIMEOUT após {tempo:.2f}s (limite {self.config.timeout}s)")
+            print(f"[{self.model}] TIMEOUT after {tempo:.2f}s (limit {self.config.timeout}s)")
             raise RuntimeError(
-                f"O modelo '{self.model}' excedeu o tempo limite "
-                f"de {self.config.timeout}s."
+                f"Model '{self.model}' exceeded the "
+                f"{self.config.timeout}s timeout."
             ) from e
 
         except httpx.HTTPStatusError as e:

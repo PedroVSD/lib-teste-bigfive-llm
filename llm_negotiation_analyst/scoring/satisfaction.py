@@ -1,32 +1,32 @@
 """
 scoring/satisfaction.py
 =======================
-Avalia a satisfação pós-negociação de cada agente usando o
-Índice de Satisfação Pós-negociação (IPC) — adaptado de:
+Evaluates each agent's post-negotiation satisfaction using the
+Post-negotiation Satisfaction Index (PSI) — adapted from:
 
   Barry, B., & Friedman, R. A. (1998). Bargainer Characteristics in
   Distributive and Integrative Negotiation.
   Journal of Personality and Social Psychology, 74(2), 345–359.
 
-Estrutura do IPC
-----------------
-16 perguntas em escala Likert 1–7, organizadas em 4 categorias:
+PSI structure
+-------------
+16 Likert-scale 1–7 questions in 4 categories:
 
   aOutcome     = 1/4 * (a1 + a2 + (7 − a3) + a4)
   aSelf        = 1/4 * ((7 − a5) + a6 + a7 + a8)
   aProcess     = 1/4 * (a9 + a10 + a11 + a12)
   aRelationship= 1/4 * (a13 + a14 + a15 + a16)
 
-  Itens 3 e 5 são invertidos (7 − aX) porque são formulados negativamente:
-    a3: "Sentiu que perdeu/abriu mão nesta negociação?"
-    a5: "Perdeu prestígio (danificou o seu orgulho) na negociação?"
+  Items 3 and 5 are reversed (7 − aX) because they are negatively worded:
+    a3: "Did you feel you gave in or lost in this negotiation?"
+    a5: "Did you lose face (damage your pride) in the negotiation?"
 
-Escala de resposta para cada item:
-  1 = Discordo totalmente / Nada satisfeito
-  7 = Concordo totalmente / Muito satisfeito
+Response scale per item:
+  1 = Strongly disagree / Not at all satisfied
+  7 = Strongly agree / Very satisfied
 
-O LLM-juiz lê o transcript completo e responde as 16 perguntas
-do ponto de vista do agente avaliado.
+The LLM judge reads the full transcript and answers the 16 questions
+from the evaluated agent's perspective.
 """
 
 import json
@@ -42,101 +42,101 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# As 16 perguntas do IPC
+# The 16 PSI questions
 # ---------------------------------------------------------------------------
 
 IPC_QUESTIONS: list[dict] = [
-    # ── Sentimentos Sobre o Resultado (Outcome) ──
+    # ── Feelings About the Outcome ──
     {
         "id": "a1", "category": "outcome", "inverted": False,
         "text": (
-            "Quão satisfeito está com o seu próprio resultado — ou seja, "
-            "até que ponto os termos do acordo (ou a falta de acordo) o beneficiaram?"
+            "How satisfied are you with your own outcome — that is, "
+            "to what extent did the terms of the agreement (or lack thereof) benefit you?"
         ),
     },
     {
         "id": "a2", "category": "outcome", "inverted": False,
         "text": (
-            "Quão satisfeito está com o equilíbrio entre o seu próprio resultado "
-            "e o resultado da sua contraparte?"
+            "How satisfied are you with the balance between your own outcome "
+            "and your counterpart's outcome?"
         ),
     },
     {
-        "id": "a3", "category": "outcome", "inverted": True,   # ← INVERTIDO
-        "text": "Sentiu que abriu mão ou 'perdeu' nesta negociação?",
+        "id": "a3", "category": "outcome", "inverted": True,   # ← REVERSED
+        "text": "Did you feel you gave in or 'lost' in this negotiation?",
     },
     {
         "id": "a4", "category": "outcome", "inverted": False,
         "text": (
-            "Acha que os termos do acordo são consistentes com princípios de "
-            "legitimidade ou critérios objetivos?"
+            "Do you feel the terms of the agreement are consistent with principles of "
+            "legitimacy or objective criteria?"
         ),
     },
 
-    # ── Sentimentos Sobre Si Mesmo (Self) ──
+    # ── Feelings About Yourself (Self) ──
     {
-        "id": "a5", "category": "self", "inverted": True,      # ← INVERTIDO
+        "id": "a5", "category": "self", "inverted": True,      # ← REVERSED
         "text": (
-            "'Perdeu o prestígio' — ou seja, danificou o seu senso de orgulho "
-            "na negociação?"
+            "Did you 'lose face' — that is, damage your sense of pride "
+            "in the negotiation?"
         ),
     },
     {
         "id": "a6", "category": "self", "inverted": False,
-        "text": "Comportou-se de acordo com os seus próprios princípios e valores?",
+        "text": "Did you behave according to your own principles and values?",
     },
     {
         "id": "a7", "category": "self", "inverted": False,
-        "text": "Esta negociação fê-lo sentir-se mais competente como negociador?",
+        "text": "Did this negotiation make you feel more competent as a negotiator?",
     },
     {
         "id": "a8", "category": "self", "inverted": False,
-        "text": "Sente que se comportou apropriadamente nesta negociação?",
+        "text": "Do you feel you behaved appropriately in this negotiation?",
     },
 
-    # ── Sentimentos Sobre o Processo (Process) ──
+    # ── Feelings About the Process ──
     {
         "id": "a9", "category": "process", "inverted": False,
-        "text": "A sua contraparte considerou os seus desejos, opiniões ou necessidades?",
+        "text": "Did your counterpart consider your wishes, opinions, or needs?",
     },
     {
         "id": "a10", "category": "process", "inverted": False,
-        "text": "Sente que a sua contraparte ouviu as suas preocupações?",
+        "text": "Do you feel your counterpart listened to your concerns?",
     },
     {
         "id": "a11", "category": "process", "inverted": False,
-        "text": "Caracterizaria o processo de negociação como justo?",
+        "text": "Would you characterize the negotiation process as fair?",
     },
     {
         "id": "a12", "category": "process", "inverted": False,
-        "text": "Quão satisfeito está com a facilidade (ou dificuldade) de chegar a um acordo?",
+        "text": "How satisfied are you with the ease (or difficulty) of reaching agreement?",
     },
 
-    # ── Sentimentos Sobre o Relacionamento (Relationship) ──
+    # ── Feelings About the Relationship ──
     {
         "id": "a13", "category": "relationship", "inverted": False,
-        "text": "Que tipo de impressão 'geral' a sua contraparte causou em si?",
+        "text": "What kind of 'overall' impression did your counterpart make on you?",
     },
     {
         "id": "a14", "category": "relationship", "inverted": False,
-        "text": "A negociação fê-lo confiar na sua contraparte?",
+        "text": "Did the negotiation make you trust your counterpart?",
     },
     {
         "id": "a15", "category": "relationship", "inverted": False,
-        "text": "Quão satisfeito está com o seu relacionamento com a sua contraparte "
-                "como resultado desta negociação?",
+        "text": "How satisfied are you with your relationship with your counterpart "
+                "as a result of this negotiation?",
     },
     {
         "id": "a16", "category": "relationship", "inverted": False,
-        "text": "A negociação construiu uma boa base para um relacionamento futuro?",
+        "text": "Did the negotiation build a good foundation for a future relationship?",
     },
 ]
 
 CATEGORY_LABELS = {
-    "outcome":      "Sentimentos Sobre o Resultado (Outcome)",
-    "self":         "Sentimentos Sobre Si Mesmo (Self)",
-    "process":      "Sentimentos Sobre o Processo (Process)",
-    "relationship": "Sentimentos Sobre o Relacionamento (Relationship)",
+    "outcome":      "Feelings About the Outcome (Outcome)",
+    "self":         "Feelings About Yourself (Self)",
+    "process":      "Feelings About the Process (Process)",
+    "relationship": "Feelings About the Relationship (Relationship)",
 }
 
 
@@ -146,7 +146,7 @@ CATEGORY_LABELS = {
 
 @dataclass
 class SatisfactionScores:
-    """Scores IPC completos para um agente."""
+    """Complete PSI scores for one agent."""
     agent_id: str
     role: str
     raw_answers: dict[str, int] = field(default_factory=dict)  # a1..a16 → 1..7
@@ -158,7 +158,7 @@ class SatisfactionScores:
 
     @property
     def overall(self) -> Optional[float]:
-        """Média das 4 sub-escalas."""
+        """Mean of the 4 subscales."""
         scores = [s for s in [self.a_outcome, self.a_self, self.a_process, self.a_relationship]
                   if s is not None]
         return round(sum(scores) / len(scores), 3) if scores else None
@@ -177,7 +177,7 @@ class SatisfactionScores:
 
 
 # ---------------------------------------------------------------------------
-# Prompt do juiz
+# Judge prompt
 # ---------------------------------------------------------------------------
 
 _SAT_SYSTEM = """You are an expert in negotiation psychology tasked with evaluating \
@@ -218,19 +218,19 @@ Answer the 16 questions from {role}'s perspective. Return JSON only."""
 
 
 # ---------------------------------------------------------------------------
-# Avaliador de satisfação
+# Satisfaction evaluator
 # ---------------------------------------------------------------------------
 
 class SatisfactionEvaluator:
     """
-    Avalia a satisfação pós-negociação de cada agente usando o IPC.
+    Evaluates each agent's post-negotiation satisfaction using the PSI.
 
-    O juiz LLM lê o transcript completo e responde às 16 perguntas
-    do ponto de vista de cada agente. As fórmulas são aplicadas
-    matematicamente sobre as respostas.
+    The LLM judge reads the full transcript and answers the 16 questions
+    from each agent's perspective. Formulas are applied
+    mathematically over the answers.
 
     Args:
-        judge: LLMAdapter usado como avaliador.
+        judge: LLMAdapter used as evaluator.
     """
 
     def __init__(self, judge: LLMAdapter):
@@ -241,7 +241,7 @@ class SatisfactionEvaluator:
         result: NegotiationResult,
     ) -> dict[str, SatisfactionScores]:
         """
-        Avalia satisfação para todos os agentes do resultado.
+        Evaluate satisfaction for all agents in the result.
 
         Returns:
             Dict agent_id → SatisfactionScores
@@ -261,7 +261,7 @@ class SatisfactionEvaluator:
         return all_scores
 
     # ------------------------------------------------------------------
-    # Avaliação de um agente
+    # Single-agent evaluation
     # ------------------------------------------------------------------
 
     def _evaluate_agent(
@@ -311,12 +311,12 @@ class SatisfactionEvaluator:
             return SatisfactionScores(agent_id=agent_id, role=role, judge_raw=str(e))
 
     # ------------------------------------------------------------------
-    # Fórmulas IPC
+    # PSI formulas
     # ------------------------------------------------------------------
 
     @staticmethod
     def _calculate(agent_id: str, role: str, answers: dict[str, int]) -> SatisfactionScores:
-        """Aplica as fórmulas IPC sobre as respostas brutas."""
+        """Apply the PSI formulas over the raw answers."""
 
         def get(qid: str, inverted: bool) -> float:
             val = answers.get(qid, 4)
@@ -365,7 +365,7 @@ class SatisfactionEvaluator:
         )
 
     # ------------------------------------------------------------------
-    # Helpers de formatação
+    # Formatting helpers
     # ------------------------------------------------------------------
 
     @staticmethod

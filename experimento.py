@@ -27,21 +27,21 @@ load_dotenv()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Funções auxiliares
+# Helper functions
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_config(filepath: str):
     with open(filepath, "r", encoding="utf-8") as file:
         data = yaml.safe_load(file)
-    # Nome do experimento = nome do arquivo YAML (sem extensão)
-    # Ex: `estagflacao.yaml` → experiment.name = "estagflacao" (sempre sobrescreve o YAML)
-    # display_name/title com espaços (ex: "teste com X variável") é preservado em display_name/yaml_name
+    # Experiment name = YAML filename (without extension)
+    # E.g., `estagflacao.yaml` → experiment.name = "estagflacao" (always overrides the YAML)
+    # display_name/title with spaces (e.g., "test with X variable") is preserved in display_name/yaml_name
     try:
         from pathlib import Path
         file_stem = Path(filepath).stem
         exp = data.get("experiment") or {}
         yaml_name = exp.get("name")
-        # title/display_name/label explícito tem prioridade como nome humano
+        # explicit title/display_name/label takes priority as the human name
         display_raw = exp.get("title") or exp.get("display_name") or exp.get("label") or yaml_name
         exp["name"] = file_stem
         if display_raw and str(display_raw).strip() and str(display_raw).strip() != file_stem:
@@ -86,7 +86,7 @@ def create_adapter(config_dict: dict):
             title=config_dict.get("title"),
             config=config_obj,
         )
-    raise ValueError(f"Provedor desconhecido: {provider}. Opções: gemini, openai, lmstudio, ollama, ollama_local, deepseek, openrouter")
+    raise ValueError(f"Unknown provider: {provider}. Options: gemini, openai, lmstudio, ollama, ollama_local, deepseek, openrouter")
 
 
 def parse_persona(agent_config: dict) -> Big5Persona | None:
@@ -96,22 +96,22 @@ def parse_persona(agent_config: dict) -> Big5Persona | None:
         return None
 
     chaves_big5 = {"openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"}
-    # 'none'/'null'/'nil' (string) também desativa; None já filtra mas deixamos
-    # passar para que Big5Persona normalize para None (trait omitido)
+    # 'none'/'null'/'nil' (string) also disables; None already filters but we still
+    # pass it through so Big5Persona normalizes it to None (omitted trait)
     filtered_persona = {}
     for k, v in persona_dict.items():
         if k not in chaves_big5:
             continue
-        # mantém 'none' como string para normalização -> None; None real já é desativado
+        # keep 'none' as a string for normalization -> None; real None is already disabled
         filtered_persona[k] = v
 
     instrucoes_originais = persona_dict.get("extra_instructions", "")
-    # Táticas NÃO são injetadas no Agent Prompt — são apenas observacionais (Judge).
-    # Não mesclar tactics em extra_instructions.
+    # Tactics are NOT injected into the Agent Prompt — they are observational only (Judge).
+    # Do not merge tactics into extra_instructions.
     if instrucoes_originais:
         filtered_persona["extra_instructions"] = instrucoes_originais
 
-    # Se só tinha extra_instructions vazia e nenhum Big Five, retorna None
+    # When there were only empty extra_instructions and no Big Five, return None
     if not filtered_persona:
         return None
 
@@ -122,7 +122,7 @@ def parse_context(context_dict: dict) -> SituationalContext:
     if not context_dict or not context_dict.get("enabled", True):
         return SituationalContext.disabled()
 
-    # Suporte a `preset:` — carrega um dos 10 contextos prontos e permite sobrescrever campos
+    # `preset:` support — loads one of the 10 ready contexts and allows field overrides
     from llm_negotiation_analyst.context import ContextPresets
     import unicodedata
     def _norm(s: str) -> str:
@@ -154,9 +154,9 @@ def parse_context(context_dict: dict) -> SituationalContext:
         key = _norm(preset_name)
         factory = _PRESET_MAP.get(key)
         if not factory:
-            raise ValueError(f"Preset de contexto desconhecido: '{preset_name}'. Opções: {list(_PRESET_MAP.keys())}")
+            raise ValueError(f"Unknown context preset: '{preset_name}'. Options: {list(_PRESET_MAP.keys())}")
         base = factory()
-        # Sobrescreve com campos manuais se fornecidos
+        # Override with manual fields when provided
         if context_dict.get("inflation"):
             base.inflation = getattr(InflationLevel, context_dict["inflation"])
         if context_dict.get("interest_rates"):
@@ -171,7 +171,7 @@ def parse_context(context_dict: dict) -> SituationalContext:
             base.unemployment = context_dict.get("unemployment")
         if context_dict.get("custom_conditions") is not None:
             extra = [c for c in context_dict.get("custom_conditions") or [] if c]
-            # Se preset já tem custom_conditions, anexa
+            # When the preset already has custom_conditions, append
             base.custom_conditions = list(base.custom_conditions) + extra
         return base
 
@@ -189,9 +189,9 @@ def parse_context(context_dict: dict) -> SituationalContext:
 
 def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: list[str],) -> dict[str, RoleUtilityParams]:
     """
-    Lê bloco 'utility' (legado top-level ou novo dentro do agente).
+    Read the 'utility' block (legacy top-level or new inside the agent).
 
-    Novo formato (preferido, dentro do agente, após tactics):
+    New format (preferred, inside the agent, after tactics):
         models:
           agent_1:
             utility:
@@ -202,7 +202,7 @@ def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: l
               p_target: 14000
               p_floor: 16500
 
-    Legado ainda suportado:
+    Legacy still supported:
         utility:
           agent_1: {p_target, p_floor, role_type?, currency?, unit?}
     """
@@ -214,10 +214,10 @@ def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: l
     params = {}
     for key, cfg in utility_cfg.items():
         role = agent_to_role.get(key, key)
-        # role_type opcional, inferido se ausente; currency/unit removidos do yaml (legado)
+        # role_type optional, inferred when missing; currency/unit removed from yaml (legacy)
         rt = cfg.get("role_type")
         if not rt:
-            # inferência simples: ambos os cálculos são simétricos, default seller
+            # simple inference: both calculations are symmetric, default seller
             try:
                 rt = "seller" if float(cfg["p_target"]) > float(cfg["p_floor"]) else "buyer"
             except Exception:
@@ -234,7 +234,7 @@ def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: l
 
 
 def parse_utility_from_agents(models_cfg: dict, chaves_agentes: list[str], papeis: list[str]) -> dict[str, RoleUtilityParams]:
-    """Novo: lê utility dentro de models.agent_x.utility (após tactics)."""
+    """New: read utility inside models.agent_x.utility (after tactics)."""
     agent_to_role = {chave: role for chave, role in zip(chaves_agentes, papeis)}
     params = {}
     for chave in chaves_agentes:
@@ -268,34 +268,36 @@ if __name__ == "__main__":
     config_path = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
     config = load_config(config_path)
     exp    = config["experiment"]
-    print(f"Iniciando experimento: {exp['name']}...")
+    print(f"Starting experiment: {exp['name']}...")
 
-    # Cenário
+    # Scenario
     scenario_name = exp["scenario"]
     if scenario_name not in SCENARIO_REGISTRY:
-        raise ValueError(f"Cenário '{scenario_name}' não encontrado!")
+        raise ValueError(f"Scenario '{scenario_name}' not found!")
     scenario = SCENARIO_REGISTRY[scenario_name]
 
     if "max_turns" in exp:
         scenario.max_turns = exp["max_turns"]
-        print(f"⚙️  Limite de turnos ajustado para: {scenario.max_turns}")
+        print(f"Turn limit set to: {scenario.max_turns} rounds ({scenario.max_turns * len(scenario.roles)} utterances)")
+    else:
+        print(f"Turn limit: {scenario.max_turns} rounds ({scenario.max_turns * len(scenario.roles)} utterances) — max_turns = rounds (1 utterance per agent)")
 
-    # 1. Juiz(es)
+    # 1. Judge(s)
     ag_judge = create_adapter(config["models"]["judge"])
     second_judge = None
     if "second_judge" in config["models"]:
         second_judge = create_adapter(config["models"]["second_judge"])
-        print(f"⚖️  Segundo juiz ativado: {config['models']['second_judge'].get('name')} ({config['models']['second_judge'].get('provider')}) — IRR será calculado")
+        print(f"Second judge enabled: {config['models']['second_judge'].get('name')} ({config['models']['second_judge'].get('provider')}) — IRR will be computed")
     elif "judge2" in config["models"]:
         second_judge = create_adapter(config["models"]["judge2"])
-        print(f"⚖️  Segundo juiz ativado: {config['models']['judge2'].get('name')}")
+        print(f"Second judge enabled: {config['models']['judge2'].get('name')}")
 
     # 2. Agentes e personas
     papeis_do_cenario    = list(scenario.roles.keys())
     chaves_agentes_yaml  = [k for k in config["models"].keys() if k not in ("judge", "second_judge", "judge2")]
 
     if len(chaves_agentes_yaml) < len(papeis_do_cenario):
-        raise ValueError("Agentes insuficientes no YAML para este cenário!")
+        raise ValueError("Not enough agents in the YAML for this scenario!")
 
     agents_dict  = {}
     personas_dict = {}
@@ -306,25 +308,25 @@ if __name__ == "__main__":
         chave = chaves_agentes_yaml[i]
         agents_dict[role_name]  = create_adapter(config["models"][chave])
         personas_dict[role_name] = parse_persona(config["models"][chave])
-        # Guarda tactics separadamente para relatório (mesmo que persona seja None)
+        # Store tactics separately for the report (even when persona is None)
         raw_tactics = config["models"][chave].get("tactics") or {}
-        # Filtra none/null/nil e normaliza
+        # Filter none/null/nil and normalize
         tactics_dict[role_name] = {k: v for k, v in raw_tactics.items() if v is not None and str(v).lower() not in ("none","null","nil")}
-        print(f"Papel '{role_name.upper()}' → '{chave}'")
+        print(f"Role '{role_name.upper()}' <- '{chave}'")
     print("-" * 40)
 
-    # 3. Contexto macroeconômico
+    # 3. Macroeconomic context
     macro_context = parse_context(config.get("context", {}))
 
-    # 3.1 Utilidade (novo: dentro do agente após tactics) — parse ANTES da simulação
-    # para injetar valores de âncora no prompt quando anchoring ativo.
+    # 3.1 Utility (new: inside the agent after tactics) — parse BEFORE the simulation
+    # to inject anchor values into the prompt when anchoring is active.
     utility_params = parse_utility_from_agents(config.get("models", {}), chaves_agentes_yaml, papeis_do_cenario)
     if not utility_params:
         legacy_cfg = config.get("utility", {})
         if legacy_cfg:
             utility_params = parse_utility_params(legacy_cfg, chaves_agentes_yaml, papeis_do_cenario)
 
-    # 3.2 Anchor hints: só roles com tactics.anchoring ativo recebem p_target/p_floor.
+    # 3.2 Anchor hints: only roles with active tactics.anchoring receive p_target/p_floor.
     def _is_anchor_active(v) -> bool:
         if v is None:
             return False
@@ -348,30 +350,28 @@ if __name__ == "__main__":
         if _is_anchor_active(tact.get("anchoring")) and role_name in utility_params:
             up = utility_params[role_name]
             anchor_hints[role_name] = {"p_target": float(up.p_target), "p_floor": float(up.p_floor)}
-            print(f"⚓ Âncora ATIVA para '{role_name.upper()}': alvo={up.p_target:g}, limite={up.p_floor:g}")
+            print(f"Anchor ACTIVE for '{role_name.upper()}': target={up.p_target:g}, limit={up.p_floor:g}")
         else:
-            print(f"⚓ Âncora inativa para '{role_name.upper()}': negocia livremente (sem valores no prompt)")
+            print(f"Anchor inactive for '{role_name.upper()}': negotiating freely (no values in prompt)")
 
-    # 4. Configuração do avaliador (métricas Big Five + negociação)
+    # 4. Evaluator configuration (Big Five + negotiation metrics)
     metricas_textos = config["models"]["judge"].get("metrics", [])
     config_juiz = EvaluatorConfig.from_strings(metricas_textos) if metricas_textos else None
 
-    # 4.1 BFI — questionário logo após condicionamento (antes da negociação)
+    # 4.1 BFI — questionnaire right after conditioning (before the negotiation)
+    # Per-agent details are saved to *_bfi.json and the report; terminal shows only applying/done.
     bfi_results = None
     try:
         from llm_negotiation_analyst.scoring.bfi import run_bfi_all
-        print("📝 Aplicando BFI-44 aos agentes (após condicionamento, antes da negociação)...")
+        print("Applying BFI-44 to agents...")
         bfi_results = run_bfi_all(agents_dict, personas_dict, macro_context)
-        for rid, res in bfi_results.items():
-            if "_" in rid and res.scores:
-                print(f"  BFI {rid}: " + ", ".join(f"{k}={v:.2f}" for k,v in res.scores.items()))
-        print("✅ BFI concluído.")
+        print("BFI done.")
     except Exception as e:
-        print(f"⚠️ BFI falhou (continuando sem BFI): {e}")
+        print(f"BFI failed (continuing without BFI): {e}")
         import traceback; traceback.print_exc()
         bfi_results = None
 
-    # 5. Simulação principal
+    # 5. Main simulation
     experiment_name = exp.get("name")
     display_name = exp.get("display_name") or exp.get("title") or exp.get("yaml_name")
     result, profiles, _ = run_negotiation(
@@ -390,27 +390,27 @@ if __name__ == "__main__":
         experiment_display_name=display_name,
         anchor_hints=anchor_hints,
     )
-    print("✅ Simulação concluída.")
+    print("Simulation done.")
 
-    # 6. Utilidade econômica (usa utility_params já parseado em 3.1)
+    # 6. Economic utility (uses utility_params already parsed in 3.1)
     utility_results = None
     if utility_params:
-        print("📊 Calculando utilidade econômica...")
+        print("Computing economic utility...")
         utility_calc    = UtilityCalculator(judge=ag_judge, role_params=utility_params)
         utility_results = utility_calc.evaluate(result)
-        print("✅ Utilidade calculada.")
+        print("Utility computed.")
 
-    # 7. Satisfação pós-negociação — IPC (sempre roda)
-    print("📋 Avaliando satisfação (IPC — 16 questões por agente)...")
+    # 7. Post-negotiation satisfaction — PSI (always runs)
+    print("Evaluating satisfaction (PSI — 16 questions per agent)...")
     sat_evaluator        = SatisfactionEvaluator(judge=ag_judge)
     satisfaction_results = sat_evaluator.evaluate_all(result)
-    print("✅ Satisfação avaliada.")
+    print("Satisfaction evaluated.")
 
-    # 8. Salva BFI se houver (para relatório e persistência)
+    # 8. Save BFI when present (for report and persistence)
     if 'bfi_results' in locals() and bfi_results:
         try:
             import json
-            # Filtra apenas agent_id (com '_') e deduplica
+            # Keep only agent_id entries (with '_') and dedupe
             bfi_to_save = {}
             for k, v in bfi_results.items():
                 if "_" in k and k not in bfi_to_save:
@@ -419,7 +419,7 @@ if __name__ == "__main__":
                     except Exception:
                         bfi_to_save[k] = {"scores": getattr(v, "scores", {}), "raw_answers": getattr(v, "raw_answers", {})}
             result.metadata["bfi"] = bfi_to_save
-            # Prefix para salvar BFI (mesmo prefix do relatório)
+            # Prefix for saving BFI (same prefix as the report)
             exp_name_tmp = result.metadata.get("experiment_name") or experiment_name or result.scenario_name
             display_tmp = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
             if display_tmp:
@@ -431,12 +431,12 @@ if __name__ == "__main__":
             pathlib.Path("results").mkdir(parents=True, exist_ok=True)
             with open(bfi_path, "w", encoding="utf-8") as f:
                 json.dump(bfi_to_save, f, ensure_ascii=False, indent=2)
-            print(f"📝 BFI salvo: {bfi_path}")
+            print(f"BFI saved: {bfi_path}")
         except Exception as e:
-            print(f"⚠️ Falha ao salvar BFI: {e}")
+            print(f"BFI save failed: {e}")
             import traceback; traceback.print_exc()
 
-    # 9. Regera o relatório com as novas seções (usa display_name + experiment_name no nome do arquivo)
+    # 9. Regenerate the report with the new sections (uses display_name + experiment_name in the filename)
     exp_name = result.metadata.get("experiment_name") or experiment_name or result.scenario_name
     display = result.metadata.get("experiment_display_name") or result.metadata.get("experiment_title") or result.metadata.get("yaml_name")
     if display:
@@ -445,7 +445,7 @@ if __name__ == "__main__":
     else:
         prefix = f"{exp_name}_{result.scenario_name}" if exp_name else result.scenario_name
     report_path = f"results/{prefix}_{result.run_id}_report.md"
-    # bfi_results pode ser dict agent_id -> BFIResult
+    # bfi_results may be dict agent_id -> BFIResult
     bfi_for_report = locals().get("bfi_results")
     generate_report(
         result=result,
@@ -456,4 +456,8 @@ if __name__ == "__main__":
         bfi_results=bfi_for_report,
     )
 
-    print(f"\n🎉 Experimento concluído! Relatório: {report_path}")
+    ended_by = result.metadata.get("ended_by", "agreement" if result.settled else "turn_limit")
+    if ended_by == "turn_limit" and not result.settled:
+        print(f"\nExperiment done with no agreement (turn limit)! Report: {report_path}")
+    else:
+        print(f"\nExperiment done! Report: {report_path}")

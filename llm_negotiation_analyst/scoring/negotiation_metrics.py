@@ -1,21 +1,21 @@
 """
 negotiation_metrics.py
 ======================
-Métricas de comportamento negocial além do Big Five — categorical.
+Negotiation behavioral metrics beyond the Big Five — categorical.
 
-Cada métrica é avaliada por turno como:
-  PRESENT         — comportamento observável presente no turno
-  ABSENT          — oportunidade havia mas comportamento ausente
-  NOT_APPLICABLE  — turno sem oportunidade suficiente para observar; não entra no denominador
+Each metric is evaluated per turn as:
+  PRESENT         — observable behavior present in the turn
+  ABSENT          — opportunity existed but behavior absent
+  NOT_APPLICABLE  — turn without enough opportunity to observe; excluded from the denominator
 
-Agregação: occurrence_rate = PRESENT / (PRESENT + ABSENT)  → 0–100%
-  NOT_APPLICABLE ignorado.
+Aggregation: occurrence_rate = PRESENT / (PRESENT + ABSENT)  → 0–100%
+  NOT_APPLICABLE ignored.
 
-Organização:
-  TÁTICAS            anchoring, conditional_concession, value_creation
-  EMOCIONAL          rapport, resilience
-  ARGUMENTAÇÃO       fact_justification, clarity
-  VIESES             loss_aversion
+Organization:
+  TACTICS            anchoring, conditional_concession, value_creation
+  EMOTIONAL          rapport, resilience
+  ARGUMENTATION      fact_justification, clarity
+  BIASES             loss_aversion
 """
 
 from enum import Enum
@@ -23,7 +23,7 @@ from .big5 import DimensionMeta
 
 
 class NegotiationMetric(str, Enum):
-    """Métricas de comportamento e tática negocial — categóricas."""
+    """Negotiation behavioral and tactic metrics — categorical."""
 
     ANCHORING              = "anchoring"
     CONDITIONAL_CONCESSION = "conditional_concession"
@@ -38,153 +38,153 @@ class NegotiationMetric(str, Enum):
 NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
 
     NegotiationMetric.ANCHORING: DimensionMeta(
-        name="Firmeza na Oferta Inicial (Anchoring)",
+        name="Initial Offer Firmness (Anchoring)",
         abbreviation="ANC",
-        high_pole="Âncora Forte / Inflexível",
-        low_pole="Cede Rapidamente",
+        high_pole="Strong / Inflexible Anchor",
+        low_pole="Yields Quickly",
         observability=5,
         category="tactics",
         behavioral_anchors={
             "present": (
-                "Faz uma oferta extrema a seu favor (ancoragem forte) "
-                "e defende o valor com argumentos sólidos antes de fazer qualquer concessão."
+                "Makes an extreme offer in their own favor (strong anchoring) "
+                "and defends the value with solid arguments before making any concession."
             ),
             "absent": (
-                "Faz uma oferta inicial fraca, ancorando contra si mesmo, "
-                "ou cede imediatamente seu valor ao primeiro sinal de resistência."
+                "Makes a weak initial offer, anchoring against themselves, "
+                "or immediately yields their value at the first sign of resistance."
             ),
         },
     ),
 
     NegotiationMetric.CONDITIONAL_CONCESSION: DimensionMeta(
-        name="Uso de Concessões Condicionais",
+        name="Use of Conditional Concessions",
         abbreviation="CON",
-        high_pole="Trocas Estritas (Toma-Lá-Dá-Cá)",
-        low_pole="Concessão Unilateral",
+        high_pole="Strict Exchanges (Give-and-Take)",
+        low_pole="Unilateral Concession",
         observability=5,
         category="tactics",
         behavioral_anchors={
             "present": (
-                "Toda concessão é estritamente vinculada a um ganho explícito: "
-                "'Se eu aceitar X, você DEVE me dar Y em troca.'"
+                "Every concession is strictly tied to an explicit gain: "
+                "'If I accept X, you MUST give me Y in return.'"
             ),
             "absent": (
-                "Faz concessões de forma unilateral, reduzindo seu preço ou cedendo "
-                "benefícios sem pedir absolutamente nada em troca."
+                "Makes concessions unilaterally, lowering their price or yielding "
+                "benefits without asking for absolutely anything in return."
             ),
         },
     ),
 
     NegotiationMetric.VALUE_CREATION: DimensionMeta(
-        name="Foco em Criação de Valor (Win-Win)",
+        name="Focus on Value Creation (Win-Win)",
         abbreviation="VAL",
-        high_pole="Integrativo / Criativo",
-        low_pole="Distributivo / Soma-Zero",
+        high_pole="Integrative / Creative",
+        low_pole="Distributive / Zero-Sum",
         observability=3,
         category="tactics",
         behavioral_anchors={
             "present": (
-                "Proativamente adiciona novas variáveis à mesa (bônus, dias de folga, prazos) "
-                "para criar um pacote que beneficie ambos os lados."
+                "Proactively adds new variables to the table (bonuses, time off, deadlines) "
+                "to create a package that benefits both sides."
             ),
             "absent": (
-                "Foca exclusivamente em brigar por uma única métrica (ex: apenas o salário), "
-                "tratando a negociação como um cabo de guerra."
+                "Focuses exclusively on fighting over a single metric (e.g., salary alone), "
+                "treating the negotiation as a tug of war."
             ),
         },
     ),
 
     NegotiationMetric.RAPPORT: DimensionMeta(
-        name="Construção de Rapport (Empatia)",
+        name="Rapport Building (Empathy)",
         abbreviation="RAP",
-        high_pole="Altamente Empático / Parceiro",
-        low_pole="Frio / Transacional",
+        high_pole="Highly Empathic / Partner",
+        low_pole="Cold / Transactional",
         observability=5,
         category="emotional",
         behavioral_anchors={
             "present": (
-                "Valida ativamente as emoções do oponente, usa tom colaborativo "
-                "e foca explicitamente em construir uma parceria de longo prazo."
+                "Actively validates the opponent's emotions, uses a collaborative tone, "
+                "and explicitly focuses on building a long-term partnership."
             ),
             "absent": (
-                "Tom frio, robótico ou puramente transacional. "
-                "Ignora o lado humano e as necessidades do oponente."
+                "Cold, robotic, or purely transactional tone. "
+                "Ignores the human side and the opponent's needs."
             ),
         },
     ),
 
     NegotiationMetric.RESILIENCE: DimensionMeta(
-        name="Resiliência à Pressão",
+        name="Resilience Under Pressure",
         abbreviation="RES",
-        high_pole="Calmo / Inabalável",
-        low_pole="Impulsivo / Amedrontado",
+        high_pole="Calm / Unshakable",
+        low_pole="Impulsive / Fearful",
         observability=3,
         category="emotional",
         behavioral_anchors={
             "present": (
-                "Totalmente inabalável diante de ameaças de cancelamento ou exigências duras. "
-                "Redireciona o foco para os fatos com calma e segurança."
+                "Completely unshakable in the face of cancellation threats or harsh demands. "
+                "Redirects focus to the facts calmly and confidently."
             ),
             "absent": (
-                "Cede instantaneamente a ultimatos, demonstra desespero "
-                "ou reage com agressividade desproporcional quando pressionado."
+                "Instantly yields to ultimatums, shows desperation, "
+                "or reacts with disproportionate aggression when pressured."
             ),
         },
     ),
 
     NegotiationMetric.FACT_JUSTIFICATION: DimensionMeta(
-        name="Justificação Baseada em Fatos",
+        name="Fact-Based Justification",
         abbreviation="JUS",
-        high_pole="Altamente Embasado",
-        low_pole="Argumentos Vazios",
+        high_pole="Highly Grounded",
+        low_pole="Empty Arguments",
         observability=5,
         category="argumentation",
         behavioral_anchors={
             "present": (
-                "Apoia cada oferta em dados sólidos: cenário macroeconômico, inflação, "
-                "média de mercado, métricas de ROI ou benchmarks da indústria."
+                "Supports every offer with solid data: macroeconomic scenario, inflation, "
+                "market averages, ROI metrics, or industry benchmarks."
             ),
             "absent": (
-                "Faz exigências baseadas apenas em desejo pessoal ou necessidades subjetivas, "
-                "sem nenhuma justificativa de mercado ou dado concreto."
+                "Makes demands based only on personal desire or subjective needs, "
+                "with no market justification or concrete data."
             ),
         },
     ),
 
     NegotiationMetric.CLARITY: DimensionMeta(
-        name="Clareza e Estruturação Lógica",
+        name="Clarity and Logical Structure",
         abbreviation="CLA",
-        high_pole="Estruturado / Matemático",
-        low_pole="Confuso / Desorganizado",
+        high_pole="Structured / Mathematical",
+        low_pole="Confusing / Disorganized",
         observability=5,
         category="argumentation",
         behavioral_anchors={
             "present": (
-                "Altamente estruturado. Separa propostas por tópicos, "
-                "resume os valores claramente e apresenta aritmética impecável."
+                "Highly structured. Separates proposals by topic, "
+                "summarizes values clearly, and presents flawless arithmetic."
             ),
             "absent": (
-                "Mistura propostas, apresenta valores matematicamente conflitantes "
-                "ou se expressa de forma vaga e difícil de acompanhar."
+                "Mixes proposals, presents mathematically conflicting values, "
+                "or expresses themselves vaguely and hard to follow."
             ),
         },
     ),
 
     NegotiationMetric.LOSS_AVERSION: DimensionMeta(
-        name="Aversão à Perda",
+        name="Loss Aversion",
         abbreviation="LSS",
-        high_pole="Reativo à Perda",
-        low_pole="Focado no Ganho Final",
+        high_pole="Loss-Reactive",
+        low_pole="Focused on Final Gain",
         observability=1,
         category="cognitive_bias",
         behavioral_anchors={
             "present": (
-                "Luta desesperadamente contra a retirada de qualquer item "
-                "já considerado garantido, mesmo que receba o dobro de valor em outro lugar."
+                "Fights desperately against the removal of any item "
+                "already considered guaranteed, even when offered double value elsewhere."
             ),
             "absent": (
-                "Foca no valor total do pacote de forma racional, não se importando "
-                "se um benefício específico foi retirado desde que compensado em outra área."
+                "Focuses rationally on the package's total value, not minding "
+                "whether a specific benefit was removed as long as it is compensated elsewhere."
             ),
         },
     ),

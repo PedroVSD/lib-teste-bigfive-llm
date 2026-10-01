@@ -1,11 +1,10 @@
 experiment:
   name: experimento_VGA_estagflacao
   scenario: vga_purchase
-  max_turns: 8
+  max_turns: 5
   use_system_reminder: true
 context:
   preset: estagflacao
-
 models:
   agent_1:
     provider: ollama
@@ -28,9 +27,8 @@ models:
       clarity: enabled
       fact_justification: enabled
     utility:
-      p_target: 2300
-      p_floor: 2450
-
+      p_target: 490
+      p_floor: 460
   agent_2:
     provider: gemini
     name: gemma-4-26b-a4b-it
@@ -52,9 +50,8 @@ models:
       clarity: enabled
       fact_justification: enabled
     utility:
-      p_target: 2500
-      p_floor: 2350
-
+      p_target: 470
+      p_floor: 500
   judge:
     provider: ollama
     name: gpt-oss:120b-cloud

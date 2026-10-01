@@ -3,8 +3,8 @@ from .base import LLMAdapter, AdapterConfig
 
 class OllamaLocalAdapter(LLMAdapter):
     """
-    Adapter EXCLUSIVO para rodar o Ollama na sua própria máquina (localhost).
-    Não possui suporte a autenticação e ignora URLs externas por segurança.
+    EXCLUSIVE adapter for running Ollama on your own machine (localhost).
+    No authentication support; ignores external URLs for security.
     """
 
     def __init__(
@@ -13,14 +13,14 @@ class OllamaLocalAdapter(LLMAdapter):
         config: Optional[AdapterConfig] = None,
     ):
         super().__init__(model, config)
-        # Fixado (hardcoded) para a porta padrão do Ollama local
+        # Fixed (hardcoded) to the default local Ollama port
         self.base_url = "http://localhost:11434"
 
         try:
             import httpx
             self._httpx = httpx
         except ImportError:
-            raise ImportError("Instale a biblioteca httpx: pip install httpx")
+            raise ImportError("Install the httpx library: pip install httpx")
 
     def complete(self, messages: list[dict], **kwargs) -> str:
         import time
@@ -41,7 +41,8 @@ class OllamaLocalAdapter(LLMAdapter):
             timeout=self.config.timeout,
         )
         tempo = time.perf_counter() - inicio
-        print(f"[{self.model}] Status {response.status_code} | {tempo:.2f}s")
+        if not self.config.quiet:
+            print(f"[{self.model}] Status {response.status_code} | {tempo:.2f}s")
         response.raise_for_status()
         content = response.json().get("message", {}).get("content")
         return content if content is not None else ""

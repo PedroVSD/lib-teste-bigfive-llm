@@ -30,7 +30,7 @@ class NegotiationScenario:
         opening_role:     Which role speaks first. The opening agent generates
                           the first message freely from its role/persona/context —
                           there is no fixed opening prompt.
-        max_turns:        Maximum number of turns (each agent speaking once = 1 turn pair).
+        max_turns:        Maximum number of rounds (each agent speaking once = 1 round).
         settlement_keywords: Optional list of phrases that signal agreement
                              (used by engine to detect early termination).
         metadata:         Arbitrary dict for extra info (domain, difficulty, etc.)
@@ -48,32 +48,32 @@ class NegotiationScenario:
 
 
 # ---------------------------------------------------------------------------
-# Built-in scenarios — 4 cenários atualizados
+# Built-in scenarios
 # ---------------------------------------------------------------------------
 
-# 1. Negociação salarial
+# 1. Salary negotiation
 SALARY_NEGOTIATION = NegotiationScenario(
     name="salary_negotiation",
-    description="Cenário de negociação entre um profissional de tecnologia experiente e uma empresa após uma oferta de emprego. Avalia âncora salarial, justificativa, concessões, criação de valor e fatores subjetivos.",
+    description="Negotiation scenario between an experienced technology professional and a company after a job offer. Evaluates salary anchoring, justification, concessions, value creation, and subjective factors.",
     shared_context=(
-        "Um engenheiro de software experiente recebeu uma oferta de emprego de uma empresa de tecnologia. "
-        "Ambos possuem interesse em chegar a um acordo, mas nenhum conhece o limite do outro. Além do salário, "
-        "podem ser negociados bônus, trabalho remoto, férias, benefícios e horário de trabalho. "
+        "An experienced software engineer has received a job offer from a technology company. "
+        "Both sides are interested in reaching an agreement, but neither knows the other side's limit. "
+        "Beyond salary, the parties can negotiate bonuses, remote work, vacation, benefits, and working hours. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "candidate": (
-            "Você é um engenheiro de software experiente negociando uma nova oportunidade. Você possui um emprego "
-            "estável e não precisa aceitar qualquer oferta. Você valoriza remuneração, crescimento profissional, "
-            "flexibilidade, reconhecimento e estabilidade. Não revele seu limite mínimo sem necessidade estratégica. "
-            "Negocie de forma assertiva e profissional."
+            "You are an experienced software engineer negotiating a new opportunity. You have a stable job "
+            "and do not need to accept just any offer. You value compensation, professional growth, "
+            "flexibility, recognition, and stability. Do not reveal your minimum threshold without strategic need. "
+            "Negotiate assertively and professionally."
         ),
         "recruiter": (
-            "Você é o responsável pela contratação. Existe alguma flexibilidade no orçamento, mas aumentos precisam "
-            "ser justificados. Você considera remuneração, equidade salarial interna, retenção do funcionário e custo "
-            "de contratar outro profissional. Você possui um limite máximo, mas não deve revelá-lo diretamente. "
-            "Negocie de forma profissional buscando fechar a contratação dentro do possível."
+            "You are the hiring manager. There is some budget flexibility, but raises must be justified. "
+            "You consider compensation, internal pay equity, employee retention, and the cost of hiring someone else. "
+            "You have a maximum limit, but you must not reveal it directly. "
+            "Negotiate professionally seeking to close the hire within what is possible."
         ),
     },
     opening_role="recruiter",
@@ -83,34 +83,34 @@ SALARY_NEGOTIATION = NegotiationScenario(
         "ACORDO_FECHADO",
         "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium", "label_pt": "Negociação salarial",
-              "aspects": "âncora, suscetibilidade, utilidade, valorização subjetiva, concessões condicionais, aversão à perda, criação de valor, rapport"},
+    metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium", "label": "Salary negotiation",
+              "aspects": "anchor, utility, subjective valuation, conditional concessions, loss aversion, value creation, rapport"},
 )
 
-# 2. Aquisição de empresa
+# 2. Company acquisition
 COMPANY_ACQUISITION = NegotiationScenario(
     name="company_acquisition",
-    description="Negociação entre o fundador de uma pequena empresa de tecnologia e uma empresa maior interessada em adquiri-la. Explora âncoras financeiras, informação assimétrica, risco, utilidade e criação de valor via estrutura do acordo.",
+    description="Negotiation between the founder of a small technology company and a larger company interested in acquiring it. Explores financial anchors, asymmetric information, risk, utility, and value creation through deal structure.",
     shared_context=(
-        "O fundador de uma pequena empresa de tecnologia está negociando sua venda com uma empresa maior do mesmo setor. "
-        "A empresa possui propriedade intelectual valiosa e clientes importantes, mas existe incerteza sobre seu crescimento futuro. "
-        "Além do preço, podem ser negociados pagamento inicial, pagamentos condicionados ao desempenho futuro (earn-out), "
-        "permanência do fundador, participação na gestão e direitos sobre a propriedade intelectual. "
+        "The founder of a small technology company is negotiating its sale with a larger company in the same industry. "
+        "The company owns valuable intellectual property and important clients, but there is uncertainty about its future growth. "
+        "Beyond price, the parties can negotiate upfront payment, performance-based payments (earn-out), founder retention, "
+        "management participation, and intellectual property rights. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "seller": (
-            "Você é o fundador da empresa. Você valoriza receber uma boa parte do dinheiro imediatamente e gostaria de manter "
-            "alguma influência sobre o futuro da empresa. Você acredita que o potencial tecnológico é maior do que os resultados "
-            "financeiros atuais demonstram. Você possui um valor mínimo aceitável, mas não deve revelá-lo. Negocie defendendo seu "
-            "valuation mas demonstrando flexibilidade na estrutura do acordo."
+            "You are the company founder. You value receiving a large share of the money immediately and would like to keep "
+            "some influence over the company's future. You believe the technological potential is greater than current financial "
+            "results show. You have a minimum acceptable value, but you must not reveal it. Negotiate defending your valuation "
+            "while showing flexibility on deal structure."
         ),
         "buyer": (
-            "Você representa uma empresa maior interessada na aquisição. Você está preocupado com integração, retenção de clientes "
-            "e desempenho futuro. Possui maior flexibilidade para negociar a estrutura do acordo do que para aumentar o pagamento inicial. "
-            "Pode utilizar bônus de desempenho, earn-outs ou contratos de permanência para compor o valor total. Negocie buscando reduzir "
-            "risco e justificar seu valuation."
+            "You represent a larger company interested in the acquisition. You are concerned about integration, client retention, "
+            "and future performance. You have more flexibility on deal structure than on increasing the upfront payment. "
+            "You can use performance bonuses, earn-outs, or retention contracts to compose the total value. Negotiate seeking to "
+            "reduce risk and justify your valuation."
         ),
     },
     opening_role="seller",
@@ -120,33 +120,33 @@ COMPANY_ACQUISITION = NegotiationScenario(
         "ACORDO_FECHADO",
         "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "M&A", "currency": "BRL", "difficulty": "hard", "label_pt": "Aquisição de empresa",
-              "aspects": "âncora, suscetibilidade, utilidade, criação de valor, concessões condicionais, aversão à perda, risco, informação assimétrica"},
+    metadata={"domain": "M&A", "currency": "BRL", "difficulty": "hard", "label": "Company acquisition",
+              "aspects": "anchor, utility, value creation, conditional concessions, loss aversion, risk, asymmetric information"},
 )
 
-# 3. Contrato com fornecedor
+# 3. Supplier contract
 STRATEGIC_SUPPLIER_CONTRACT = NegotiationScenario(
     name="strategic_supplier_contract",
-    description="Negociação comercial entre empresa industrial e fornecedor estratégico. Cenário com múltiplas variáveis negociáveis para testar criação de valor, concessões condicionais e diferentes funções de utilidade.",
+    description="Commercial negotiation between an industrial company and a strategic supplier. Scenario with multiple negotiable variables to test value creation, conditional concessions, and different utility functions.",
     shared_context=(
-        "Uma empresa industrial precisa negociar um contrato anual com um fornecedor estratégico de matéria-prima. "
-        "O fornecedor propôs inicialmente R$ 1.200 por unidade. O comprador considera que um preço competitivo estaria próximo de "
-        "R$ 950. Entretanto, preço não é o único elemento importante. As partes podem negociar volume mínimo de compra, prazo de pagamento, "
-        "prazo de entrega, qualidade, duração do contrato, garantias e penalidades por atraso. "
+        "An industrial company needs to negotiate an annual contract with a strategic raw-material supplier. "
+        "The supplier initially proposed $240 per unit. The buyer considers that a competitive price would be near "
+        "$190. However, price is not the only important element. The parties can negotiate minimum purchase volume, payment terms, "
+        "delivery times, quality, contract duration, warranties, and late-delivery penalties. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "buyer": (
-            "Você representa o departamento de compras. Seu principal objetivo é reduzir o custo total de aquisição, mas a "
-            "confiabilidade do fornecimento é extremamente importante. Você prefere pagar um pouco mais por um fornecedor confiável "
-            "a correr o risco de interrupções na produção. Existem fornecedores alternativos, mas trocar de fornecedor geraria custos "
-            "operacionais relevantes. Negocie buscando melhor preço sem sacrificar confiabilidade."
+            "You represent the purchasing department. Your main goal is to reduce total acquisition cost, but supply "
+            "reliability is extremely important. You prefer to pay a bit more for a reliable supplier "
+            "than to risk production interruptions. Alternative suppliers exist, but switching would create relevant "
+            "operational costs. Negotiate seeking a better price without sacrificing reliability."
         ),
         "supplier": (
-            "Você representa o fornecedor. Sua proposta inicial é de R$ 1.200 por unidade. Você deseja um contrato de longo prazo e "
-            "demanda previsível. Está disposto a reduzir o preço se receber maior volume mínimo ou pagamentos mais rápidos. Você considera "
-            "penalidades contratuais particularmente arriscadas e prefere evitá-las. Negocie defendendo seu preço mas oferecendo trade-offs."
+            "You represent the supplier. Your initial proposal is $240 per unit. You want a long-term contract and "
+            "predictable demand. You are willing to reduce the price if you receive a larger minimum volume or faster payments. You consider "
+            "contractual penalties particularly risky and prefer to avoid them. Negotiate defending your price while offering trade-offs."
         ),
     },
     opening_role="supplier",
@@ -156,35 +156,35 @@ STRATEGIC_SUPPLIER_CONTRACT = NegotiationScenario(
         "ACORDO_FECHADO",
         "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "Supply Chain", "currency": "BRL", "difficulty": "hard", "label_pt": "Contrato com fornecedor",
-              "aspects": "âncora, suscetibilidade, utilidade, criação de valor, trade-offs, concessões condicionais, aversão à perda, clareza"},
+    metadata={"domain": "Supply Chain", "currency": "BRL", "difficulty": "hard", "label": "Supplier contract",
+              "aspects": "anchor, utility, value creation, trade-offs, conditional concessions, loss aversion, clarity"},
 )
 
-# 4. Disputa de propriedade
+# 4. Property dispute
 PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
     name="property_boundary_dispute",
-    description="Negociação entre dois proprietários vizinhos em disputa sobre limites de terreno. Reduz importância financeira pura e aumenta justiça percebida, emoções, relacionamento e valorização subjetiva.",
+    description="Negotiation between two neighboring property owners disputing land boundaries. Reduces pure financial importance and increases perceived fairness, emotions, relationship, and subjective valuation.",
     shared_context=(
-        "Dois proprietários vizinhos discordam sobre o limite entre suas propriedades. Um deles afirma que um muro recentemente "
-        "construído ocupa aproximadamente 12 metros quadrados de seu terreno. O outro acredita que o muro foi construído corretamente. "
-        "Um processo judicial seria caro e poderia levar meses, portanto ambos possuem interesse em encontrar uma solução privada. As "
-        "alternativas incluem mover o muro, pagar uma compensação financeira, trocar uma pequena área de terreno, dividir os custos "
-        "jurídicos ou estabelecer um acordo permanente de uso da área. "
+        "Two neighboring owners disagree about the boundary between their properties. One of them claims that a recently "
+        "built wall occupies approximately 12 square meters of their land. The other believes the wall was built correctly. "
+        "A lawsuit would be expensive and could take months, so both sides are interested in finding a private solution. "
+        "Alternatives include moving the wall, paying financial compensation, exchanging a small land area, splitting legal "
+        "costs, or establishing a permanent land-use agreement. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "owner_a": (
-            "Você é o Proprietário A. Você acredita que aproximadamente 12 metros quadrados de seu terreno foram ocupados pelo muro "
-            "do vizinho. Sua demanda inicial é de R$ 80.000. Você valoriza fortemente a percepção de justiça e considera que o vizinho "
-            "agiu de maneira desrespeitosa. Entretanto, estaria disposto a aceitar uma compensação menor caso o vizinho reconheça o problema "
-            "e aceite uma solução que considere justa. Negocie buscando justiça e reconhecimento."
+            "You are Owner A. You believe approximately 12 square meters of your land were occupied by your neighbor's wall. "
+            "Your initial demand is $16,000. You strongly value perceived fairness and feel your neighbor acted disrespectfully. However, you would accept "
+            "lower compensation if your neighbor acknowledges the problem and accepts a solution you consider fair. "
+            "Negotiate seeking fairness and recognition."
         ),
         "owner_b": (
-            "Você é o Proprietário B. Você acredita que o muro está corretamente localizado e rejeita a acusação de ter ocupado "
-            "deliberadamente o terreno do vizinho. Você não deseja mover o muro porque isso seria caro e causaria transtornos. Está disposto "
-            "a discutir compensação financeira ou outras alternativas caso elas evitem a reconstrução do muro e reduzam o risco de uma disputa "
-            "judicial prolongada. Negocie buscando evitar custos e litígio."
+            "You are Owner B. You believe the wall is correctly placed and reject the accusation of having deliberately "
+            "occupied your neighbor's land. You do not want to move the wall because that would be expensive and disruptive. You are willing "
+            "to discuss financial compensation or other alternatives if they avoid rebuilding the wall and reduce the risk of a prolonged "
+            "legal dispute. Negotiate seeking to avoid costs and litigation."
         ),
     },
     opening_role="owner_a",
@@ -194,35 +194,35 @@ PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
         "ACORDO_FECHADO",
         "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "Property", "currency": "BRL", "difficulty": "hard", "label_pt": "Disputa de propriedade",
-              "aspects": "âncora, suscetibilidade, utilidade, valorização subjetiva, justiça percebida, aversão à perda, rapport, resiliência"},
+    metadata={"domain": "Property", "currency": "BRL", "difficulty": "hard", "label": "Property dispute",
+              "aspects": "anchor, utility, subjective valuation, perceived fairness, loss aversion, rapport, resilience"},
 )
 
-# 5. Compra de peça de computador — VGA
+# 5. Computer part purchase — GPU
 VGA_PURCHASE = NegotiationScenario(
     name="vga_purchase",
-    description="Negociação de compra de placa de vídeo (VGA) entre vendedor experiente e jovem comprador. Avalia persuasão, pesquisa de preço, ancoragem, concessões e decisão ponderada.",
+    description="Negotiation over a graphics card (GPU) purchase between an experienced seller and a young buyer. Evaluates persuasion, price research, anchoring, concessions, and deliberate decision-making.",
     shared_context=(
-        "Uma loja de informática está negociando a venda de uma placa de vídeo (VGA) muito procurada para jogos e trabalho. "
-        "A loja tem a VGA em estoque pronta entrega, com garantia e possibilidade de parcelamento. "
-        "O comprador precisa da peça para montar seu PC e usá-la no trabalho como desenvolvedor. Ambos querem fechar, "
-        "mas divergem no preço e nas condições. Além do preço, podem ser negociados garantia estendida, parcelamento, "
-        "desconto à vista, kit, frete e prazo de entrega. "
+        "A computer store is negotiating the sale of a highly demanded graphics card (GPU) for gaming and work. "
+        "The store has the GPU in stock ready for delivery, with warranty and installment options. "
+        "The buyer needs the part to build a PC and use it for work as a developer. Both sides want to close, "
+        "but they diverge on price and conditions. Beyond price, the parties can negotiate extended warranty, installments, "
+        "upfront discount, bundles, shipping, and delivery time. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
     ),
     roles={
         "seller": (
-            "Você é o vendedor da loja, com 10 anos de experiência em vendas de hardware. Você conhece profundamente "
-            "o produto e sabe argumentar. Você valoriza fechar a venda com boa margem, mas prefere conceder benefícios "
-            "a baixar muito o preço. Você tem um limite mínimo, mas não deve revelá-lo. Seja persuasivo, profissional "
-            "e empático, mas firme na defesa do valor."
+            "You are the store salesperson, with 10 years of experience selling hardware. You know the product deeply "
+            "and know how to argue. You value closing the sale with a good margin, but you prefer granting benefits "
+            "over lowering the price too much. You have a minimum limit, but you must not reveal it. Be persuasive, professional "
+            "and empathetic, but firm in defending value."
         ),
         "buyer": (
-            "Você é o comprador: um jovem montando seu PC, desenvolvedor júnior recém-contratado. Você sempre pesquisa "
-            "preços e pensa bem antes de decidir. Seu orçamento é limitado e você precisa de custo-benefício e parcelamento. "
-            "Você valoriza preço justo, garantia, procedência e parcelamento. Não revele seu limite máximo sem estratégia. "
-            "Negocie de forma ponderada, pedindo dados, comparando ofertas e propondo trocas condicionais."
+            "You are the buyer: a young person building a PC, a newly hired junior developer. You always research "
+            "prices and think carefully before deciding. Your budget is limited and you need cost-benefit and installments. "
+            "You value fair price, warranty, origin, and installments. Do not reveal your maximum limit without strategy. "
+            "Negotiate prudently, asking for data, comparing offers, and proposing conditional trades."
         ),
     },
     opening_role="seller",
@@ -232,8 +232,8 @@ VGA_PURCHASE = NegotiationScenario(
         "ACORDO_FECHADO",
         "[ACORDO_FECHADO]",
     ],
-    metadata={"domain": "Retail", "currency": "BRL", "difficulty": "medium", "label_pt": "Compra de VGA",
-              "aspects": "âncora, pesquisa de preço, concessões condicionais, criação de valor, persuasão, decisão ponderada"},
+    metadata={"domain": "Retail", "currency": "BRL", "difficulty": "medium", "label": "GPU purchase",
+              "aspects": "anchor, price research, conditional concessions, value creation, persuasion, deliberate decision"},
 )
 
 # Registry for easy lookup

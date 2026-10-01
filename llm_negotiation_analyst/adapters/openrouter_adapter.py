@@ -7,14 +7,14 @@ from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
 
 class OpenRouterAdapter(LLMAdapter):
     """
-    Adapter para OpenRouter (https://openrouter.ai) — API compatível com OpenAI.
+    Adapter for OpenRouter (https://openrouter.ai) — OpenAI-compatible API.
 
-    Suporta todos os modelos do OpenRouter, incluindo os gratuitos :free
-    (ex: meta-llama/llama-3.1-8b-instruct:free, google/gemma-2-9b-it:free,
+    Supports all OpenRouter models, including free :free ones
+    (e.g., meta-llama/llama-3.1-8b-instruct:free, google/gemma-2-9b-it:free,
          mistralai/mistral-7b-instruct:free, qwen/qwen-2-7b-instruct:free).
 
-    Requer OPENROUTER_API_KEY no .env ou via parâmetro. Opcionalmente define
-    HTTP-Referer e X-Title para ranking no OpenRouter.
+    Requires OPENROUTER_API_KEY in .env or as a parameter. Optionally sets
+    HTTP-Referer and X-Title for OpenRouter ranking.
     """
 
     def __init__(
@@ -31,16 +31,16 @@ class OpenRouterAdapter(LLMAdapter):
         key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not key:
             raise ValueError(
-                "API key do OpenRouter não fornecida. "
-                "Passe via parâmetro ou defina OPENROUTER_API_KEY no .env. "
-                "Obtenha em https://openrouter.ai/keys"
+                "OpenRouter API key not provided. "
+                "Pass it as a parameter or set OPENROUTER_API_KEY in .env. "
+                "Get one at https://openrouter.ai/keys"
             )
 
         self.base_url = (base_url or os.environ.get("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1").rstrip("/")
         self.referer = referer or os.environ.get("OPENROUTER_REFERER") or "https://github.com/llm-negotiation-analyst"
         self.title = title or os.environ.get("OPENROUTER_TITLE") or "llm-negotiation-analyst"
 
-        # Cliente OpenAI apontado para OpenRouter
+        # OpenAI client pointed at OpenRouter
         self.client = openai.OpenAI(
             api_key=key,
             base_url=self.base_url,
@@ -62,11 +62,12 @@ class OpenRouterAdapter(LLMAdapter):
                 **self.config.extra,
             )
             tempo = time.perf_counter() - inicio
-            print(f"[{self.model}] OK | {tempo:.2f}s (OpenRouter)")
+            if not self.config.quiet:
+                print(f"[{self.model}] OK | {tempo:.2f}s (OpenRouter)")
             content = response.choices[0].message.content
             return content if content is not None else ""
         except Exception as e:
-            print(f"[{self.model}] ERRO OpenRouter: {e}")
+            print(f"[{self.model}] OpenRouter ERROR: {e}")
             raise
 
     @property

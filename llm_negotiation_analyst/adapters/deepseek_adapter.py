@@ -4,9 +4,9 @@ from .base import LLMAdapter, AdapterConfig
 
 class DeepSeekAdapter(LLMAdapter):
     """
-    Adaptador exclusivo para a API oficial da DeepSeek.
-    Utiliza a biblioteca 'openai' por baixo dos panos, mas aponta
-    exclusivamente para a infraestrutura da DeepSeek.
+    Exclusive adapter for the official DeepSeek API.
+    Uses the 'openai' library under the hood, but points
+    exclusively at DeepSeek infrastructure.
     """
 
     def __init__(
@@ -18,27 +18,27 @@ class DeepSeekAdapter(LLMAdapter):
     ):
         super().__init__(model, config)
 
-        # A URL padrão oficial da DeepSeek
+        # The official default DeepSeek URL
         default_url = "https://api.deepseek.com"
 
-        # Tenta pegar do YAML, senão do .env, senão usa o padrão
+        # Try the YAML, then .env, then the default
         raw_url = base_url or os.environ.get("DEEPSEEK_BASE_URL") or default_url
         self.base_url = raw_url.rstrip("/")
 
-        # Puxa a chave obrigatoriamente
+        # API key is required
         self.api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
 
         if not self.api_key:
             raise ValueError(
-                "Falta a chave da API da DeepSeek! Defina 'DEEPSEEK_API_KEY' no ficheiro .env"
+                "Missing DeepSeek API key! Set 'DEEPSEEK_API_KEY' in the .env file"
             )
 
         try:
             from openai import OpenAI
-            # Instancia o cliente OpenAI mas forçando a URL da DeepSeek
+            # Instantiate the OpenAI client forcing the DeepSeek URL
             self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
         except ImportError:
-            raise ImportError("Por favor instale a biblioteca openai: pip install openai")
+            raise ImportError("Please install the openai library: pip install openai")
 
     def complete(self, messages: list[dict], **kwargs) -> str:
         import time
@@ -51,7 +51,8 @@ class DeepSeekAdapter(LLMAdapter):
             **self.config.extra,
         )
         tempo = time.perf_counter() - inicio
-        print(f"[{self.model}] OK | {tempo:.2f}s")
+        if not self.config.quiet:
+            print(f"[{self.model}] OK | {tempo:.2f}s")
         return response.choices[0].message.content
 
     @property

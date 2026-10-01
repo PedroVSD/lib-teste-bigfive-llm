@@ -2,28 +2,27 @@
 persona/big5_persona.py
 =======================
 
-Define e gera instruções de personalidade Big Five para injeção
-no system prompt de agentes negociadores.
+Defines and generates Big Five personality instructions for injection
+into negotiator agents' system prompts.
 
-A persona utiliza APENAS dois polos comportamentais:
+The persona uses ONLY two behavioral poles:
 
-    positive -> polo positivo (comportamento alto)
-    negative -> polo negativo (comportamento baixo)
-    none     -> desativa o traço (não injeta instrução)
+    positive -> positive pole (high behavior)
+    negative -> negative pole (low behavior)
+    none     -> disables the trait (no instruction injected)
 
-No YAML a configuração é feita com strings:
+In the YAML the configuration uses strings:
 
     persona:
       agreeableness: positive
       neuroticism: negative
-      openness: none          # desativa — trait omitido
+      openness: none          # disables — trait omitted
 
-Valores aceitos: 'positive', 'negative', 'none' (case-insensitive).
-Também aceita null/~ do YAML (vira None). 'none' é equivalente a
-omitir a chave ou deixar em branco.
+Accepted values: 'positive', 'negative', 'none' (case-insensitive).
+Also accepts YAML null/~ (becomes None). 'none' is equivalent to
+omitting the key or leaving it blank.
 
-Não há escala numérica 1-5 para Big Five. As demais métricas
-(tactics) continuam usando 1-5 normalmente.
+There is no 1-5 numeric scale for Big Five.
 """
 
 from __future__ import annotations
@@ -42,11 +41,11 @@ _NONE_VALUES = {"none", "null", "nil", ""}
 
 def _normalize_polarity(value) -> str | None:
     """
-    Converte valor do YAML para 'positive', 'negative' ou None (desativado).
+    Converts a YAML value to 'positive', 'negative' or None (disabled).
 
-    - 'positive'/'negative' -> polo respectivo
-    - 'none'/'null'/'nil'/''/None -> None (traço desativado, não injetado)
-    - int -> erro orientando usar strings
+    - 'positive'/'negative' -> respective pole
+    - 'none'/'null'/'nil'/''/None -> None (trait disabled, not injected)
+    - int -> error directing to use strings
     """
     if value is None:
         return None
@@ -61,7 +60,7 @@ def _normalize_polarity(value) -> str | None:
             f"Big Five polarity must be 'positive', 'negative' or 'none'. Got {value!r}."
         )
 
-    # Suporte legacy numérico removido por requisito — orientar migração
+    # Legacy numeric support removed by requirement — direct migration
     if isinstance(value, int):
         raise ValueError(
             f"Big Five polarity must be 'positive', 'negative' or 'none' (not numeric). "
@@ -204,13 +203,13 @@ class Big5Persona:
     """
     Defines a Big Five personality profile for a negotiation agent.
 
-    Polarity (único formato aceito):
+    Polarity (only accepted format):
 
-        positive -> polo positivo (alto)
-        negative -> polo negativo (baixo)
-        none     -> desativa o traço (trait omitido, sem instrução)
+        positive -> positive pole (high)
+        negative -> negative pole (low)
+        none     -> disables the trait (trait omitted, no instruction)
 
-    Exemplo YAML:
+    YAML example:
 
         persona:
           agreeableness: positive
@@ -218,7 +217,7 @@ class Big5Persona:
           openness: none         # desativa
           extra_instructions: "..."
 
-        # ou omitir a chave / usar null / ~ também desativa
+        # or omit the key / use null / ~ which also disables
     """
 
     openness: Optional[str] = None
@@ -237,7 +236,7 @@ class Big5Persona:
                 continue
 
             normalized = _normalize_polarity(value)
-            # None = desativado (mantém None), senão armazena polo normalizado
+            # None = disabled (keep None), otherwise store normalized pole
             object.__setattr__(self, dim, normalized)
 
     def to_dict(self) -> dict:
@@ -303,7 +302,7 @@ class PersonaPromptBuilder:
         for dim in dims:
             polarity = getattr(persona, dim)  # already normalized
             guidance = _GUIDANCE[dim][polarity]
-            # guidance já contém \n entre frases — emite exatamente como definido
+            # guidance already contains \n between sentences — emit exactly as defined
             lines.append(guidance)
             lines.append("")
 
