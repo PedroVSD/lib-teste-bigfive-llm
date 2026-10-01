@@ -13,7 +13,6 @@ Aggregation: occurrence_rate = PRESENT / (PRESENT + ABSENT)  → 0–100%
 
 Organization:
   TACTICS            anchoring, conditional_concession, value_creation
-  EMOTIONAL          rapport, resilience
   ARGUMENTATION      fact_justification, clarity
   BIASES             loss_aversion
 """
@@ -28,8 +27,6 @@ class NegotiationMetric(str, Enum):
     ANCHORING              = "anchoring"
     CONDITIONAL_CONCESSION = "conditional_concession"
     VALUE_CREATION         = "value_creation"
-    RAPPORT                = "rapport"
-    RESILIENCE             = "resilience"
     FACT_JUSTIFICATION     = "fact_justification"
     CLARITY                = "clarity"
     LOSS_AVERSION          = "loss_aversion"
@@ -90,44 +87,6 @@ NEGOTIATION_META: dict[NegotiationMetric, DimensionMeta] = {
             "absent": (
                 "Focuses exclusively on fighting over a single metric (e.g., salary alone), "
                 "treating the negotiation as a tug of war."
-            ),
-        },
-    ),
-
-    NegotiationMetric.RAPPORT: DimensionMeta(
-        name="Rapport Building (Empathy)",
-        abbreviation="RAP",
-        high_pole="Highly Empathic / Partner",
-        low_pole="Cold / Transactional",
-        observability=5,
-        category="emotional",
-        behavioral_anchors={
-            "present": (
-                "Actively validates the opponent's emotions, uses a collaborative tone, "
-                "and explicitly focuses on building a long-term partnership."
-            ),
-            "absent": (
-                "Cold, robotic, or purely transactional tone. "
-                "Ignores the human side and the opponent's needs."
-            ),
-        },
-    ),
-
-    NegotiationMetric.RESILIENCE: DimensionMeta(
-        name="Resilience Under Pressure",
-        abbreviation="RES",
-        high_pole="Calm / Unshakable",
-        low_pole="Impulsive / Fearful",
-        observability=3,
-        category="emotional",
-        behavioral_anchors={
-            "present": (
-                "Completely unshakable in the face of cancellation threats or harsh demands. "
-                "Redirects focus to the facts calmly and confidently."
-            ),
-            "absent": (
-                "Instantly yields to ultimatums, shows desperation, "
-                "or reacts with disproportionate aggression when pressured."
             ),
         },
     ),
@@ -196,10 +155,6 @@ METRICS_BY_CATEGORY: dict[str, list[NegotiationMetric]] = {
         NegotiationMetric.ANCHORING,
         NegotiationMetric.CONDITIONAL_CONCESSION,
         NegotiationMetric.VALUE_CREATION,
-    ],
-    "emotional": [
-        NegotiationMetric.RAPPORT,
-        NegotiationMetric.RESILIENCE,
     ],
     "argumentation": [
         NegotiationMetric.FACT_JUSTIFICATION,

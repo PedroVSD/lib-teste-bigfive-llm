@@ -111,8 +111,6 @@ models:
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
-      rapport: enabled
-      resilience: enabled
       clarity: enabled
       fact_justification: enabled
 
@@ -139,8 +137,6 @@ models:
       - "openness"
       - "conscientiousness"
       - "anchoring"            # Tactics: anchoring, conditional_concession, value_creation
-      - "rapport"              # Emotional: rapport, resilience
-      - "resilience"
       - "clarity"              # Argumentation: fact_justification, clarity
       - "fact_justification"
       - "loss_aversion"        # Biases: loss_aversion
@@ -178,13 +174,11 @@ Guides in `_GUIDANCE:76`; names in `_DIM_NAMES`. `none`/`null`/`nil`/`~`/omittin
 | `anchoring` | does not inject | Strong anchor | does not inject (no opportunity) |
 | `conditional_concession` | does not inject | Strict exchanges | — |
 | `value_creation` | does not inject | Integrative/creative | — |
-| `rapport` | does not inject | Highly empathetic | — |
-| `resilience` | does not inject | Calm/unshakable | — |
 | `clarity` | does not inject | Structured/mathematical | — |
 | `loss_aversion` | does not inject (immune) | Loss-reactive | — |
 | `fact_justification` | does not inject | Highly grounded | — |
 
-`PRESENT` = behavior observed in the turn; `ABSENT` = opportunity existed but absent; `NOT_APPLICABLE` = turn without enough opportunity (excluded from the denominator) and must carry short `evidence`. Alias `enabled→PRESENT`, `disabled/absent→ABSENT`, `none/not_applicable→ignored`. Legacy `1-5` still works (`1-2→ABSENT`, `4-5→PRESENT`) for compatibility. All 10 `configs/*.yaml` ship the 8 metrics `present`/`enabled` on both agents and `judge.metrics` with the 13 dimensions, and `experimento.py:272` evaluates **utility** (continuous 0-1 `utility`) and **satisfaction** (1-7 PSI) separately.
+`PRESENT` = behavior observed in the turn; `ABSENT` = opportunity existed but absent; `NOT_APPLICABLE` = turn without enough opportunity (excluded from the denominator) and must carry short `evidence`. Alias `enabled→PRESENT`, `disabled/absent→ABSENT`, `none/not_applicable→ignored`. Legacy `1-5` still works (`1-2→ABSENT`, `4-5→PRESENT`) for compatibility. All 10 `configs/*.yaml` ship the 6 metrics `present`/`enabled` on both agents and `judge.metrics` with the 11 dimensions, and `experimento.py:272` evaluates **utility** (continuous 0-1 `utility`) and **satisfaction** (1-7 PSI) separately.
 
 **Batched categorical observation per round (same base):** the same `NEGOTIATION_META` used to induce is used to judge. The judge (`scoring/evaluator.py` `_JUDGE_SYSTEM_ROUND`) receives **per round (2 consecutive turns, one per agent), in 1 call**, only the two complete responses + rubrics for **all** metrics listed in `judge.metrics` — no resent history, no summary. Returns `{"turn_evaluations": [{"turn_index": i, "evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, ...}}, ...]}` (`N` turns = `N/2` calls). Later aggregation: `occurrence_rate = PRESENT / (PRESENT + ABSENT)` over applicable turns (`NOT_APPLICABLE` ignored) → `65% (13/20; 5 NA)`, enabling `persistence_rate/first/last_occurrence` over the `Turn 1:0, Turn 2:N/A...` sequence. Big Five follows Goldberg (`positive→PRESENT`, `negative→ABSENT`); tactics `enabled→PRESENT`. E.g., `Induced PRESENT` vs `Observed 65%` → `✅ Compatible` (`≥50%`), `20%` → `❌` (`report/generator.py:250`).
 

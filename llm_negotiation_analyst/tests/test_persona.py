@@ -193,7 +193,7 @@ class TestTacticsBuilder:
         block = self.builder.build({"anchoring": "present"})
         assert "Firmness" in block or "Anchoring" in block
         # alias enabled still works
-        block2 = self.builder.build({"rapport": "enabled"})
+        block2 = self.builder.build({"clarity": "enabled"})
         assert len(block2) > 0
 
     def test_tactics_enabled_alias(self):
@@ -203,7 +203,7 @@ class TestTacticsBuilder:
     def test_tactics_absent_nao_gera_bloco(self):
         block = self.builder.build({"anchoring": "absent"})
         assert block == ""
-        block2 = self.builder.build({"anchoring": "disabled", "rapport": "absent"})
+        block2 = self.builder.build({"anchoring": "disabled", "clarity": "absent"})
         assert block2 == ""
 
     def test_tactics_not_applicable_nao_gera_bloco(self):

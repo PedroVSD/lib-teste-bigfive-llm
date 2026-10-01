@@ -84,7 +84,7 @@ SALARY_NEGOTIATION = NegotiationScenario(
         "[ACORDO_FECHADO]",
     ],
     metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium", "label": "Salary negotiation",
-              "aspects": "anchor, utility, subjective valuation, conditional concessions, loss aversion, value creation, rapport"},
+              "aspects": "anchor, utility, subjective valuation, conditional concessions, loss aversion, value creation"},
 )
 
 # 2. Company acquisition
@@ -195,7 +195,7 @@ PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
         "[ACORDO_FECHADO]",
     ],
     metadata={"domain": "Property", "currency": "BRL", "difficulty": "hard", "label": "Property dispute",
-              "aspects": "anchor, utility, subjective valuation, perceived fairness, loss aversion, rapport, resilience"},
+              "aspects": "anchor, utility, subjective valuation, perceived fairness, loss aversion"},
 )
 
 # 5. Computer part purchase — GPU

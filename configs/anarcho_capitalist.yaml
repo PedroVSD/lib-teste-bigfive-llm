@@ -22,8 +22,6 @@ models:
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
-      rapport: enabled
-      resilience: enabled
       clarity: enabled
       fact_justification: enabled
     utility:
@@ -45,8 +43,6 @@ models:
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
-      rapport: enabled
-      resilience: enabled
       clarity: enabled
       fact_justification: enabled
     utility:
@@ -66,7 +62,5 @@ models:
     - loss_aversion
     - conditional_concession
     - value_creation
-    - rapport
-    - resilience
     - clarity
     - fact_justification

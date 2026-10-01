@@ -43,7 +43,7 @@ class MockJudge(LLMAdapter):
         self.last_prompt = messages[-1]["content"] if messages else ""
         # Build evaluations for all possible metrics so any subset is covered
         all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
-                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "anchoring","conditional_concession","value_creation",
                    "fact_justification","clarity","loss_aversion"]
         evals = {mid: {"result": self._result, "evidence": f"Mock evidence for {self._result} on {mid}"} for mid in all_ids}
         return json.dumps({"evaluations": evals})
@@ -62,7 +62,7 @@ class SequenceJudge(LLMAdapter):
         self.call_count += 1
         # Return batch with agreeableness varying, others as PRESENT (to not affect that metric's counts)
         all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
-                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "anchoring","conditional_concession","value_creation",
                    "fact_justification","clarity","loss_aversion"]
         evals = {}
         for mid in all_ids:
@@ -85,7 +85,7 @@ class CountingJudge(LLMAdapter):
         self.call_count += 1
         self.prompts.append(messages[-1]["content"])
         all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
-                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "anchoring","conditional_concession","value_creation",
                    "fact_justification","clarity","loss_aversion"]
         evals = {mid: {"result": self.result, "evidence": f"ev {mid}"} for mid in all_ids}
         return json.dumps({"evaluations": evals})
@@ -106,7 +106,7 @@ class RoundJudge(LLMAdapter):
         self.prompts.append(prompt)
         indices = [int(x) for x in re.findall(r"### Turn (\d+)", prompt)] or [0]
         all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
-                   "anchoring","conditional_concession","value_creation","rapport","resilience",
+                   "anchoring","conditional_concession","value_creation",
                    "fact_justification","clarity","loss_aversion"]
         out = []
         for i in indices:
@@ -556,8 +556,8 @@ class TestBatchEvaluator:
         class AllMetricsJudge(LLMAdapter):
             def complete(self, messages, **kwargs):
                 all_ids = ["openness","conscientiousness","extraversion","agreeableness","neuroticism",
-                           "anchoring","conditional_concession","value_creation","rapport","resilience",
-                           "fact_justification","clarity","loss_aversion"]
+                            "anchoring","conditional_concession","value_creation",
+                            "fact_justification","clarity","loss_aversion"]
                 evals = {mid: {"result": "PRESENT", "evidence": f"ev {mid}"} for mid in all_ids}
                 return json.dumps({"evaluations": evals})
         judge = AllMetricsJudge(model="all")

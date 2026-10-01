@@ -43,7 +43,7 @@ class DimensionMeta:
     observability: int   # 1–5, how well it shows in text negotiations
     behavioral_anchors: dict  # {"present": str, "absent": str}
     facets: list[str] = field(default_factory=list)  # NEO-PI-R facets (Big Five only)
-    category: str = "big5"  # "big5" | "tactics" | "emotional" | "cognitive"
+    category: str = "big5"  # "big5" | "tactics" | "argumentation" | "cognitive_bias"
 
 
 @dataclass

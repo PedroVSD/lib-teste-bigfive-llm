@@ -319,8 +319,6 @@ tactics:
   loss_aversion: present
   conditional_concession: present
   value_creation: present
-  rapport: present
-  resilience: present
   clarity: present
   fact_justification: present
 ```
@@ -353,7 +351,7 @@ Para cada rodada, `_observe_round` monta **um único prompt** com todas as métr
 4. Resposta em JSON (lote por rodada)
 * O `_JUDGE_SYSTEM_ROUND` obriga o LLM a responder exclusivamente com JSON em lote, um bloco por turno:
 ```json
-{"turn_evaluations": [{"turn_index": 4, "evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, "rapport": {"result": "ABSENT", "evidence": "..."}}}, {"turn_index": 5, "evaluations": {...}}]}
+{"turn_evaluations": [{"turn_index": 4, "evaluations": {"anchoring": {"result": "PRESENT", "evidence": "..."}, "clarity": {"result": "ABSENT", "evidence": "..."}}}, {"turn_index": 5, "evaluations": {...}}]}
 ```
 * Para cada turno e cada métrica: `result: PRESENT` (reconhecido) `|ABSENT` (não reconhecido) `|NOT_APPLICABLE` (sem oportunidade, mantido), `evidence` só daquele turno. `Evaluate the CURRENT turn response as a single unit, considering the history/context above` — aqui, o "contexto" é o outro turno da rodada.
 
@@ -381,10 +379,10 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 ---
 ##  Métricas
 ---
-### #Há **13 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas.
+### #Há **11 métricas comportamentais categóricas** + **outcomes** + **subjetivas**, todas avaliadas/testadas.
 
 
-#### 1. Behavioral Metrics — Big Five (5) + Negociação (8)
+#### 1. Behavioral Metrics — Big Five (5) + Negociação (6)
 
 | # | Métrica | Código | Categoria | PRESENT ↔ ABSENT (âncora resumida) |
 |---|---|---|---|---|
@@ -396,11 +394,9 @@ IRR = 1.0 if result1==result2 else 0.0  # 0.5 se um for NOT_APPLICABLE
 | 6 | **Firmeza na Oferta Inicial** | `ANC` | tactics | **Anchoring** — âncora forte e defende antes de conceder ↔ cede imediato |
 | 7 | **Concessões Condicionais** | `CON` | tactics | `Se X então Y` estrito ↔ concessão unilateral |
 | 8 | **Criação de Valor** | `VAL` | tactics | Adiciona variáveis (bônus, remoto, PLR) win-win ↔ briga só salário soma-zero |
-| 9 | **Rapport** | `RAP` | emotional | Valida emoções, tom colaborativo, parceria longo prazo ↔ frio/transacional |
-| 10 | **Resiliência à Pressão** | `RES` | emotional | Inabalável, redireciona a fatos ↔ cede a ultimato/desespero |
-| 11 | **Justificação Baseada em Fatos** | `JUS` | argumentation | Dados (PIB, inflação, benchmark, ROI) ↔ desejo subjetivo sem dado |
-| 12 | **Clareza** | `CLA` | argumentation | Estruturado, tópicos, aritmética impecável ↔ confuso, valores conflitantes |
-| 13 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional |
+| 9 | **Justificação Baseada em Fatos** | `JUS` | argumentation | Dados (PIB, inflação, benchmark, ROI) ↔ desejo subjetivo sem dado |
+| 10 | **Clareza** | `CLA` | argumentation | Estruturado, tópicos, aritmética impecável ↔ confuso, valores conflitantes |
+| 11 | **Aversão à Perda** | `LSS` | cognitive_bias | Luta por item já garantido ↔ foca pacote total racional |
 
 ---
 

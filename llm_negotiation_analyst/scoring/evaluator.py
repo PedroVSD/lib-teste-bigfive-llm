@@ -80,7 +80,7 @@ Rules:
   - Respond ONLY with a valid JSON object. No markdown fences, no preamble. Ensure JSON is valid: double quotes around keys/values, no trailing commas, escape any inner double quotes.
 
 Example:
-{"evaluations": {"anchoring": {"result": "PRESENT", "evidence": "proposes R$ 18.000 as initial anchor"}, "rapport": {"result": "ABSENT", "evidence": "no empathetic language"}, "clarity": {"result": "NOT_APPLICABLE", "evidence": ""}}}
+{"evaluations": {"anchoring": {"result": "PRESENT", "evidence": "proposes $18,000 as initial anchor"}, "clarity": {"result": "ABSENT", "evidence": "no clear structure"}, "value_creation": {"result": "NOT_APPLICABLE", "evidence": ""}}}
 
 JSON schema:
 {
@@ -186,7 +186,7 @@ Rules:
   - Respond ONLY with a valid JSON object. No markdown fences, no preamble. Ensure JSON is valid: double quotes around keys/values, no trailing commas.
 
 Example:
-{"turn_evaluations": [{"turn_index": 4, "evaluations": {"anchoring": {"result": "PRESENT", "evidence": "proposes firm initial offer"}, "rapport": {"result": "ABSENT", "evidence": "no empathetic language"}}}, {"turn_index": 5, "evaluations": {"anchoring": {"result": "ABSENT", "evidence": "cedes without defending"}}} ]}
+{"turn_evaluations": [{"turn_index": 4, "evaluations": {"anchoring": {"result": "PRESENT", "evidence": "proposes firm initial offer"}, "clarity": {"result": "ABSENT", "evidence": "no clear structure"}}}, {"turn_index": 5, "evaluations": {"anchoring": {"result": "ABSENT", "evidence": "cedes without defending"}}} ]}
 
 JSON schema:
 {

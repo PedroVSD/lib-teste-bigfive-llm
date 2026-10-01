@@ -32,8 +32,6 @@ models:
       anchoring: 5
       conditional_concession: 2
       value_creation: 4
-      rapport: 5
-      resilience: 4
       clarity: 4
       loss_aversion: 1
       fact_justification: 5
@@ -57,8 +55,6 @@ models:
       anchoring: 2
       conditional_concession: 4
       value_creation: 5
-      rapport: 5
-      resilience: 4
       clarity: 4
       loss_aversion: 2
       fact_justification: 5
@@ -78,8 +74,6 @@ models:
     - anchoring
     - conditional_concession
     - value_creation
-    - rapport
-    - resilience
     - clarity
     - loss_aversion
     - fact_justification
