@@ -42,7 +42,7 @@ class NegotiationScenario:
     opening_role: str
     max_turns: int = 8
     settlement_keywords: list[str] = field(default_factory=lambda: [
-        "we have a deal", "agreed", "aceito", "fechado", "deal", "acordo"
+        "we have a deal", "agreed", "AGREEMENT REACHED", "deal"
     ])
     metadata: dict = field(default_factory=dict)
 
@@ -60,7 +60,7 @@ SALARY_NEGOTIATION = NegotiationScenario(
         "Both sides are interested in reaching an agreement, but neither knows the other side's limit. "
         "Beyond salary, the parties can negotiate bonuses, remote work, vacation, benefits, and working hours. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
-        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
+        "include the exact phrase 'SIMULATION_COMPLETED' at the end of your response."
     ),
     roles={
         "candidate": (
@@ -79,9 +79,9 @@ SALARY_NEGOTIATION = NegotiationScenario(
     opening_role="recruiter",
     max_turns=8,
     settlement_keywords=[
-        "SIMULACAO_CONCLUIDA",
-        "ACORDO_FECHADO",
-        "[ACORDO_FECHADO]",
+        "SIMULATION_COMPLETED",
+        "AGREEMENT_REACHED",
+        "[AGREEMENT_REACHED]",
     ],
     metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium", "label": "Salary negotiation",
               "aspects": "anchor, utility, subjective valuation, conditional concessions, loss aversion, value creation"},
@@ -97,7 +97,7 @@ COMPANY_ACQUISITION = NegotiationScenario(
         "Beyond price, the parties can negotiate upfront payment, performance-based payments (earn-out), founder retention, "
         "management participation, and intellectual property rights. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
-        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
+        "include the exact phrase 'SIMULATION_COMPLETED' at the end of your response."
     ),
     roles={
         "seller": (
@@ -116,9 +116,9 @@ COMPANY_ACQUISITION = NegotiationScenario(
     opening_role="seller",
     max_turns=10,
     settlement_keywords=[
-        "SIMULACAO_CONCLUIDA",
-        "ACORDO_FECHADO",
-        "[ACORDO_FECHADO]",
+        "SIMULATION_COMPLETED",
+        "AGREEMENT_REACHED",
+        "[AGREEMENT_REACHED]",
     ],
     metadata={"domain": "M&A", "currency": "BRL", "difficulty": "hard", "label": "Company acquisition",
               "aspects": "anchor, utility, value creation, conditional concessions, loss aversion, risk, asymmetric information"},
@@ -134,7 +134,7 @@ STRATEGIC_SUPPLIER_CONTRACT = NegotiationScenario(
         "$190. However, price is not the only important element. The parties can negotiate minimum purchase volume, payment terms, "
         "delivery times, quality, contract duration, warranties, and late-delivery penalties. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
-        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
+        "include the exact phrase 'SIMULATION_COMPLETED' at the end of your response."
     ),
     roles={
         "buyer": (
@@ -152,9 +152,9 @@ STRATEGIC_SUPPLIER_CONTRACT = NegotiationScenario(
     opening_role="supplier",
     max_turns=10,
     settlement_keywords=[
-        "SIMULACAO_CONCLUIDA",
-        "ACORDO_FECHADO",
-        "[ACORDO_FECHADO]",
+        "SIMULATION_COMPLETED",
+        "AGREEMENT_REACHED",
+        "[AGREEMENT_REACHED]",
     ],
     metadata={"domain": "Supply Chain", "currency": "BRL", "difficulty": "hard", "label": "Supplier contract",
               "aspects": "anchor, utility, value creation, trade-offs, conditional concessions, loss aversion, clarity"},
@@ -171,7 +171,7 @@ PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
         "Alternatives include moving the wall, paying financial compensation, exchanging a small land area, splitting legal "
         "costs, or establishing a permanent land-use agreement. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
-        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
+        "include the exact phrase 'SIMULATION_COMPLETED' at the end of your response."
     ),
     roles={
         "owner_a": (
@@ -190,9 +190,9 @@ PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
     opening_role="owner_a",
     max_turns=10,
     settlement_keywords=[
-        "SIMULACAO_CONCLUIDA",
-        "ACORDO_FECHADO",
-        "[ACORDO_FECHADO]",
+        "SIMULATION_COMPLETED",
+        "AGREEMENT_REACHED",
+        "[AGREEMENT_REACHED]",
     ],
     metadata={"domain": "Property", "currency": "BRL", "difficulty": "hard", "label": "Property dispute",
               "aspects": "anchor, utility, subjective valuation, perceived fairness, loss aversion"},
@@ -209,7 +209,7 @@ VGA_PURCHASE = NegotiationScenario(
         "but they diverge on price and conditions. Beyond price, the parties can negotiate extended warranty, installments, "
         "upfront discount, bundles, shipping, and delivery time. "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
-        "include the exact phrase 'SIMULACAO_CONCLUIDA' at the end of your response."
+        "include the exact phrase 'SIMULATION_COMPLETED' at the end of your response."
     ),
     roles={
         "seller": (
@@ -228,9 +228,9 @@ VGA_PURCHASE = NegotiationScenario(
     opening_role="seller",
     max_turns=8,
     settlement_keywords=[
-        "SIMULACAO_CONCLUIDA",
-        "ACORDO_FECHADO",
-        "[ACORDO_FECHADO]",
+        "SIMULATION_COMPLETED",
+        "AGREEMENT_REACHED",
+        "[AGREEMENT_REACHED]",
     ],
     metadata={"domain": "Retail", "currency": "BRL", "difficulty": "medium", "label": "GPU purchase",
               "aspects": "anchor, price research, conditional concessions, value creation, persuasion, deliberate decision"},
