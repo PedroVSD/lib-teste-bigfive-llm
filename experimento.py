@@ -315,8 +315,19 @@ if __name__ == "__main__":
         print(f"Role '{role_name.upper()}' <- '{chave}'")
     print("-" * 40)
 
-    # 3. Macroeconomic context
-    macro_context = parse_context(config.get("context", {}))
+    # 3. Macroeconomic context (+ experimental on/off switch with minimal context)
+    context_cfg = config.get("context", {}) or {}
+    macro_context = parse_context(context_cfg)
+    macro_context_enabled = context_cfg.get("macro_context_enabled", True)
+    if isinstance(macro_context_enabled, str):
+        macro_context_enabled = macro_context_enabled.strip().lower() in ("true", "1", "yes", "on")
+    minimal_context = context_cfg.get("minimal_context")
+    if isinstance(minimal_context, str) and not minimal_context.strip():
+        minimal_context = None
+    if macro_context_enabled:
+        print("Macroeconomic context: ENABLED")
+    else:
+        print("Macroeconomic context: DISABLED — agents negotiate on minimal context only")
 
     # 3.1 Utility (new: inside the agent after tactics) — parse BEFORE the simulation
     # to inject anchor values into the prompt when anchoring is active.
@@ -360,11 +371,13 @@ if __name__ == "__main__":
 
     # 4.1 BFI — questionnaire right after conditioning (before the negotiation)
     # Per-agent details are saved to *_bfi.json and the report; terminal shows only applying/done.
+    # With macro disabled, BFI runs without macroeconomic context as well.
     bfi_results = None
     try:
         from llm_negotiation_analyst.scoring.bfi import run_bfi_all
+        from llm_negotiation_analyst.context import SituationalContext as _SC
         print("Applying BFI-44 to agents...")
-        bfi_results = run_bfi_all(agents_dict, personas_dict, macro_context)
+        bfi_results = run_bfi_all(agents_dict, personas_dict, macro_context if macro_context_enabled else _SC.disabled())
         print("BFI done.")
     except Exception as e:
         print(f"BFI failed (continuing without BFI): {e}")
@@ -389,6 +402,8 @@ if __name__ == "__main__":
         experiment_name=experiment_name,
         experiment_display_name=display_name,
         anchor_hints=anchor_hints,
+        macro_context_enabled=macro_context_enabled,
+        minimal_context=minimal_context,
     )
     print("Simulation done.")
 

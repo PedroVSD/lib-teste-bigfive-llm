@@ -242,7 +242,16 @@ def generate_report(
         a("")
 
     e(["### 1.4 Situational Context (Macro)", ""])
-    if context_meta and context_meta.get("enabled", True):
+    macro_off = isinstance(context_meta, dict) and context_meta.get("enabled") is False and "minimal_context" in context_meta
+    if macro_off:
+        a("_Macroeconomic context **disabled** for this run (Condition B — minimal context)._")
+        a("")
+        if context_meta.get("minimal_context"):
+            a("**Minimal context sent to both agents:**")
+            a("")
+            a(f"> {context_meta.get('minimal_context')}")
+            a("")
+    elif context_meta and context_meta.get("enabled", True):
         active = {k: v for k, v in context_meta.items() if k != "enabled" and v not in (None, [], {}, "")}
         if active:
             a("| External Condition | Configured Value |")

@@ -1,0 +1,67 @@
+experiment:
+  name: experimento_VGA_nomacro
+  scenario: vga_purchase
+  max_turns: 5
+  use_system_reminder: true
+context:
+  macro_context_enabled: false
+  minimal_context: "A guy is trying to buy a new VGA for your PC. The buyer and the seller negotiate the price."
+models:
+  agent_1:
+    provider: ollama
+    name: gemma4:31b-cloud
+    temperature: 0.5
+    max_tokens: 2048
+    persona:
+      agreeableness: positive
+      neuroticism: positive
+      extraversion: positive
+      openness: positive
+      conscientiousness: positive
+    tactics:
+      anchoring: enabled
+      loss_aversion: enabled
+      conditional_concession: enabled
+      value_creation: enabled
+      clarity: enabled
+      fact_justification: enabled
+    utility:
+      p_target: 490
+      p_floor: 460
+  agent_2:
+    provider: gemini
+    name: gemma-4-26b-a4b-it
+    temperature: 0.5
+    max_tokens: 2048
+    persona:
+      agreeableness: positive
+      neuroticism: positive
+      extraversion: positive
+      openness: positive
+      conscientiousness: positive
+    tactics:
+      anchoring: enabled
+      loss_aversion: enabled
+      conditional_concession: enabled
+      value_creation: enabled
+      clarity: enabled
+      fact_justification: enabled
+    utility:
+      p_target: 470
+      p_floor: 500
+  judge:
+    provider: ollama
+    name: gpt-oss:120b-cloud
+    temperature: 0.0
+    metrics:
+    - agreeableness
+    - neuroticism
+    - extraversion
+    - openness
+    - conscientiousness
+    - anchoring
+    - loss_aversion
+    - conditional_concession
+    - value_creation
+    - clarity
+    - fact_justification

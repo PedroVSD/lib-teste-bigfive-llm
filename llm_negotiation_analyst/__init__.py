@@ -38,7 +38,7 @@ def run_negotiation(
     evaluator_config=None,
     second_judge=None,
     personas=None,#persona customization
-    context=None,#context customization
+    context=None,#macroeconomic context (SituationalContext); ignored when macro_context_enabled=False
     turn_delay_seconds = 0.0,
     verbose: bool = True,
     use_system_reminder: bool = True,
@@ -46,6 +46,8 @@ def run_negotiation(
     experiment_name=None,
     experiment_display_name=None,
     anchor_hints=None,
+    macro_context_enabled: bool = True,
+    minimal_context=None,
 ):
     import logging
     if verbose:
@@ -67,6 +69,8 @@ def run_negotiation(
         experiment_name=experiment_name,
         experiment_display_name=experiment_display_name,
         anchor_hints=anchor_hints,
+        macro_context_enabled=macro_context_enabled,
+        minimal_context=minimal_context,
     )
     result = engine.run()
     # If the engine had no name but the result does, propagate it

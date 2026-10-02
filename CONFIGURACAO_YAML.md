@@ -86,6 +86,33 @@ context:
 
 > Removing a line = omitting. Do not duplicate keys in the same YAML map (`Map keys must be unique` error).
 
+### 2.3 Disabling the macroeconomic context (Condition B)
+
+`macro_context_enabled` (default `true`) controls whether macro variables reach the agents. `minimal_context` carries the basic negotiation situation and is **required** when macro is off.
+
+```yaml
+# Condition A — negotiation + macroeconomic context (default, legacy behavior)
+context:
+  preset: "estagflacao"
+```
+
+```yaml
+# Condition B — negotiation + minimal context only
+context:
+  macro_context_enabled: false
+  minimal_context: "A tech company is hiring a software engineer. The candidate and the recruiter negotiate pay."
+```
+
+| Setting | `True` (default) | `False` |
+|---|---|---|
+| Macro block in prompt | sent (unchanged legacy flow) | never sent — not even as `None`/`null` |
+| `minimal_context` | accepted but ignored | **required** (`ValueError` when missing) |
+| Situation text | `scenario.shared_context` | `minimal_context` (also used as judge context) |
+| Report §1.4 | macro table | `Macroeconomic context disabled` + minimal text |
+| Metadata | `macro_context_enabled: true` | `macro_context_enabled: false` + `minimal_context` |
+
+Rules: `minimal_context` must describe who negotiates, the situation, the object and the basic goal — with no macroeconomic content. Behavioral metrics, judges, `occurrence_rate`, utility and satisfaction work identically in both conditions, so the same variables can be compared across them.
+
 ---
 
 ## 3. `models` block — Agents and Judge

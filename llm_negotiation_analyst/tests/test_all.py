@@ -12,7 +12,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from llm_negotiation_analyst.adapters.base import LLMAdapter, AdapterConfig
-from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION, SCENARIO_REGISTRY
+from llm_negotiation_analyst.scenarios import SALARY_NEGOTIATION, SCENARIO_REGISTRY, NegotiationScenario
+from llm_negotiation_analyst.context import SituationalContext, InflationLevel
 from llm_negotiation_analyst.simulation.engine import SimulationEngine, NegotiationResult
 from llm_negotiation_analyst.scoring.big5 import Dimension, BIG5_META, BehavioralResult, BehaviorObservation
 from llm_negotiation_analyst.scoring.negotiation_metrics import NegotiationMetric
@@ -243,7 +244,7 @@ class TestSimulationEngine:
         )
         engine = SimulationEngine(
             scenario=scenario,
-            agents={"a": MockAdapter("I accept [ACORDO_FECHADO]"), "b": MockAdapter("I accept [ACORDO_FECHADO]")},
+            agents={"a": MockAdapter("I agreed to the terms, we have a deal"), "b": MockAdapter("I agreed to the terms, we have a deal")},
         )
         result = engine.run()
         assert result.settled is True
@@ -368,6 +369,86 @@ class TestSimulationEngine:
             assert "R$" not in sc.shared_context
             for role, prompt in sc.roles.items():
                 assert "R$" not in prompt, f"{sc.name}/{role} contains a value"
+
+
+class RecordingAdapter(LLMAdapter):
+    """Records every messages[0] it receives; replies with fixed text."""
+    def __init__(self, text: str = "ok, noted."):
+        super().__init__(model="rec", config=AdapterConfig())
+        self.text = text
+        self.systems = []
+    def complete(self, messages: list[dict], **kwargs) -> str:
+        self.systems.append(messages[0]["content"])
+        return self.text
+
+
+class TestMacroContext:
+    """Condition A (macro on) vs Condition B (macro off + minimal context)."""
+
+    MINIMAL = (
+        "A tech company is hiring a software engineer. "
+        "The candidate and the recruiter negotiate pay."
+    )
+
+    def _scenario(self):
+        return NegotiationScenario(
+            name="mini_macro",
+            description="test",
+            shared_context="Shared situation with some background.",
+            roles={"a": "You are A. Negotiate.", "b": "You are B. Negotiate."},
+            opening_role="a",
+            max_turns=1,
+        )
+
+    def _ctx(self):
+        return SituationalContext(inflation=InflationLevel.HIGH)
+
+    def test_legacy_macro_enabled_by_default(self):
+        adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
+        engine = SimulationEngine(scenario=self._scenario(), agents=adapters, context=self._ctx())
+        result = engine.run()
+        assert result.metadata.get("macro_context_enabled") is True
+        for adapter in adapters.values():
+            assert "Economic & Situational Context" in adapter.systems[0]
+            assert "Inflation" in adapter.systems[0]
+
+    def test_disabled_sends_minimal_no_macro(self):
+        adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
+        engine = SimulationEngine(
+            scenario=self._scenario(), agents=adapters, context=self._ctx(),
+            macro_context_enabled=False, minimal_context=self.MINIMAL,
+        )
+        result = engine.run()
+        assert result.metadata.get("macro_context_enabled") is False
+        assert result.metadata.get("minimal_context") == self.MINIMAL
+        assert result.scenario_context == self.MINIMAL
+        seen = " ".join(s for adapter in adapters.values() for s in adapter.systems)
+        assert self.MINIMAL.split(".")[0] in seen
+        for token in ("Economic & Situational Context", "Inflation", "Interest rates",
+                      "GDP growth", "Unemployment", "Political/institutional",
+                      "Active crisis", "Shared situation"):
+            assert token not in seen
+        # No null-ish leakage of macro fields
+        for token in ("None", "null", "N/A", "Not provided", "not informed"):
+            assert token not in seen
+
+    def test_disabled_without_minimal_raises(self):
+        with pytest.raises(ValueError, match="minimal_context"):
+            SimulationEngine(
+                scenario=self._scenario(), agents={"a": RecordingAdapter()},
+                macro_context_enabled=False, minimal_context=None,
+            )
+
+    def test_enabled_ignores_minimal(self):
+        adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
+        engine = SimulationEngine(
+            scenario=self._scenario(), agents=adapters, context=self._ctx(),
+            macro_context_enabled=True, minimal_context=self.MINIMAL,
+        )
+        engine.run()
+        seen = " ".join(s for adapter in adapters.values() for s in adapter.systems)
+        assert "Economic & Situational Context" in seen
+        assert self.MINIMAL.split(".")[0] not in seen
 
 
 # ---------------------------------------------------------------------------

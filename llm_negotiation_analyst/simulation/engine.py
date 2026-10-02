@@ -258,6 +258,8 @@ class SimulationEngine:
         experiment_name: Optional[str] = None,
         experiment_display_name: Optional[str] = None,
         anchor_hints: Optional[dict[str, dict]] = None,
+        macro_context_enabled: bool = True,
+        minimal_context: Optional[str] = None,
     ):
         self.scenario = scenario
         self.raw_agents = agents
@@ -270,8 +272,19 @@ class SimulationEngine:
         self.experiment_name = experiment_name
         self.experiment_display_name = experiment_display_name
         # anchor_hints: role -> {p_target, p_floor}, only for roles with anchoring active in the YAML.
-        # Sem entrada, o agente negocia livremente (sem valores no prompt).
+        # Without entry, the agent negotiates freely (no values in the prompt).
         self.anchor_hints = anchor_hints or {}
+        # Macroeconomic context switch (default True = legacy behavior).
+        # When False, no macro variables reach the agents; minimal_context
+        # carries the basic situation instead and is required.
+        self.macro_context_enabled = macro_context_enabled
+        self.minimal_context = minimal_context.strip() if isinstance(minimal_context, str) and minimal_context.strip() else None
+        if not self.macro_context_enabled and self.minimal_context is None:
+            raise ValueError(
+                "With macro_context_enabled=False, provide minimal_context "
+                "(the basic negotiation situation). Macroeconomic context is disabled, "
+                "so the agents need the minimal context to understand the negotiation."
+            )
 
     def run(self) -> NegotiationResult:
         if self.benchmark_turns is not None:
@@ -292,6 +305,12 @@ class SimulationEngine:
         agents: dict[str, NegotiationAgent] = {}
         agent_roles: dict[str, str] = {}
 
+        # Macro disabled → situational context never reaches the agents.
+        effective_context = self.context if self.macro_context_enabled else None
+        # Shared situation text: scenario default when macro is on,
+        # minimal_context when macro is off (validated in __init__).
+        situation_text = scenario.shared_context if self.macro_context_enabled else self.minimal_context
+
         for role, adapter in self.raw_agents.items():
             agent_id = f"{role}_{adapter.model.replace(':', '-')}"
             agents[role] = NegotiationAgent(
@@ -300,7 +319,7 @@ class SimulationEngine:
                 system_prompt=scenario.roles[role],
                 adapter=adapter,
                 persona=self.personas.get(role),
-                context=self.context,
+                context=effective_context,
                 anchor_hint=(self.anchor_hints or {}).get(role),
             )
             agent_roles[agent_id] = role
@@ -329,9 +348,9 @@ class SimulationEngine:
                         "• If the turn limit is reached without agreement, the simulation will end automatically as NO_AGREEMENT — do not invent an agreement and do not include the code.\n"
                         "• Never drag on with pleasantries after the agreement.]"
                     )
-                    current_hint = scenario.shared_context + system_reminder if turn_index <= 1 else system_reminder
+                    current_hint = situation_text + system_reminder if turn_index <= 1 else system_reminder
                 else:
-                    current_hint = scenario.shared_context if turn_index <= 1 else ""
+                    current_hint = situation_text if turn_index <= 1 else ""
                 content, latency = agent.speak(
                     context_hint=current_hint
                 )
@@ -384,7 +403,7 @@ class SimulationEngine:
             if settled:
                 break
 
-        # Motivo do encerramento: acordo (ambos confirmaram) ou limite de turnos
+        # Ending reason: agreement (both confirmed) or turn limit
         ended_by = "agreement" if settled else "turn_limit"
         if not settled:
             n_rounds = scenario.max_turns
@@ -410,9 +429,18 @@ class SimulationEngine:
                 filtered[k] = v
             if filtered:
                 tactics_meta[role] = filtered
-        context_meta = self.context.to_dict() if self.context else None
-
-        meta_extra = {"experiment_name": self.experiment_name, "ended_by": ended_by, "max_rounds": scenario.max_turns}
+        if self.macro_context_enabled:
+            context_meta = self.context.to_dict() if self.context else None
+        else:
+            # Macro off: never persist macro fields (not even as None) — only the minimal brief.
+            context_meta = {"enabled": False, "minimal_context": self.minimal_context}
+        meta_extra = {
+            "experiment_name": self.experiment_name,
+            "ended_by": ended_by,
+            "max_rounds": scenario.max_turns,
+            "macro_context_enabled": self.macro_context_enabled,
+            "minimal_context": self.minimal_context,
+        }
         if getattr(self, "experiment_display_name", None):
             meta_extra["experiment_display_name"] = self.experiment_display_name
             meta_extra["experiment_title"] = self.experiment_display_name
@@ -427,7 +455,7 @@ class SimulationEngine:
             run_id=run_id,
             scenario_name=scenario.name,
             scenario_description=scenario.description,
-            scenario_context=scenario.shared_context,
+            scenario_context=situation_text,
             agents={a.agent_id: a.adapter.identifier for a in agents.values()},
             agent_roles=agent_roles,
             transcript=transcript,
@@ -459,7 +487,7 @@ class SimulationEngine:
             system_prompt=scenario.roles[role],
             adapter=adapter,
             persona=self.personas.get(role),
-            context=self.context,
+            context=self.context if self.macro_context_enabled else None,
             anchor_hint=(self.anchor_hints or {}).get(role),
         )
         opponent_role = [r for r in scenario.roles if r != role][0]
@@ -496,13 +524,18 @@ class SimulationEngine:
         personas_meta = {
             r: p.to_dict() for r, p in self.personas.items()
         }
-        context_meta = self.context.to_dict() if self.context else None
+        if self.macro_context_enabled:
+            context_meta = self.context.to_dict() if self.context else None
+            situation_text = scenario.shared_context
+        else:
+            context_meta = {"enabled": False, "minimal_context": self.minimal_context}
+            situation_text = self.minimal_context
 
         return NegotiationResult(
             run_id=run_id,
             scenario_name=scenario.name,
             scenario_description=scenario.description,
-            scenario_context=scenario.shared_context,
+            scenario_context=situation_text,
             agents={agent.agent_id: adapter.identifier},
             agent_roles={agent.agent_id: role},
             transcript=transcript,
@@ -510,5 +543,6 @@ class SimulationEngine:
             total_turns=len(transcript),
             started_at=started_at,
             ended_at=time.time(),
-            metadata={**scenario.metadata, "mode": "benchmark", "personas": personas_meta, "context": context_meta},
+            metadata={**scenario.metadata, "mode": "benchmark", "personas": personas_meta, "context": context_meta,
+                      "macro_context_enabled": self.macro_context_enabled, "minimal_context": self.minimal_context},
         )
