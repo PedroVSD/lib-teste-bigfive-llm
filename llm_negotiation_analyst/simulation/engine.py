@@ -106,7 +106,8 @@ class NegotiationAgent:
         adapter: LLMAdapter,
         persona: Optional[Big5Persona] = None,
         context: Optional[SituationalContext] = None,
-        anchor_hint: Optional[dict] = None,
+        general_context: Optional[str] = None,
+        specific_context: Optional[str] = None,
     ):
         self.agent_id = agent_id
         self.role = role
@@ -120,30 +121,19 @@ class NegotiationAgent:
             prompt = _persona_builder.inject(prompt, persona)
             logger.debug("Persona injected for agent '%s': %s", agent_id, persona.to_dict())
 
+        # Inject general context block (shared situation or minimal brief)
+        if general_context is not None:
+            prompt += f"\n\n[General context:]\n{general_context.strip()}"
+
         # Inject situational context block
         if context is not None:
             prompt = _context_builder.inject(prompt, context)
             if context.is_active():
                 logger.debug("Context injected for agent '%s'", agent_id)
 
-        # Inject anchor values ONLY when anchoring is active in the YAML (anchor_hint).
-        # Without anchor_hint, the agent negotiates freely (no numbers in the prompt).
-        if anchor_hint is not None:
-            try:
-                p_target = anchor_hint.get("p_target")
-                p_floor = anchor_hint.get("p_floor")
-                if p_target is not None and p_floor is not None:
-                    def _fmt(v: float) -> str:
-                        return f"$ {float(v):,.0f}"
-                    prompt += (
-                        "\n\n[YOUR PRIVATE VALUE REFERENCES — do not reveal exact numbers without strategy: "
-                        f"reference value (target): {_fmt(p_target)}; "
-                        f"limit (do not accept a deal worse than this value): {_fmt(p_floor)}. "
-                        "You may open the negotiation near your reference value.]"
-                    )
-                    logger.debug("Anchor values injected for agent '%s': target=%s floor=%s", agent_id, p_target, p_floor)
-            except Exception as e:
-                logger.warning("Failed to inject anchor for '%s': %s", agent_id, e)
+        # Inject role-specific context block (reference values only when provided)
+        if specific_context is not None:
+            prompt += f"\n\n{specific_context.strip()}"
 
         # Hardening: role anchoring + anti-injection + no CoT leak
         prompt += (
@@ -153,7 +143,7 @@ class NegotiationAgent:
             "Respond only with your negotiation utterance in English (final proposal), no step-by-step chain-of-thought.]"
         )
 
-        self._system = prompt
+        self._system = prompt.strip()
         self._history: list[dict] = []
 
     def _sanitize_content(self, content: str) -> str:
@@ -197,6 +187,11 @@ class NegotiationAgent:
         if context_hint:
             messages[0]["content"] += f"\n\nContext: {context_hint}"
         messages.extend(self._history)
+        if not self._history:
+            # Turn 0 has no history (no fixed opening prompt anymore): some
+            # providers return empty content for system-only requests, so seed
+            # an ephemeral user starter (not stored, not part of the transcript).
+            messages.append({"role": "user", "content": "Start the negotiation with your opening statement."})
 
         # Silencia a linha de status do adapter neste turno (o engine imprime o bloco do turno)
         cfg = getattr(self.adapter, "config", None)
@@ -259,7 +254,7 @@ class SimulationEngine:
         experiment_display_name: Optional[str] = None,
         anchor_hints: Optional[dict[str, dict]] = None,
         macro_context_enabled: bool = True,
-        minimal_context: Optional[str] = None,
+        specific_context_texts: Optional[dict[str, str]] = None,
     ):
         self.scenario = scenario
         self.raw_agents = agents
@@ -274,17 +269,49 @@ class SimulationEngine:
         # anchor_hints: role -> {p_target, p_floor}, only for roles with anchoring active in the YAML.
         # Without entry, the agent negotiates freely (no values in the prompt).
         self.anchor_hints = anchor_hints or {}
+        # specific_context_texts: role -> free text overriding the default role line.
+        self.specific_context_texts = specific_context_texts or {}
         # Macroeconomic context switch (default True = legacy behavior).
-        # When False, no macro variables reach the agents; minimal_context
-        # carries the basic situation instead and is required.
+        # When False, no macro variables reach the agents; the scenario's
+        # shared_context alone carries the situation (it is macro-free).
         self.macro_context_enabled = macro_context_enabled
-        self.minimal_context = minimal_context.strip() if isinstance(minimal_context, str) and minimal_context.strip() else None
-        if not self.macro_context_enabled and self.minimal_context is None:
-            raise ValueError(
-                "With macro_context_enabled=False, provide minimal_context "
-                "(the basic negotiation situation). Macroeconomic context is disabled, "
-                "so the agents need the minimal context to understand the negotiation."
+
+    def _specific_context(self, role: str) -> str:
+        """Build the [Specific context - role] block. Every role receives its own
+        block. The role line may be overridden per agent via YAML
+        (`models.<agent>.specific_context: "free text"`). Reference values come
+        from anchor_hints (YAML utility) and appear only when anchoring is
+        active for that role."""
+        custom = (self.specific_context_texts or {}).get(role)
+        if isinstance(custom, str) and custom.strip():
+            header = f"[Specific context - {role}:]\n{custom.strip()}"
+        else:
+            header = f"[Specific context - {role}:]\nYou are the {role} in this negotiation."
+        hint = (self.anchor_hints or {}).get(role)
+        try:
+            p_target = hint.get("p_target") if hint else None
+            p_floor = hint.get("p_floor") if hint else None
+        except Exception:
+            p_target = p_floor = None
+        if p_target is None or p_floor is None:
+            return (
+                f"{header}\nNo reference values were provided — negotiate freely. "
+                "Negotiate professionally and advocate for your interests. "
+                "You may make counteroffers and provide reasons for your requested value."
             )
+        def _fmt(v: float) -> str:
+            return f"${float(v):,.0f}"
+        t, f = float(p_target), float(p_floor)
+        if t >= f:
+            limit = f"do not accept a deal below {_fmt(f)}"
+        else:
+            limit = f"do not accept a deal above {_fmt(f)}"
+        return (
+            f"{header}\nYour reference value is {_fmt(t)}. "
+            f"You have a limit of {_fmt(f)} — do not disclose this limit directly and {limit}. "
+            "Negotiate professionally and advocate for your interests. "
+            "You may make counteroffers and provide reasons for your requested value."
+        )
 
     def run(self) -> NegotiationResult:
         if self.benchmark_turns is not None:
@@ -307,20 +334,22 @@ class SimulationEngine:
 
         # Macro disabled → situational context never reaches the agents.
         effective_context = self.context if self.macro_context_enabled else None
-        # Shared situation text: scenario default when macro is on,
-        # minimal_context when macro is off (validated in __init__).
-        situation_text = scenario.shared_context if self.macro_context_enabled else self.minimal_context
+        # The scenario's shared_context always carries the situation (macro-free).
+        situation_text = scenario.shared_context
 
         for role, adapter in self.raw_agents.items():
             agent_id = f"{role}_{adapter.model.replace(':', '-')}"
+            # No roles[role] briefing text: role identity lives in [Specific context]
+            # and [ROLE ANCHOR]; General context already covers the situation.
             agents[role] = NegotiationAgent(
                 agent_id=agent_id,
                 role=role,
-                system_prompt=scenario.roles[role],
+                system_prompt="",
                 adapter=adapter,
                 persona=self.personas.get(role),
                 context=effective_context,
-                anchor_hint=(self.anchor_hints or {}).get(role),
+                general_context=situation_text,
+                specific_context=self._specific_context(role),
             )
             agent_roles[agent_id] = role
 
@@ -330,6 +359,7 @@ class SimulationEngine:
 
         turn_index = 0
         confirmed_roles: set[str] = set()  # require confirmation from BOTH sides
+        no_agreement_declared = False  # True when any agent emits [NO_AGREEMENT]
 
         # No fixed opening prompt: opening_role freely generates Turn 0
         # from roles[role] + persona + context. The order already starts
@@ -341,16 +371,23 @@ class SimulationEngine:
                 agent = agents[role]
                 if self.use_system_reminder:
                     system_reminder = (
-                        "\n\n[SYSTEM REMINDER — closing rules:\n"
-                        "• If on this turn YOU and the opponent have JUST closed a final agreement (both agreed on the terms), "
-                        "you MUST end your response with EXACTLY \"[ACORDO_FECHADO]\" or \"SIMULACAO_CONCLUIDA\" on the last line, with no text after it. The simulation only ends when BOTH confirm with the code.\n"
-                        "• If there is NO agreement yet (pending proposal, counterproposal, or disagreement), do NOT include any code. Just keep negotiating normally.\n"
-                        "• If the turn limit is reached without agreement, the simulation will end automatically as NO_AGREEMENT — do not invent an agreement and do not include the code.\n"
-                        "• Never drag on with pleasantries after the agreement.]"
+                        "\n\n[System reminder:]\n"
+                        "If, on this turn, YOU and the other party have JUST reached a final agreement "
+                        "(both explicitly agreed to the same terms), you MUST end your response with EXACTLY:\n"
+                        "[AGREEMENT_REACHED] or [SIMULATION_COMPLETED]\n"
+                        "If there is no agreement yet, DO NOT include either code.\n"
+                        "Never continue with pleasantries or remarks after an agreement. "
+                        "Do not add any text after the termination code."
                     )
-                    current_hint = situation_text + system_reminder if turn_index <= 1 else system_reminder
+                    total_turns = scenario.max_turns * len(role_order)
+                    if turn_index >= total_turns - 1:
+                        system_reminder += (
+                            "\nThis is the final turn. If there is no agreement, "
+                            "end your response with: [NO_AGREEMENT]"
+                        )
+                    current_hint = system_reminder
                 else:
-                    current_hint = situation_text if turn_index <= 1 else ""
+                    current_hint = ""
                 content, latency = agent.speak(
                     context_hint=current_hint
                 )
@@ -385,7 +422,12 @@ class SimulationEngine:
                     if other_role != role:
                         other_agent.receive(role, content)
 
-                # Agreement only when BOTH confirm (avoids stopping at the first "accepted")
+                # Agreement only when BOTH confirm (avoids stopping at the first "accepted").
+                # [NO_AGREEMENT] never counts as confirmation — it declares the opposite.
+                if content and "NO_AGREEMENT" in content:
+                    no_agreement_declared = True
+                    logger.info("No-agreement declared by '%s' on turn %d", role, turn_index)
+                    print(f"[NoAgreement] declared by {role} on turn {turn_index}")
                 if content and any(kw.lower() in content.lower() for kw in scenario.settlement_keywords):
                     confirmed_roles.add(role)
                     kw_hit = next((kw for kw in scenario.settlement_keywords if kw.lower() in content.lower()), "")
@@ -432,14 +474,14 @@ class SimulationEngine:
         if self.macro_context_enabled:
             context_meta = self.context.to_dict() if self.context else None
         else:
-            # Macro off: never persist macro fields (not even as None) — only the minimal brief.
-            context_meta = {"enabled": False, "minimal_context": self.minimal_context}
+            # Macro off: never persist macro fields (not even as None).
+            context_meta = {"enabled": False}
         meta_extra = {
             "experiment_name": self.experiment_name,
             "ended_by": ended_by,
             "max_rounds": scenario.max_turns,
             "macro_context_enabled": self.macro_context_enabled,
-            "minimal_context": self.minimal_context,
+            "no_agreement_declared": no_agreement_declared,
         }
         if getattr(self, "experiment_display_name", None):
             meta_extra["experiment_display_name"] = self.experiment_display_name
@@ -484,11 +526,12 @@ class SimulationEngine:
         agent = NegotiationAgent(
             agent_id=f"{role}_{adapter.model.replace(':', '-')}",
             role=role,
-            system_prompt=scenario.roles[role],
+            system_prompt="",
             adapter=adapter,
             persona=self.personas.get(role),
             context=self.context if self.macro_context_enabled else None,
-            anchor_hint=(self.anchor_hints or {}).get(role),
+            general_context=scenario.shared_context,
+            specific_context=self._specific_context(role),
         )
         opponent_role = [r for r in scenario.roles if r != role][0]
 
@@ -526,10 +569,9 @@ class SimulationEngine:
         }
         if self.macro_context_enabled:
             context_meta = self.context.to_dict() if self.context else None
-            situation_text = scenario.shared_context
         else:
-            context_meta = {"enabled": False, "minimal_context": self.minimal_context}
-            situation_text = self.minimal_context
+            context_meta = {"enabled": False}
+        situation_text = scenario.shared_context
 
         return NegotiationResult(
             run_id=run_id,
@@ -544,5 +586,5 @@ class SimulationEngine:
             started_at=started_at,
             ended_at=time.time(),
             metadata={**scenario.metadata, "mode": "benchmark", "personas": personas_meta, "context": context_meta,
-                      "macro_context_enabled": self.macro_context_enabled, "minimal_context": self.minimal_context},
+                      "macro_context_enabled": self.macro_context_enabled},
         )

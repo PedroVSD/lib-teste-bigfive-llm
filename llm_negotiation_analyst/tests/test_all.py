@@ -329,10 +329,16 @@ class TestSimulationEngine:
         assert first.content in ("CANDIDATE free opening.", "RECRUITER free opening.")
 
     def test_anchor_values_only_when_anchoring_active(self):
-        from llm_negotiation_analyst.simulation.engine import NegotiationAgent
+        from llm_negotiation_analyst.simulation.engine import NegotiationAgent, SimulationEngine
         from unittest.mock import Mock
         scenario = SALARY_NEGOTIATION
-        # No anchor_hint: no values in the prompt (negotiates freely)
+        # No anchor_hints: specific context without values (negotiates freely)
+        engine_free = SimulationEngine(
+            scenario=scenario,
+            agents={"candidate": MockAdapter("hi"), "recruiter": MockAdapter("hi")},
+        )
+        assert "18,000" not in engine_free._specific_context("candidate")
+        assert "negotiate freely" in engine_free._specific_context("candidate")
         mock = Mock()
         mock.model = "test-model"
         agent_free = NegotiationAgent(
@@ -342,11 +348,21 @@ class TestSimulationEngine:
             adapter=mock,
             persona=None,
             context=None,
-            anchor_hint=None,
+            general_context="General situation.",
+            specific_context=engine_free._specific_context("candidate"),
         )
-        assert "R$" not in agent_free._system
-        assert "PRIVATE VALUE REFERENCES" not in agent_free._system
-        # With anchor_hint: values injected
+        assert "18,000" not in agent_free._system
+        assert "General context:" in agent_free._system
+        assert "Specific context - candidate:" in agent_free._system
+        # With anchor_hints: values injected in the specific context
+        engine_anchored = SimulationEngine(
+            scenario=scenario,
+            agents={"candidate": MockAdapter("hi"), "recruiter": MockAdapter("hi")},
+            anchor_hints={"candidate": {"p_target": 18000, "p_floor": 15500}},
+        )
+        specific = engine_anchored._specific_context("candidate")
+        assert "18,000" in specific
+        assert "15,500" in specific
         agent_anchored = NegotiationAgent(
             agent_id="candidate_test",
             role="candidate",
@@ -354,11 +370,77 @@ class TestSimulationEngine:
             adapter=mock,
             persona=None,
             context=None,
-            anchor_hint={"p_target": 18000, "p_floor": 15500},
+            general_context="General situation.",
+            specific_context=specific,
         )
         assert "18,000" in agent_anchored._system
         assert "15,500" in agent_anchored._system
-        assert "PRIVATE VALUE REFERENCES" in agent_anchored._system
+
+    def test_no_agreement_code_does_not_settle(self):
+        from llm_negotiation_analyst.scenarios import NegotiationScenario
+        scenario = NegotiationScenario(
+            name="test_noagree",
+            description="test",
+            shared_context="test context",
+            roles={"a": "You are A.", "b": "You are B."},
+            opening_role="a",
+            max_turns=1,
+        )
+        engine = SimulationEngine(
+            scenario=scenario,
+            agents={"a": MockAdapter("no agreement here [NO_AGREEMENT]"), "b": MockAdapter("no agreement here [NO_AGREEMENT]")},
+        )
+        result = engine.run()
+        assert result.settled is False
+        assert result.metadata.get("no_agreement_declared") is True
+        assert result.metadata.get("ended_by") == "turn_limit"
+
+    def test_new_settlement_codes_settle(self):
+        from llm_negotiation_analyst.scenarios import NegotiationScenario
+        scenario = NegotiationScenario(
+            name="test_newcodes",
+            description="test",
+            shared_context="test context",
+            roles={"a": "You are A.", "b": "You are B."},
+            opening_role="a",
+            max_turns=2,
+        )
+        engine = SimulationEngine(
+            scenario=scenario,
+            agents={"a": MockAdapter("accepted [AGREEMENT_REACHED]"), "b": MockAdapter("accepted [AGREEMENT_REACHED]")},
+        )
+        result = engine.run()
+        assert result.settled is True
+
+    def test_system_reminder_new_codes_and_final_turn(self, capsys):
+        from llm_negotiation_analyst.scenarios import NegotiationScenario
+
+        class ReminderAdapter(LLMAdapter):
+            def __init__(self):
+                super().__init__(model="rem", config=AdapterConfig())
+                self.hints = []
+            def complete(self, messages, **kwargs):
+                self.hints.append(messages[0]["content"])
+                return "still talking"
+
+        scenario = NegotiationScenario(
+            name="test_reminder",
+            description="test",
+            shared_context="test context",
+            roles={"a": "You are A.", "b": "You are B."},
+            opening_role="a",
+            max_turns=1,
+        )
+        adapters = {"a": ReminderAdapter(), "b": ReminderAdapter()}
+        engine = SimulationEngine(scenario=scenario, agents=adapters)
+        engine.run()
+        capsys.readouterr()
+        # Reminder carries the new codes; only the final turn warns it is final
+        assert "AGREEMENT_REACHED" in adapters["a"].hints[0]
+        assert "SIMULATION_COMPLETED" in adapters["a"].hints[0]
+        assert "NO_AGREEMENT" not in adapters["a"].hints[0]
+        assert "NO_AGREEMENT" in adapters["b"].hints[0]
+        assert "final turn" in adapters["b"].hints[0].lower()
 
     def test_salary_company_vga_have_no_values_in_prompts(self):
         from llm_negotiation_analyst.scenarios import (
@@ -369,6 +451,77 @@ class TestSimulationEngine:
             assert "R$" not in sc.shared_context
             for role, prompt in sc.roles.items():
                 assert "R$" not in prompt, f"{sc.name}/{role} contains a value"
+
+
+class TestAgentPromptLayout:
+    """Role briefing removed; Specific context only for the YAML-chosen role."""
+
+    def _scenario(self):
+        return NegotiationScenario(
+            name="mini_layout",
+            description="test",
+            shared_context="Shared situation.",
+            roles={"a": "ROLEPRIVATE-A briefing text.", "b": "ROLEPRIVATE-B briefing text."},
+            opening_role="a",
+            max_turns=1,
+        )
+
+    def test_role_briefing_not_in_prompt(self):
+        adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
+        engine = SimulationEngine(scenario=self._scenario(), agents=adapters)
+        engine.run()
+        seen = " ".join(s for adapter in adapters.values() for s in adapter.systems)
+        assert "ROLEPRIVATE-A" not in seen
+        assert "ROLEPRIVATE-B" not in seen
+
+    def test_turn0_seeds_user_starter(self):
+        from llm_negotiation_analyst.simulation.engine import NegotiationAgent
+        from unittest.mock import Mock
+
+        class CaptureAdapter(LLMAdapter):
+            def __init__(self):
+                super().__init__(model="cap", config=AdapterConfig())
+                self.seen = None
+            def complete(self, messages, **kwargs):
+                self.seen = messages
+                return "opening move"
+
+        adapter = CaptureAdapter()
+        agent = NegotiationAgent(
+            agent_id="a_test", role="a", system_prompt="",
+            adapter=adapter, persona=None, context=None,
+            general_context="Shared situation.",
+            specific_context="[Specific context - a:]\nYou are the a.",
+        )
+        content, _ = agent.speak(context_hint="reminder")
+        assert content == "opening move"
+        roles = [m["role"] for m in adapter.seen]
+        assert roles[0] == "system"
+        assert roles[-1] == "user"
+        assert "opening statement" in adapter.seen[-1]["content"].lower()
+        # Starter is ephemeral: history holds only the reply
+        assert len(agent._history) == 1
+        assert agent._history[0]["role"] == "assistant"
+
+    def test_specific_goes_to_both_roles(self):
+        adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
+        engine = SimulationEngine(scenario=self._scenario(), agents=adapters)
+        engine.run()
+        assert "[Specific context - a:]" in " ".join(adapters["a"].systems)
+        assert "[Specific context - b:]" in " ".join(adapters["b"].systems)
+
+    def test_specific_custom_text_per_role(self):
+        adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
+        engine = SimulationEngine(
+            scenario=self._scenario(), agents=adapters,
+            specific_context_texts={"a": "You are the hiring manager. Defend the budget."},
+        )
+        engine.run()
+        seen_a = " ".join(adapters["a"].systems)
+        seen_b = " ".join(adapters["b"].systems)
+        assert "You are the hiring manager. Defend the budget." in seen_a
+        assert "Defend the budget." not in seen_b
+        assert "[Specific context - b:]" in seen_b
 
 
 class RecordingAdapter(LLMAdapter):
@@ -383,12 +536,7 @@ class RecordingAdapter(LLMAdapter):
 
 
 class TestMacroContext:
-    """Condition A (macro on) vs Condition B (macro off + minimal context)."""
-
-    MINIMAL = (
-        "A tech company is hiring a software engineer. "
-        "The candidate and the recruiter negotiate pay."
-    )
+    """Condition A (macro on) vs Condition B (macro off, shared situation only)."""
 
     def _scenario(self):
         return NegotiationScenario(
@@ -412,43 +560,24 @@ class TestMacroContext:
             assert "Economic & Situational Context" in adapter.systems[0]
             assert "Inflation" in adapter.systems[0]
 
-    def test_disabled_sends_minimal_no_macro(self):
+    def test_disabled_sends_shared_no_macro(self):
         adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
         engine = SimulationEngine(
             scenario=self._scenario(), agents=adapters, context=self._ctx(),
-            macro_context_enabled=False, minimal_context=self.MINIMAL,
+            macro_context_enabled=False,
         )
         result = engine.run()
         assert result.metadata.get("macro_context_enabled") is False
-        assert result.metadata.get("minimal_context") == self.MINIMAL
-        assert result.scenario_context == self.MINIMAL
+        assert result.scenario_context == "Shared situation with some background."
         seen = " ".join(s for adapter in adapters.values() for s in adapter.systems)
-        assert self.MINIMAL.split(".")[0] in seen
+        assert "Shared situation with some background." in seen
         for token in ("Economic & Situational Context", "Inflation", "Interest rates",
                       "GDP growth", "Unemployment", "Political/institutional",
-                      "Active crisis", "Shared situation"):
+                      "Active crisis"):
             assert token not in seen
         # No null-ish leakage of macro fields
         for token in ("None", "null", "N/A", "Not provided", "not informed"):
             assert token not in seen
-
-    def test_disabled_without_minimal_raises(self):
-        with pytest.raises(ValueError, match="minimal_context"):
-            SimulationEngine(
-                scenario=self._scenario(), agents={"a": RecordingAdapter()},
-                macro_context_enabled=False, minimal_context=None,
-            )
-
-    def test_enabled_ignores_minimal(self):
-        adapters = {"a": RecordingAdapter(), "b": RecordingAdapter()}
-        engine = SimulationEngine(
-            scenario=self._scenario(), agents=adapters, context=self._ctx(),
-            macro_context_enabled=True, minimal_context=self.MINIMAL,
-        )
-        engine.run()
-        seen = " ".join(s for adapter in adapters.values() for s in adapter.systems)
-        assert "Economic & Situational Context" in seen
-        assert self.MINIMAL.split(".")[0] not in seen
 
 
 # ---------------------------------------------------------------------------

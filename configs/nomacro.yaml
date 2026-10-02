@@ -4,8 +4,8 @@ experiment:
   max_turns: 5
   use_system_reminder: true
 context:
+  preset: "estagflacao"
   macro_context_enabled: false
-  minimal_context: "A guy is trying to buy a new VGA for your PC. The buyer and the seller negotiate the price."
 models:
   agent_1:
     provider: ollama

@@ -321,9 +321,6 @@ if __name__ == "__main__":
     macro_context_enabled = context_cfg.get("macro_context_enabled", True)
     if isinstance(macro_context_enabled, str):
         macro_context_enabled = macro_context_enabled.strip().lower() in ("true", "1", "yes", "on")
-    minimal_context = context_cfg.get("minimal_context")
-    if isinstance(minimal_context, str) and not minimal_context.strip():
-        minimal_context = None
     if macro_context_enabled:
         print("Macroeconomic context: ENABLED")
     else:
@@ -365,6 +362,21 @@ if __name__ == "__main__":
         else:
             print(f"Anchor inactive for '{role_name.upper()}': negotiating freely (no values in prompt)")
 
+    # 3.3 Specific context: every role receives its own [Specific context] block
+    # (reference values only when anchoring is active for that role).
+    # Optional per-agent free text overrides the default role line:
+    #   models:
+    #     agent_1:
+    #       specific_context: "You are the hiring manager. Defend the budget."
+    specific_context_texts: dict[str, str] = {}
+    agent_to_role_sc = {chave: role for chave, role in zip(chaves_agentes_yaml, papeis_do_cenario)}
+    for chave in chaves_agentes_yaml:
+        custom = (config["models"].get(chave) or {}).get("specific_context")
+        if isinstance(custom, str) and custom.strip():
+            role_sc = agent_to_role_sc.get(chave, chave)
+            specific_context_texts[role_sc] = custom.strip()
+            print(f"Specific context override for '{role_sc.upper()}' from YAML")
+
     # 4. Evaluator configuration (Big Five + negotiation metrics)
     metricas_textos = config["models"]["judge"].get("metrics", [])
     config_juiz = EvaluatorConfig.from_strings(metricas_textos) if metricas_textos else None
@@ -403,7 +415,7 @@ if __name__ == "__main__":
         experiment_display_name=display_name,
         anchor_hints=anchor_hints,
         macro_context_enabled=macro_context_enabled,
-        minimal_context=minimal_context,
+        specific_context_texts=specific_context_texts or None,
     )
     print("Simulation done.")
 

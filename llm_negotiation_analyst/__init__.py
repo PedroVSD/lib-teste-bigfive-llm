@@ -47,7 +47,7 @@ def run_negotiation(
     experiment_display_name=None,
     anchor_hints=None,
     macro_context_enabled: bool = True,
-    minimal_context=None,
+    specific_context_texts=None,
 ):
     import logging
     if verbose:
@@ -70,7 +70,7 @@ def run_negotiation(
         experiment_display_name=experiment_display_name,
         anchor_hints=anchor_hints,
         macro_context_enabled=macro_context_enabled,
-        minimal_context=minimal_context,
+        specific_context_texts=specific_context_texts,
     )
     result = engine.run()
     # If the engine had no name but the result does, propagate it

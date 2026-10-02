@@ -27,6 +27,8 @@ def _detect_settlement_retroactively(result: NegotiationResult) -> bool:
         "SIMULACAO_CONCLUIDA",
         "ACORDO_FECHADO",
         "[ACORDO_FECHADO]",
+        "AGREEMENT_REACHED",
+        "SIMULATION_COMPLETED",
         "confirmo os termos",
         "iniciar a implementação",
         "parceria firmada",
@@ -170,7 +172,10 @@ def generate_report(
         a(f"> **Duration:** {result.duration_seconds:.1f}s | **Turns:** {result.total_turns}")
     a(f"> **Agreement:** `{agreement_label}`")
     if ended_by == "turn_limit" and not settled:
-        a(f"> **Ending:** turn limit reached — no agreement (NO_AGREEMENT)")
+        if result.metadata.get("no_agreement_declared"):
+            a(f"> **Ending:** no agreement declared by agent (NO_AGREEMENT)")
+        else:
+            a(f"> **Ending:** turn limit reached — no agreement (NO_AGREEMENT)")
     a("")
 
     # ── 1. SETUP ────────────────────────────────
@@ -242,15 +247,10 @@ def generate_report(
         a("")
 
     e(["### 1.4 Situational Context (Macro)", ""])
-    macro_off = isinstance(context_meta, dict) and context_meta.get("enabled") is False and "minimal_context" in context_meta
+    macro_off = isinstance(context_meta, dict) and context_meta.get("enabled") is False
     if macro_off:
-        a("_Macroeconomic context **disabled** for this run (Condition B — minimal context)._")
+        a("_Macroeconomic context **disabled** for this run (Condition B — shared situation only)._")
         a("")
-        if context_meta.get("minimal_context"):
-            a("**Minimal context sent to both agents:**")
-            a("")
-            a(f"> {context_meta.get('minimal_context')}")
-            a("")
     elif context_meta and context_meta.get("enabled", True):
         active = {k: v for k, v in context_meta.items() if k != "enabled" and v not in (None, [], {}, "")}
         if active:

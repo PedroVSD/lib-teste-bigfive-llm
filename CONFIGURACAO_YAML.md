@@ -88,7 +88,7 @@ context:
 
 ### 2.3 Disabling the macroeconomic context (Condition B)
 
-`macro_context_enabled` (default `true`) controls whether macro variables reach the agents. `minimal_context` carries the basic negotiation situation and is **required** when macro is off.
+`macro_context_enabled` (default `true`) controls whether macro variables reach the agents. When off, agents negotiate on the scenario's `shared_context` alone (it is macro-free) — there is nothing else to configure.
 
 ```yaml
 # Condition A — negotiation + macroeconomic context (default, legacy behavior)
@@ -97,21 +97,20 @@ context:
 ```
 
 ```yaml
-# Condition B — negotiation + minimal context only
+# Condition B — negotiation on the shared situation only
 context:
+  preset: "estagflacao"
   macro_context_enabled: false
-  minimal_context: "A tech company is hiring a software engineer. The candidate and the recruiter negotiate pay."
 ```
 
 | Setting | `True` (default) | `False` |
 |---|---|---|
 | Macro block in prompt | sent (unchanged legacy flow) | never sent — not even as `None`/`null` |
-| `minimal_context` | accepted but ignored | **required** (`ValueError` when missing) |
-| Situation text | `scenario.shared_context` | `minimal_context` (also used as judge context) |
-| Report §1.4 | macro table | `Macroeconomic context disabled` + minimal text |
-| Metadata | `macro_context_enabled: true` | `macro_context_enabled: false` + `minimal_context` |
+| Situation text | `scenario.shared_context` | `scenario.shared_context` (judge context too) |
+| Report §1.4 | macro table | `Macroeconomic context disabled` |
+| Metadata | `macro_context_enabled: true` | `macro_context_enabled: false` |
 
-Rules: `minimal_context` must describe who negotiates, the situation, the object and the basic goal — with no macroeconomic content. Behavioral metrics, judges, `occurrence_rate`, utility and satisfaction work identically in both conditions, so the same variables can be compared across them.
+Behavioral metrics, judges, `occurrence_rate`, utility and satisfaction work identically in both conditions, so the same variables can be compared across them.
 
 ---
 
@@ -251,6 +250,20 @@ Formulas `scoring/utility.py:8`: `u_s(p)=(p-p_s)/(p̄_s-p_s)`, `u_b(p)=(p̄_b-p)
 | *custom* | Create in `scenarios/__init__.py:228` `NegotiationScenario(name=..., roles={...}, opening_role=..., max_turns=...)` and register in `SCENARIO_REGISTRY:175` | — | — | — |
 
 Settlement only when **both** confirm agreement (`simulation/engine.py:271`).
+
+Agent prompt layout (reference model): `[Persona induction]` (IPIP-style `_GUIDANCE` sentences, unchanged) → `[General context:]` (shared situation in both conditions) → macro block when enabled → `[Specific context - role]` (**every** role receives its own block; role line + reference value/limit from `utility` when `tactics.anchoring` is active for that role, else negotiate-freely) → `[ROLE ANCHOR]` → `[System reminder:]` per turn. The old `roles[role]` briefing text is **not** sent (redundant with General + Specific).
+
+Per-agent specific text (optional — overrides the default role line only for that agent):
+
+```yaml
+models:
+  agent_1:
+    specific_context: "You are the hiring manager. Defend the budget and protect internal equity."
+```
+
+Without it, the block uses `You are the {role} in this negotiation.` The other agent never sees this text (isolated per model). For free-form behavioral notes you can also use `persona.extra_instructions`.
+
+Termination codes: `[AGREEMENT_REACHED]` or `[SIMULATION_COMPLETED]` on agreement (legacy `SIMULACAO_CONCLUIDA`/`ACORDO_FECHADO` still detected); `[NO_AGREEMENT]` emitted by the model on the final turn when there is no agreement (never counts as settlement; the engine still auto-ends via `ended_by`).
 
 > No fixed opening prompt: scenarios have no `opening_prompt`. The `opening_role` freely generates `Turn 0` from `roles[role]` + persona + context.
 

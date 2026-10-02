@@ -42,7 +42,8 @@ class NegotiationScenario:
     opening_role: str
     max_turns: int = 8
     settlement_keywords: list[str] = field(default_factory=lambda: [
-        "we have a deal", "agreed", "AGREEMENT REACHED", "deal"
+        "we have a deal", "agreed", "AGREEMENT REACHED", "AGREEMENT_REACHED",
+        "SIMULATION_COMPLETED", "SIMULACAO_CONCLUIDA", "ACORDO_FECHADO", "deal"
     ])
     metadata: dict = field(default_factory=dict)
 
@@ -79,9 +80,8 @@ SALARY_NEGOTIATION = NegotiationScenario(
     opening_role="recruiter",
     max_turns=8,
     settlement_keywords=[
-        "SIMULATION_COMPLETED",
         "AGREEMENT_REACHED",
-        "[AGREEMENT_REACHED]",
+        "SIMULATION_COMPLETED",
     ],
     metadata={"domain": "HR", "currency": "BRL", "difficulty": "medium", "label": "Salary negotiation",
               "aspects": "anchor, utility, subjective valuation, conditional concessions, loss aversion, value creation"},
@@ -116,9 +116,8 @@ COMPANY_ACQUISITION = NegotiationScenario(
     opening_role="seller",
     max_turns=10,
     settlement_keywords=[
-        "SIMULATION_COMPLETED",
         "AGREEMENT_REACHED",
-        "[AGREEMENT_REACHED]",
+        "SIMULATION_COMPLETED",
     ],
     metadata={"domain": "M&A", "currency": "BRL", "difficulty": "hard", "label": "Company acquisition",
               "aspects": "anchor, utility, value creation, conditional concessions, loss aversion, risk, asymmetric information"},
@@ -152,9 +151,8 @@ STRATEGIC_SUPPLIER_CONTRACT = NegotiationScenario(
     opening_role="supplier",
     max_turns=10,
     settlement_keywords=[
-        "SIMULATION_COMPLETED",
         "AGREEMENT_REACHED",
-        "[AGREEMENT_REACHED]",
+        "SIMULATION_COMPLETED",
     ],
     metadata={"domain": "Supply Chain", "currency": "BRL", "difficulty": "hard", "label": "Supplier contract",
               "aspects": "anchor, utility, value creation, trade-offs, conditional concessions, loss aversion, clarity"},
@@ -190,9 +188,8 @@ PROPERTY_BOUNDARY_DISPUTE = NegotiationScenario(
     opening_role="owner_a",
     max_turns=10,
     settlement_keywords=[
-        "SIMULATION_COMPLETED",
         "AGREEMENT_REACHED",
-        "[AGREEMENT_REACHED]",
+        "SIMULATION_COMPLETED",
     ],
     metadata={"domain": "Property", "currency": "BRL", "difficulty": "hard", "label": "Property dispute",
               "aspects": "anchor, utility, subjective valuation, perceived fairness, loss aversion"},
@@ -203,34 +200,26 @@ VGA_PURCHASE = NegotiationScenario(
     name="vga_purchase",
     description="Negotiation over a graphics card (GPU) purchase between an experienced seller and a young buyer. Evaluates persuasion, price research, anchoring, concessions, and deliberate decision-making.",
     shared_context=(
-        "A computer store is negotiating the sale of a highly demanded graphics card (GPU) for gaming and work. "
-        "The store has the GPU in stock ready for delivery, with warranty and installment options. "
-        "The buyer needs the part to build a PC and use it for work as a developer. Both sides want to close, "
-        "but they diverge on price and conditions. Beyond price, the parties can negotiate extended warranty, installments, "
-        "upfront discount, bundles, shipping, and delivery time. "
+        "A computer store is negotiating the sale of a graphics card (GPU). "
+        "Both sides want to close, "
         "IMPORTANT: If an agreement is definitively reached by both parties, you MUST "
         "include the exact phrase 'SIMULATION_COMPLETED' at the end of your response."
     ),
     roles={
         "seller": (
             "You are the store salesperson, with 10 years of experience selling hardware. You know the product deeply "
-            "and know how to argue. You value closing the sale with a good margin, but you prefer granting benefits "
-            "over lowering the price too much. You have a minimum limit, but you must not reveal it. Be persuasive, professional "
-            "and empathetic, but firm in defending value."
+            "and know how to argue."
         ),
         "buyer": (
-            "You are the buyer: a young person building a PC, a newly hired junior developer. You always research "
-            "prices and think carefully before deciding. Your budget is limited and you need cost-benefit and installments. "
-            "You value fair price, warranty, origin, and installments. Do not reveal your maximum limit without strategy. "
-            "Negotiate prudently, asking for data, comparing offers, and proposing conditional trades."
+            "You are the buyer: a person building a PC. You always research "
+            "prices and think carefully before deciding."
         ),
     },
     opening_role="seller",
     max_turns=8,
     settlement_keywords=[
-        "SIMULATION_COMPLETED",
         "AGREEMENT_REACHED",
-        "[AGREEMENT_REACHED]",
+        "SIMULATION_COMPLETED",
     ],
     metadata={"domain": "Retail", "currency": "BRL", "difficulty": "medium", "label": "GPU purchase",
               "aspects": "anchor, price research, conditional concessions, value creation, persuasion, deliberate decision"},
