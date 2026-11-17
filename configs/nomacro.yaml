@@ -1,5 +1,5 @@
 experiment:
-  name: experimento_VGA_nomacro
+  name: experimento_VGA_nomacro agreeableness O - I
   scenario: vga_purchase
   max_turns: 5
   use_system_reminder: true
@@ -8,18 +8,18 @@ context:
   macro_context_enabled: false
 models:
   agent_1:
-    provider: ollama
-    name: gemma4:31b-cloud
+    provider: gemini
+    name: gemma-4-31b-it
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: positive
-      neuroticism: positive
-      extraversion: positive
-      openness: positive
-      conscientiousness: positive
+      agreeableness: negative
+      #neuroticism: positive
+      #extraversion: negative
+      #openness: negative
+      #conscientiousness: positive
     tactics:
-      anchoring: enabled
+      anchoring: disable
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
@@ -35,23 +35,23 @@ models:
     max_tokens: 2048
     persona:
       agreeableness: positive
-      neuroticism: positive
-      extraversion: positive
-      openness: positive
-      conscientiousness: positive
+      #neuroticism: negative
+      #extraversion: negative
+      #openness: negative
+      #conscientiousness: negative
     tactics:
-      anchoring: enabled
+      anchoring: disable
       loss_aversion: enabled
       conditional_concession: enabled
       value_creation: enabled
-      clarity: enabled
-      fact_justification: enabled
+      #clarity: enabled
+      #fact_justification: enabled
     utility:
       p_target: 470
       p_floor: 500
   judge:
-    provider: ollama
-    name: gpt-oss:120b-cloud
+    provider: gemini
+    name: gemini-3.5-flash-lite
     temperature: 0.0
     metrics:
     - agreeableness
@@ -65,3 +65,17 @@ models:
     - value_creation
     - clarity
     - fact_justification
+
+# Guard policy (optional). Each leak category accepts:
+#   block (default) = reject the turn, retry, abort after max_attempts
+#   warn            = record the event but forward the utterance
+#   off             = ignore the category
+# invalid_output:
+#   raise (default) = abort if a structured adapter never returns valid JSON
+#   plain           = accept the plain-text reply if it passes the leak guard
+guard:
+  #prompt_labels: block      # Role:, Reference Value, CoT bullets, etc.
+  #verbatim_spans: block     # copied private prompt text
+  #self_disclosure: warn     # "my limit is...", "I can go up to..."
+  invalid_output: plain     # never abort just because the reply was not JSON
+  max_attempts: 3

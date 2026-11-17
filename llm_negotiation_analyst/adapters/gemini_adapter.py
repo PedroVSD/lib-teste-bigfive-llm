@@ -12,6 +12,8 @@ class GeminiAdapter(LLMAdapter):
     Includes a retry system to work around rate limits (429) and overloads (503).
     """
 
+    supports_structured_output = True
+
     def __init__(
         self,
         model: str = "",
@@ -28,6 +30,12 @@ class GeminiAdapter(LLMAdapter):
         self.client = genai.Client(api_key=key)
 
     def complete(self, messages: list[dict], **kwargs) -> str:
+        return self._complete(messages, structured=False)
+
+    def complete_structured(self, messages: list[dict], schema=None) -> str:
+        return self._complete(messages, structured=True)
+
+    def _complete(self, messages: list[dict], structured: bool) -> str:
         system_instruction = None
         contents = []
 
@@ -97,6 +105,8 @@ class GeminiAdapter(LLMAdapter):
             "max_output_tokens": self.config.max_tokens,
             **extra_filtrado,
         }
+        if structured:
+            config_args.setdefault("response_mime_type", "application/json")
 
         if system_instruction:
             config_args["system_instruction"] = system_instruction

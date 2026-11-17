@@ -22,6 +22,7 @@ from llm_negotiation_analyst.scoring.evaluator import EvaluatorConfig
 from llm_negotiation_analyst.scoring.utility import UtilityCalculator, RoleUtilityParams
 from llm_negotiation_analyst.scoring.satisfaction import SatisfactionEvaluator
 from llm_negotiation_analyst.report.generator import generate_report
+from llm_negotiation_analyst.guards import LeakGuardConfig
 
 load_dotenv()
 
@@ -233,6 +234,14 @@ def parse_utility_params(utility_cfg: dict, chaves_agentes: list[str], papeis: l
     return params
 
 
+def parse_bfi_enabled(config: dict) -> bool:
+    """Top-level `bfi: false` skips the BFI-44 questionnaire (default True)."""
+    cfg = (config or {}).get("bfi", True)
+    if isinstance(cfg, dict):
+        return bool(cfg.get("enabled", True))
+    return bool(cfg)
+
+
 def parse_utility_from_agents(models_cfg: dict, chaves_agentes: list[str], papeis: list[str]) -> dict[str, RoleUtilityParams]:
     """New: read utility inside models.agent_x.utility (after tactics)."""
     agent_to_role = {chave: role for chave, role in zip(chaves_agentes, papeis)}
@@ -384,21 +393,37 @@ if __name__ == "__main__":
     # 4.1 BFI — questionnaire right after conditioning (before the negotiation)
     # Per-agent details are saved to *_bfi.json and the report; terminal shows only applying/done.
     # With macro disabled, BFI runs without macroeconomic context as well.
+    # Skip with top-level `bfi: false` when BFI validation is not needed (saves 1 judge call per agent).
     bfi_results = None
-    try:
-        from llm_negotiation_analyst.scoring.bfi import run_bfi_all
-        from llm_negotiation_analyst.context import SituationalContext as _SC
-        print("Applying BFI-44 to agents...")
-        bfi_results = run_bfi_all(agents_dict, personas_dict, macro_context if macro_context_enabled else _SC.disabled())
-        print("BFI done.")
-    except Exception as e:
-        print(f"BFI failed (continuing without BFI): {e}")
-        import traceback; traceback.print_exc()
-        bfi_results = None
+    if not parse_bfi_enabled(config):
+        print("BFI skipped (bfi: false).")
+    else:
+        try:
+            from llm_negotiation_analyst.scoring.bfi import run_bfi_all
+            from llm_negotiation_analyst.context import SituationalContext as _SC
+            print("Applying BFI-44 to agents...")
+            bfi_results = run_bfi_all(agents_dict, personas_dict, macro_context if macro_context_enabled else _SC.disabled())
+            print("BFI done.")
+        except Exception as e:
+            print(f"BFI failed (continuing without BFI): {e}")
+            import traceback; traceback.print_exc()
+            bfi_results = None
 
     # 5. Main simulation
     experiment_name = exp.get("name")
     display_name = exp.get("display_name") or exp.get("title") or exp.get("yaml_name")
+    try:
+        guard_config = LeakGuardConfig.from_dict(config.get("guard"))
+    except ValueError as e:
+        raise ValueError(f"Invalid `guard` block in the YAML: {e}") from e
+    print(
+        "Guard policy: "
+        f"prompt_labels={guard_config.prompt_labels}, "
+        f"verbatim_spans={guard_config.verbatim_spans}, "
+        f"self_disclosure={guard_config.self_disclosure}, "
+        f"invalid_output={guard_config.invalid_output}, "
+        f"max_attempts={guard_config.max_attempts}"
+    )
     result, profiles, _ = run_negotiation(
         scenario=scenario,
         agents=agents_dict,
@@ -416,6 +441,7 @@ if __name__ == "__main__":
         anchor_hints=anchor_hints,
         macro_context_enabled=macro_context_enabled,
         specific_context_texts=specific_context_texts or None,
+        guard_config=guard_config,
     )
     print("Simulation done.")
 

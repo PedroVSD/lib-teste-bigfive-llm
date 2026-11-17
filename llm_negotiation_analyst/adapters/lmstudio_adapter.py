@@ -16,6 +16,8 @@ class LMStudioAdapter(LLMAdapter):
     LM Studio exposes an OpenAI-compatible API.
     """
 
+    supports_structured_output = True
+
     def __init__(
         self,
         model: str = "local-model",
@@ -32,7 +34,16 @@ class LMStudioAdapter(LLMAdapter):
         )
 
     def complete(self, messages: list[dict], **kwargs) -> str:
+        return self._complete(messages, structured=False)
+
+    def complete_structured(self, messages: list[dict], schema=None) -> str:
+        return self._complete(messages, structured=True)
+
+    def _complete(self, messages: list[dict], structured: bool) -> str:
         max_attempts = 3
+        extra = dict(self.config.extra)
+        if structured:
+            extra.setdefault("response_format", {"type": "json_object"})
         for attempt in range(max_attempts):
             inicio = time.perf_counter()
             try:
@@ -42,7 +53,7 @@ class LMStudioAdapter(LLMAdapter):
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
                     timeout=self.config.timeout,
-                    **self.config.extra,
+                    **extra,
                 )
                 tempo = time.perf_counter() - inicio
                 if not self.config.quiet:

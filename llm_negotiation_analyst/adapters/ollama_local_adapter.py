@@ -7,6 +7,8 @@ class OllamaLocalAdapter(LLMAdapter):
     No authentication support; ignores external URLs for security.
     """
 
+    supports_structured_output = True
+
     def __init__(
         self,
         model: str,
@@ -23,6 +25,12 @@ class OllamaLocalAdapter(LLMAdapter):
             raise ImportError("Install the httpx library: pip install httpx")
 
     def complete(self, messages: list[dict], **kwargs) -> str:
+        return self._complete(messages, structured=False)
+
+    def complete_structured(self, messages: list[dict], schema=None) -> str:
+        return self._complete(messages, structured=True)
+
+    def _complete(self, messages: list[dict], structured: bool) -> str:
         import time
         payload = {
             "model": self.model,
@@ -34,6 +42,8 @@ class OllamaLocalAdapter(LLMAdapter):
                 **self.config.extra,
             },
         }
+        if structured:
+            payload["format"] = "json"
         inicio = time.perf_counter()
         response = self._httpx.post(
             f"{self.base_url}/api/chat",

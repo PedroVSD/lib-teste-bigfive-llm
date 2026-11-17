@@ -208,6 +208,8 @@ _JUDGE_USER_ROUND = """## Negotiation Context
 Evaluate the CURRENT turn response as a single unit, considering the history/context above.
 Return JSON only: {{"turn_evaluations": [{{"turn_index": <int>, "evaluations": {{"<metric_id>": {{"result": "PRESENT|ABSENT|NOT_APPLICABLE", "evidence": "..."}}, ...}}}}, ...]}}"""
 
+_REPAIR_NUDGE = """Your previous reply was not valid JSON matching the required schema. Reply again with ONLY the JSON object, double quotes around all keys and values, no trailing commas, and no markdown fences."""
+
 
 # ---------------------------------------------------------------------------
 # EvaluatorConfig
@@ -219,6 +221,9 @@ class EvaluatorConfig:
     # legacy compat: score_per_turn / invert_neuroticism kept but ignored
     score_per_turn: bool = True
     invert_neuroticism: bool = False
+    # cost control: round-batch retries with a JSON-repair nudge before falling
+    # back to per-turn/per-metric calls (0 = no retry, fail straight to fallback)
+    batch_retries: int = 1
 
     def __post_init__(self):
         if not self.dimensions:
@@ -540,6 +545,74 @@ class Evaluator:
                 ) for m in metrics
             ]
 
+    @staticmethod
+    def _parse_metric_entry(entry: object, mid: str, ti: int) -> tuple[BehavioralResult, str, float]:
+        """Parse one {result, evidence} entry; raises on invalid content."""
+        if not isinstance(entry, dict):
+            raise ValueError(f"Invalid entry for metric '{mid}' turn {ti}: {entry}")
+        result_raw = str(entry.get("result", "")).strip().upper()
+        if result_raw not in ("PRESENT", "ABSENT", "NOT_APPLICABLE"):
+            raise ValueError(f"Invalid result '{result_raw}' for metric '{mid}' turn {ti}")
+        result = BehavioralResult(result_raw)
+        evidence = entry.get("evidence")
+        if evidence is None:
+            evidence = ""
+        evidence = str(evidence).strip()
+        if not evidence and result != BehavioralResult.NOT_APPLICABLE:
+            evidence = "(no evidence provided)"
+        elif not evidence:
+            evidence = ""
+        conf = float(entry.get("confidence", 1.0)) if "confidence" in entry else 1.0
+        return result, evidence, conf
+
+    def _rescue_turn(
+        self,
+        item: dict,
+        scenario_context: str,
+        metrics: list[AnyMetric],
+        judge: LLMAdapter,
+    ) -> list[BehaviorObservation]:
+        """Targeted rescue for one turn missing from the round response: a single
+        per-turn batch call (complete response, no external history)."""
+        try:
+            return self._observe_batch(
+                utterance=item["content"], role=item["role"],
+                scenario_context=scenario_context, turn_index=item["turn_index"],
+                metrics=metrics, history_text="(No prior history — evaluated in round context.)",
+                judge=judge,
+            )
+        except Exception as e2:
+            logger.warning("Rescue batch failed turn=%d: %s", item["turn_index"], e2)
+            return [
+                BehaviorObservation(
+                    dimension=m, result=BehavioralResult.NOT_APPLICABLE,
+                    evidence=f"[Evaluation failed: {e2}]",
+                    turn_index=item["turn_index"], confidence=0.0,
+                ) for m in metrics
+            ]
+
+    def _rescue_metric(
+        self,
+        item: dict,
+        scenario_context: str,
+        metric: AnyMetric,
+        judge: LLMAdapter,
+    ) -> BehaviorObservation:
+        """Targeted rescue for one invalid metric entry: a single-metric call."""
+        try:
+            return self._observe_one_legacy(
+                utterance=item["content"], role=item["role"],
+                scenario_context=scenario_context, turn_index=item["turn_index"],
+                metric=metric, judge=judge,
+            )
+        except Exception as e2:
+            logger.warning("Rescue single failed for %s turn=%d: %s", metric, item["turn_index"], e2)
+            return BehaviorObservation(
+                dimension=metric, result=BehavioralResult.NOT_APPLICABLE,
+                evidence=f"[Evaluation failed: {e2}]",
+                turn_index=item["turn_index"], confidence=0.0,
+            )
+
     def _observe_round(
         self,
         items: list[dict],
@@ -551,6 +624,10 @@ class Evaluator:
         Evaluate one ROUND (1-2 consecutive turns) in ONE judge call.
         Each item: {turn_index, agent_id, role, content}. No history resent:
         the round's other turn is the context. Returns per-turn×metric observations.
+
+        Cost control: the round call is retried `batch_retries` times with a
+        JSON-repair nudge before any fallback; only turns/metrics actually
+        missing or invalid are re-queried with targeted calls.
         """
         metrics_block = _build_metrics_block(metrics)
         turns_lines = []
@@ -563,100 +640,87 @@ class Evaluator:
             n_metrics=len(metrics),
             metrics_block=metrics_block,
         )
-        messages = [
+        base_messages = [
             {"role": "system", "content": _JUDGE_SYSTEM_ROUND},
             {"role": "user", "content": prompt},
         ]
-        try:
-            raw = judge.complete(messages)
-            parsed = self._parse_json(raw)
-            turn_evals = parsed.get("turn_evaluations")
-            if not isinstance(turn_evals, list):
-                # Tolerance: single-turn {"evaluations": {...}} shape with 1 item
-                if isinstance(parsed.get("evaluations"), dict) and len(items) == 1:
-                    turn_evals = [{"turn_index": items[0]["turn_index"], "evaluations": parsed["evaluations"]}]
-                else:
-                    raise ValueError(f"No turn_evaluations found in judge response: {raw[:500]}")
-            by_turn: dict[int, dict] = {}
-            for te in turn_evals:
-                if not isinstance(te, dict) or "evaluations" not in te:
-                    continue
-                try:
-                    ti = int(te.get("turn_index"))
-                except Exception:
-                    continue
-                if isinstance(te["evaluations"], dict):
-                    by_turn[ti] = te["evaluations"]
-
-            observations: list[BehaviorObservation] = []
-            for it in items:
-                ti = it["turn_index"]
-                evals = by_turn.get(ti)
-                if evals is None:
-                    logger.warning("Judge response missing turn %d — marking NOT_APPLICABLE", ti)
-                    for m in metrics:
-                        observations.append(BehaviorObservation(
-                            dimension=m, result=BehavioralResult.NOT_APPLICABLE,
-                            evidence=f"[Missing turn {ti} in judge response]",
-                            turn_index=ti, confidence=0.0,
-                        ))
-                    continue
-                for metric in metrics:
-                    mid = metric.value if hasattr(metric, "value") else str(metric)
-                    entry = evals.get(mid) or evals.get(mid.lower()) or evals.get(mid.upper())
-                    if entry is None:
-                        for k, v in evals.items():
-                            if k.lower() == mid.lower():
-                                entry = v
-                                break
-                    if entry is None:
-                        logger.warning("Judge response missing metric '%s' turn=%d — marking NOT_APPLICABLE", mid, ti)
-                        result = BehavioralResult.NOT_APPLICABLE
-                        evidence = f"[Missing metric '{mid}' in judge response]"
-                        conf = 0.0
+        retries = max(0, int(getattr(self.config, "batch_retries", 1) or 0))
+        by_turn: dict[int, dict] = {}
+        last_err: Optional[Exception] = None
+        raw_resp = ""
+        parsed_ok = False
+        for attempt in range(retries + 1):
+            try:
+                msgs = base_messages
+                if attempt > 0:
+                    msgs = base_messages + [
+                        {"role": "assistant", "content": raw_resp[:500]},
+                        {"role": "user", "content": _REPAIR_NUDGE},
+                    ]
+                raw_resp = judge.complete(msgs)
+                parsed = self._parse_json(raw_resp)
+                turn_evals = parsed.get("turn_evaluations")
+                if not isinstance(turn_evals, list):
+                    # Tolerance: single-turn {"evaluations": {...}} shape with 1 item
+                    if isinstance(parsed.get("evaluations"), dict) and len(items) == 1:
+                        turn_evals = [{"turn_index": items[0]["turn_index"], "evaluations": parsed["evaluations"]}]
                     else:
-                        if not isinstance(entry, dict):
-                            raise ValueError(f"Invalid entry for metric '{mid}' turn {ti}: {entry}")
-                        result_raw = str(entry.get("result", "")).strip().upper()
-                        if result_raw not in ("PRESENT", "ABSENT", "NOT_APPLICABLE"):
-                            raise ValueError(f"Invalid result '{result_raw}' for metric '{mid}' turn {ti}")
-                        result = BehavioralResult(result_raw)
-                        evidence = entry.get("evidence")
-                        if evidence is None:
-                            evidence = ""
-                        evidence = str(evidence).strip()
-                        if not evidence and result != BehavioralResult.NOT_APPLICABLE:
-                            evidence = "(no evidence provided)"
-                        elif not evidence:
-                            evidence = ""
-                        conf = float(entry.get("confidence", 1.0)) if "confidence" in entry else 1.0
-                    observations.append(BehaviorObservation(
-                        dimension=metric, result=result, evidence=evidence,
-                        turn_index=ti, confidence=conf,
-                    ))
-            return observations
-        except Exception as e:
-            logger.warning("Judge round failed turns=%s: %s — falling back to per-turn", [it["turn_index"] for it in items], e)
-            # Fallback: per-turn batch (complete response, no external history)
-            fallback_obs: list[BehaviorObservation] = []
+                        raise ValueError(f"No turn_evaluations found in judge response: {raw_resp[:500]}")
+                for te in turn_evals:
+                    if not isinstance(te, dict) or "evaluations" not in te:
+                        continue
+                    try:
+                        ti = int(te.get("turn_index"))
+                    except Exception:
+                        continue
+                    if isinstance(te["evaluations"], dict):
+                        by_turn[ti] = te["evaluations"]
+                parsed_ok = True
+                break
+            except Exception as e:
+                last_err = e
+                logger.warning(
+                    "Judge round failed turns=%s attempt %d/%d: %s",
+                    [it["turn_index"] for it in items], attempt + 1, retries + 1, e,
+                )
+                continue
+        if not parsed_ok:
+            logger.warning("Judge round failed turns=%s — rescuing per turn",
+                           [it["turn_index"] for it in items])
+            rescued: list[BehaviorObservation] = []
             for it in items:
+                rescued.extend(self._rescue_turn(it, scenario_context, metrics, judge))
+            return rescued
+
+        observations: list[BehaviorObservation] = []
+        for it in items:
+            ti = it["turn_index"]
+            evals = by_turn.get(ti)
+            if evals is None:
+                logger.warning("Judge response missing turn %d — rescuing it", ti)
+                observations.extend(self._rescue_turn(it, scenario_context, metrics, judge))
+                continue
+            for metric in metrics:
+                mid = metric.value if hasattr(metric, "value") else str(metric)
+                entry = evals.get(mid) or evals.get(mid.lower()) or evals.get(mid.upper())
+                if entry is None:
+                    for k, v in evals.items():
+                        if k.lower() == mid.lower():
+                            entry = v
+                            break
                 try:
-                    obs_list = self._observe_batch(
-                        utterance=it["content"], role=it["role"],
-                        scenario_context=scenario_context, turn_index=it["turn_index"],
-                        metrics=metrics, history_text="(No prior history — evaluated in round context.)",
-                        judge=judge,
-                    )
-                    fallback_obs.extend(obs_list)
-                except Exception as e2:
-                    logger.warning("Fallback batch failed turn=%d: %s", it["turn_index"], e2)
-                    for m in metrics:
-                        fallback_obs.append(BehaviorObservation(
-                            dimension=m, result=BehavioralResult.NOT_APPLICABLE,
-                            evidence=f"[Evaluation failed: {e2}]",
-                            turn_index=it["turn_index"], confidence=0.0,
-                        ))
-            return fallback_obs
+                    if entry is None:
+                        raise ValueError(f"Missing metric '{mid}' in judge response")
+                    result, evidence, conf = self._parse_metric_entry(entry, mid, ti)
+                except Exception as e:
+                    logger.warning("%s — rescuing metric", e)
+                    observations.append(self._rescue_metric(it, scenario_context, metric, judge))
+                    continue
+                observations.append(BehaviorObservation(
+                    dimension=metric, result=result, evidence=evidence,
+                    turn_index=ti, confidence=conf,
+                ))
+        return observations
 
     def _observe_one_legacy(
         self,

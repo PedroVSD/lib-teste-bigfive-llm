@@ -12,6 +12,8 @@ class OllamaAdapter(LLMAdapter):
     Adapter for local and cloud models via Ollama.
     """
 
+    supports_structured_output = True
+
     def __init__(
         self,
         model: str = "",
@@ -33,6 +35,12 @@ class OllamaAdapter(LLMAdapter):
         self.api_key = api_key or os.environ.get("OLLAMA_API_KEY")
 
     def complete(self, messages: list[dict], **kwargs) -> str:
+        return self._complete(messages, structured=False)
+
+    def complete_structured(self, messages: list[dict], schema=None) -> str:
+        return self._complete(messages, structured=True)
+
+    def _complete(self, messages: list[dict], structured: bool) -> str:
         payload = {
             "model": self.model,
             "messages": messages,
@@ -43,6 +51,10 @@ class OllamaAdapter(LLMAdapter):
                 **self.config.extra,
             },
         }
+        if structured:
+            # Ollama's JSON mode forces a valid JSON object; the system prompt
+            # defines the required {"utterance": "..."} shape.
+            payload["format"] = "json"
 
         headers = {}
         if self.api_key:

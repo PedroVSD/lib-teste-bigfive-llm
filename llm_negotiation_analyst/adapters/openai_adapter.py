@@ -10,6 +10,8 @@ class OpenAIAdapter(LLMAdapter):
     into the negotiation simulation.
     """
 
+    supports_structured_output = True
+
     def __init__(
         self,
         model: str = "gpt-4o",
@@ -30,15 +32,24 @@ class OpenAIAdapter(LLMAdapter):
         self.client = openai.OpenAI(api_key=key)
 
     def complete(self, messages: list[dict], **kwargs) -> str:
+        return self._complete(messages, structured=False)
+
+    def complete_structured(self, messages: list[dict], schema=None) -> str:
+        return self._complete(messages, structured=True)
+
+    def _complete(self, messages: list[dict], structured: bool) -> str:
         import time
         inicio = time.perf_counter()
+        extra = dict(self.config.extra)
+        if structured:
+            extra.setdefault("response_format", {"type": "json_object"})
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
-                **self.config.extra
+                **extra
             )
             tempo = time.perf_counter() - inicio
             if not self.config.quiet:

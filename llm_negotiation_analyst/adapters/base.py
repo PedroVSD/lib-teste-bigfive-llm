@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 import json
 
+from ..guards import UTTERANCE_SCHEMA
+
 
 @dataclass
 class AdapterConfig:
@@ -28,6 +30,10 @@ class LLMAdapter(ABC):
         ]
     """
 
+    # Native JSON mode support. Adapters that can force structured output set
+    # this to True and implement complete_structured().
+    supports_structured_output = False
+
     def __init__(self, model: str, config: Optional[AdapterConfig] = None):
         self.model = model
         self.config = config or AdapterConfig()
@@ -36,6 +42,19 @@ class LLMAdapter(ABC):
     def complete(self, messages: list[dict], **kwargs) -> str:
         """Send messages and return the model's reply."""
         ...
+
+    def complete_structured(
+        self,
+        messages: list[dict],
+        schema: Optional[dict] = None,
+    ) -> str:
+        """Ask the model for a structured utterance.
+
+        The default implementation relies on the output-contract instruction
+        already present in the system message. Adapters with a native JSON mode
+        override this method to enforce the format at the provider level.
+        """
+        return self.complete(messages, response_schema=schema or UTTERANCE_SCHEMA)
 
     @property
     def identifier(self) -> str:

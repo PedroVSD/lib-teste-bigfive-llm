@@ -212,6 +212,36 @@ Guides in `_GUIDANCE:76`; names in `_DIM_NAMES`. `none`/`null`/`nil`/`~`/omittin
 
 Free list of Big Five + `NegotiationMetric` (`scoring/negotiation_metrics.py:42`). When omitted, evaluates Big Five only. Per round, **a single call** evaluates all metrics of both turns: `Turn 2k` + `Turn 2k+1` (complete responses, each is the other's context) + `PRESENT/ABSENT` rubrics (Goldberg for Big Five). Returns `{"turn_evaluations": [{"turn_index": i, "evaluations": {metric: {result: PRESENT|ABSENT|NOT_APPLICABLE, evidence}}}]}`. Behavioral metrics do **not** use immediate averaging: later `occurrence_rate` (`NOT_APPLICABLE` ignored) → `65%`. `utility` (continuous 0-1, `utility.py:147`) and `satisfaction` (ordinal 1-7, `satisfaction.py:48`) are separate; `agreement` is `AGREEMENT|NO_AGREEMENT`. The report splits `3 Behavioral Metrics | 5 Utility | 6 Subjective`; per-`turn×metric` `evidence` persists in `scores.jsonl` (`storage/jsonl_store.py:89`).
 
+### 3.5 Judge-call budget (cost control, same outputs)
+
+Per 16-turn run the judge baseline is `8` (rounds) + `1` (utility) + `1` (satisfaction, batched for all agents) + `2` (BFI) = `12` calls (×2 rounds with `second_judge`). Built-in savers, all default-on:
+
+* Round calls retry once with a JSON-repair nudge before any fallback (`EvaluatorConfig(batch_retries=1)`); only actually missing turns/metrics are re-queried with targeted calls instead of re-evaluating everything.
+* Satisfaction runs one call for all agents (per-agent rescue only on failure).
+* Top-level `bfi: false` skips the BFI-44 questionnaire (saves 1 call per agent) when BFI validation is not needed.
+
+### 3.6 `guard` block (output/leak policy)
+
+Optional top-level block. Defaults reproduce the strict behavior; each leak category accepts `block`, `warn` or `off`.
+
+```yaml
+guard:
+  enabled: true             # false = all leak categories off
+  prompt_labels: block      # Role:, Reference Value, CoT bullets, prompt echoes
+  verbatim_spans: block     # copied private prompt/persona text
+  self_disclosure: block    # "my limit is...", "my target is...", "I can go up to..."
+  invalid_output: raise     # raise | plain
+  max_attempts: 2
+```
+
+* `enabled: false` turns every leak category off at once (the structured-output contract still applies).
+* `block`: reject the turn, ask for a corrected reply, abort the run after `max_attempts`.
+* `warn`: record the event in `metadata.leak_guard.events` and forward the utterance.
+* `off`: ignore the category entirely.
+* `invalid_output: plain` accepts a plain-text reply (still leak-checked) when a provider never returns valid JSON; `raise` aborts instead. The parser already tolerates code fences, literal newlines, trailing commas, trailing prose and unescaped quotes.
+
+The effective policy is persisted per run in `metadata.leak_guard.policy`.
+
 ---
 
 ## 4. `utility` block — inside the agent, after `tactics` (no `currency`/`unit`/`role_type`)

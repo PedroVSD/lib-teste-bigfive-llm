@@ -216,6 +216,21 @@ You must answer from the perspective of: **{role}** (agent: {agent_id})
 
 Answer the 16 questions from {role}'s perspective. Return JSON only."""
 
+_SAT_USER_BATCH = """## Negotiation Context
+{scenario_context}
+
+## Roles to Evaluate
+{roles_block}
+
+## Questions (scale 1–7)
+{questions_block}
+
+## Full Transcript
+{transcript}
+
+Answer the 16 questions separately for EACH role listed above, from that role's perspective. Return JSON only:
+{{"agents": {{"<agent_id>": {{"a1": <int>, ..., "a16": <int>}}, ...}}}}"""
+
 
 # ---------------------------------------------------------------------------
 # Satisfaction evaluator
@@ -243,22 +258,94 @@ class SatisfactionEvaluator:
         """
         Evaluate satisfaction for all agents in the result.
 
+        One judge call covers every agent; agents missing or invalid in the
+        batch response are rescued with individual calls.
+
         Returns:
             Dict agent_id → SatisfactionScores
         """
         all_scores: dict[str, SatisfactionScores] = {}
         transcript_text = self._format_transcript(result)
+        remaining = dict(result.agent_roles)
 
-        for agent_id, role in result.agent_roles.items():
-            scores = self._evaluate_agent(
+        batch = self._evaluate_batch(
+            agent_roles=result.agent_roles,
+            scenario_context=result.scenario_context,
+            transcript_text=transcript_text,
+        )
+        for agent_id, scores in batch.items():
+            if agent_id in remaining:
+                all_scores[agent_id] = scores
+                del remaining[agent_id]
+
+        for agent_id, role in remaining.items():
+            all_scores[agent_id] = self._evaluate_agent(
                 agent_id=agent_id,
                 role=role,
                 scenario_context=result.scenario_context,
                 transcript_text=transcript_text,
             )
-            all_scores[agent_id] = scores
 
         return all_scores
+
+    def _evaluate_batch(
+        self,
+        agent_roles: dict[str, str],
+        scenario_context: str,
+        transcript_text: str,
+    ) -> dict[str, SatisfactionScores]:
+        """Single judge call for all agents; returns only valid entries."""
+        if not agent_roles:
+            return {}
+        roles_block = "\n".join(
+            f"- **{role}** (agent: {agent_id})" for agent_id, role in agent_roles.items()
+        )
+        messages = [
+            {"role": "system", "content": _SAT_SYSTEM},
+            {"role": "user",   "content": _SAT_USER_BATCH.format(
+                scenario_context=scenario_context,
+                roles_block=roles_block,
+                questions_block=self._format_questions(),
+                transcript=transcript_text,
+            )},
+        ]
+        try:
+            raw = self.judge.complete(messages)
+            clean = re.sub(r"```(?:json)?|```", "", raw).strip()
+            start = clean.find('{')
+            end   = clean.rfind('}')
+            if start == -1 or end == -1 or end <= start:
+                raise ValueError("No JSON object found in judge response.")
+            parsed = json.loads(clean[start:end+1])
+            agents_data = parsed.get("agents")
+            if not isinstance(agents_data, dict):
+                raise ValueError("No 'agents' object found in judge response.")
+            out: dict[str, SatisfactionScores] = {}
+            for agent_id, role in agent_roles.items():
+                answers_raw = agents_data.get(agent_id)
+                if not isinstance(answers_raw, dict):
+                    continue
+                raw_answers = self._normalize_answers(answers_raw, agent_id)
+                scores = self._calculate(agent_id, role, raw_answers)
+                scores.judge_raw = raw
+                out[agent_id] = scores
+            return out
+        except Exception as e:
+            logger.warning("SatisfactionEvaluator batch failed: %s — rescuing per agent", e)
+            return {}
+
+    @staticmethod
+    def _normalize_answers(answers: dict, agent_id: str) -> dict[str, int]:
+        """Validate and clamp raw answers to 1–7, defaulting missing to 4."""
+        raw_answers = {}
+        for q in IPC_QUESTIONS:
+            qid = q["id"]
+            val = answers.get(qid)
+            if val is None:
+                logger.warning("SatisfactionEvaluator: missing answer for %s (%s)", agent_id, qid)
+                val = 4  # neutral fallback
+            raw_answers[qid] = max(1, min(7, int(val)))
+        return raw_answers
 
     # ------------------------------------------------------------------
     # Single-agent evaluation
@@ -289,25 +376,18 @@ class SatisfactionEvaluator:
             start = clean.find('{')
             end   = clean.rfind('}')
             if start == -1 or end == -1 or end <= start:
-                raise ValueError("Nenhum objeto JSON encontrado na resposta do juiz.")
+                raise ValueError("No JSON object found in judge response.")
             answers = json.loads(clean[start:end+1])
 
-            # Valida e normaliza respostas
-            raw_answers = {}
-            for q in IPC_QUESTIONS:
-                qid = q["id"]
-                val = answers.get(qid)
-                if val is None:
-                    logger.warning("SatisfactionEvaluator: resposta faltando para %s", qid)
-                    val = 4  # neutro como fallback
-                raw_answers[qid] = max(1, min(7, int(val)))
+            # Validate and normalize answers
+            raw_answers = self._normalize_answers(answers, agent_id)
 
             scores = self._calculate(agent_id, role, raw_answers)
             scores.judge_raw = raw
             return scores
 
         except Exception as e:
-            logger.warning("SatisfactionEvaluator falhou para '%s': %s", agent_id, e)
+            logger.warning("SatisfactionEvaluator failed for '%s': %s", agent_id, e)
             return SatisfactionScores(agent_id=agent_id, role=role, judge_raw=str(e))
 
     # ------------------------------------------------------------------

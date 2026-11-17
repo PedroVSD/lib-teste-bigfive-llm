@@ -48,6 +48,7 @@ def run_negotiation(
     anchor_hints=None,
     macro_context_enabled: bool = True,
     specific_context_texts=None,
+    guard_config=None,
 ):
     import logging
     if verbose:
@@ -71,6 +72,7 @@ def run_negotiation(
         anchor_hints=anchor_hints,
         macro_context_enabled=macro_context_enabled,
         specific_context_texts=specific_context_texts,
+        guard_config=guard_config,
     )
     result = engine.run()
     # If the engine had no name but the result does, propagate it

@@ -77,3 +77,11 @@ models:
     - clarity
     - loss_aversion
     - fact_justification
+
+# Output/leak guard policy (see CONFIGURACAO_YAML.md, section 3.6).
+guard:
+  prompt_labels: block      # prompt echoes, "Role:", CoT, persona text
+  verbatim_spans: block     # copied private prompt text
+  self_disclosure: warn     # "my limit is...", "I can go up to..."
+  invalid_output: plain     # accept a leak-checked plain reply instead of aborting
+  max_attempts: 3

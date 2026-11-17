@@ -173,7 +173,7 @@ class TestSimulationEngine:
         engine = SimulationEngine(
             scenario=scenario,
             agents={
-                "candidate": MockAdapter("My target is R$17,000."),
+                "candidate": MockAdapter("I can offer R$17,000."),
                 "recruiter": MockAdapter("We can offer R$15,000. We have a deal."),
             },
         )
@@ -641,7 +641,7 @@ class TestEvaluator:
         assert summ.occurrence_rate == 0.0
 
     def test_not_applicable_ignored_in_denominator(self):
-        judge = SequenceJudge(["PRESENT", "NOT_APPLICABLE", "ABSENT", "NOT_APPLICABLE"])
+        judge = RoundJudge(results=["PRESENT", "NOT_APPLICABLE", "ABSENT", "NOT_APPLICABLE"])
         evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
         transcript = [
             {"role": "candidate", "agent_id": "c", "content": f"turn {i}"} for i in range(4)
@@ -655,7 +655,7 @@ class TestEvaluator:
         assert summ.occurrence_rate == 0.5
 
     def test_occurrence_rate_calculated_correctly(self):
-        judge = SequenceJudge(["PRESENT", "PRESENT", "ABSENT"])
+        judge = RoundJudge(results=["PRESENT", "PRESENT", "ABSENT"])
         evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
         transcript = [{"role": "candidate", "agent_id": "c", "content": f"t{i}"} for i in range(3)]
         profiles = evaluator.evaluate_transcript(transcript, {"c": "candidate"}, "ctx")
@@ -793,11 +793,11 @@ class TestBatchEvaluator:
         assert r_obs == [1]
 
     def test_aggregation_still_works_after_batch(self):
-        judge = SequenceJudge(["PRESENT", "ABSENT", "PRESENT"])
+        judge = RoundJudge(results=["PRESENT", "ABSENT", "PRESENT"])
         evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
         transcript = [{"role": "candidate", "agent_id": "c", "content": f"t{i}"} for i in range(3)]
         profiles = evaluator.evaluate_transcript(transcript, {"c": "candidate"}, "ctx")
-        # SequenceJudge cycles PRESENT, ABSENT, PRESENT per turn
+        # RoundJudge cycles PRESENT, ABSENT, PRESENT per turn
         assert profiles["c"].summaries[Dimension.AGREEABLENESS].present == 2
         assert profiles["c"].summaries[Dimension.AGREEABLENESS].absent == 1
         assert profiles["c"].summaries[Dimension.AGREEABLENESS].occurrence_rate == 2/3
@@ -885,6 +885,155 @@ class TestRoundEvaluator:
         # Aggregation still works: s has PRESENT(t0)+PRESENT(t2), b has ABSENT(t1)
         assert profiles["s"].summaries[Dimension.AGREEABLENESS].occurrence_rate == 1.0
         assert profiles["b"].summaries[Dimension.AGREEABLENESS].occurrence_rate == 0.0
+
+    def test_retry_repairs_invalid_json(self):
+        class FlakyJudge(LLMAdapter):
+            def __init__(self):
+                super().__init__(model="flaky", config=AdapterConfig())
+                self.call_count = 0
+            def complete(self, messages, **kwargs):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return "not json at all"
+                return json.dumps({"turn_evaluations": [
+                    {"turn_index": 0, "evaluations": {"agreeableness": {"result": "PRESENT", "evidence": "ev"}}},
+                    {"turn_index": 1, "evaluations": {"agreeableness": {"result": "ABSENT", "evidence": "ev"}}},
+                ]})
+        judge = FlakyJudge()
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS]))
+        transcript = [{"role": "c", "agent_id": "c", "content": f"t{i}"} for i in range(2)]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "c"}, "ctx")
+        # 1 failed + 1 repair retry, no per-turn/per-metric cascade
+        assert judge.call_count == 2
+        assert profiles["c"].summaries[Dimension.AGREEABLENESS].present == 1
+        assert profiles["c"].summaries[Dimension.AGREEABLENESS].absent == 1
+
+    def test_no_retry_when_disabled(self):
+        class FlakyJudge(LLMAdapter):
+            def __init__(self):
+                super().__init__(model="flaky", config=AdapterConfig())
+                self.call_count = 0
+            def complete(self, messages, **kwargs):
+                self.call_count += 1
+                if "## Round" in messages[-1]["content"]:
+                    return "not json at all"
+                return json.dumps({"evaluations": {"agreeableness": {"result": "PRESENT", "evidence": "ev"}}})
+        judge = FlakyJudge()
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS], batch_retries=0))
+        transcript = [{"role": "c", "agent_id": "c", "content": f"t{i}"} for i in range(2)]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "c"}, "ctx")
+        # 1 failed round + 2 per-turn rescues, no retry
+        assert judge.call_count == 3
+        assert profiles["c"].summaries[Dimension.AGREEABLENESS].present == 2
+
+    def test_partial_rescue_queries_only_missing(self):
+        class MixedJudge(LLMAdapter):
+            def __init__(self):
+                super().__init__(model="mixed", config=AdapterConfig())
+                self.call_count = 0
+                self.round_calls = 0
+            def complete(self, messages, **kwargs):
+                prompt = messages[-1]["content"]
+                if "## Round" in prompt:
+                    self.round_calls += 1
+                    self.call_count += 1
+                    return json.dumps({"turn_evaluations": [
+                        {"turn_index": 0, "evaluations": {"agreeableness": {"result": "PRESENT", "evidence": "batch ev"}}},
+                        {"turn_index": 1, "evaluations": {"agreeableness": {"result": "ABSENT", "evidence": "batch ev"}}},
+                    ]})
+                self.call_count += 1
+                return json.dumps({"metric": "openness", "result": "ABSENT", "evidence": "rescued ev"})
+        judge = MixedJudge()
+        evaluator = Evaluator(judge=judge, config=EvaluatorConfig(dimensions=[Dimension.AGREEABLENESS, Dimension.OPENNESS]))
+        transcript = [{"role": "c", "agent_id": "c", "content": f"t{i}"} for i in range(2)]
+        profiles = evaluator.evaluate_transcript(transcript, {"c": "c"}, "ctx")
+        assert judge.round_calls == 1
+        # 1 round + 2 targeted single-metric rescues (openness × 2 turns)
+        assert judge.call_count == 3
+        summ_o = profiles["c"].summaries[Dimension.OPENNESS]
+        assert summ_o.absent == 2
+        assert all(o.evidence == "rescued ev" for o in profiles["c"].observations if o.dimension == Dimension.OPENNESS)
+
+
+class TestSatisfactionBatch:
+    """One judge call covers all agents; per-agent rescue on failure."""
+
+    def _make_result(self):
+        engine = SimulationEngine(
+            scenario=SALARY_NEGOTIATION,
+            agents={
+                "candidate": MockAdapter("I want more."),
+                "recruiter": MockAdapter("We agree. Deal."),
+            },
+        )
+        return engine.run()
+
+    def test_batch_single_call_all_agents(self):
+        class SatJudge(LLMAdapter):
+            def __init__(self):
+                super().__init__(model="sat", config=AdapterConfig())
+                self.call_count = 0
+            def complete(self, messages, **kwargs):
+                self.call_count += 1
+                ans = {f"a{i}": 6 for i in range(1, 17)}
+                agents = {}
+                import re
+                for aid in re.findall(r"\(agent: ([^)]+)\)", messages[-1]["content"]):
+                    agents[aid] = dict(ans)
+                return json.dumps({"agents": agents})
+
+        result = self._make_result()
+        judge = SatJudge()
+        ev = SatisfactionEvaluator(judge=judge)
+        scores = ev.evaluate_all(result)
+        assert judge.call_count == 1
+        assert set(scores.keys()) == set(result.agent_roles.keys())
+        for s in scores.values():
+            assert s.a_outcome is not None
+            assert s.overall is not None
+
+    def test_batch_fallback_per_agent(self):
+        class BadSatJudge(LLMAdapter):
+            def __init__(self):
+                super().__init__(model="badsat", config=AdapterConfig())
+                self.call_count = 0
+            def complete(self, messages, **kwargs):
+                self.call_count += 1
+                if '{"agents"' in messages[-1]["content"] or '"agents":' in messages[-1]["content"] or "EACH role" in messages[-1]["content"]:
+                    return "not json at all"
+                ans = {f"a{i}": 5 for i in range(1, 17)}
+                return json.dumps(ans)
+
+        result = self._make_result()
+        judge = BadSatJudge()
+        ev = SatisfactionEvaluator(judge=judge)
+        scores = ev.evaluate_all(result)
+        # 1 failed batch + 2 per-agent rescues
+        assert judge.call_count == 3
+        assert set(scores.keys()) == set(result.agent_roles.keys())
+        for s in scores.values():
+            assert s.a_outcome is not None
+
+
+class TestBfiConfig:
+    def _load_experimento(self):
+        import importlib.util
+        import pathlib
+        spec = importlib.util.spec_from_file_location("experimento", pathlib.Path("experimento.py").absolute())
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_bfi_enabled_by_default(self):
+        mod = self._load_experimento()
+        assert mod.parse_bfi_enabled({}) is True
+        assert mod.parse_bfi_enabled({"bfi": True}) is True
+        assert mod.parse_bfi_enabled({"bfi": {"enabled": True}}) is True
+
+    def test_bfi_disabled(self):
+        mod = self._load_experimento()
+        assert mod.parse_bfi_enabled({"bfi": False}) is False
+        assert mod.parse_bfi_enabled({"bfi": {"enabled": False}}) is False
 
 
 # ---------------------------------------------------------------------------
