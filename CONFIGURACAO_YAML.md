@@ -121,7 +121,7 @@ Keys `agent_1`, `agent_2`, ... map in order onto the scenario `roles` (`experime
 ```yaml
 models:
   agent_1:   # → scenario 1st role (e.g., candidate in salary_negotiation)
-    provider: "ollama"         # ollama / ollama_local / gemini / openai / lmstudio / deepseek / openrouter
+    provider: "ollama"         # ollama / ollama_local / gemini / openai / lmstudio / deepseek / openrouter / nvidia / cloudflare
     name: "gemma4:31b-cloud"   # model name on the provider
     temperature: 0.5           # 0.0 deterministic — 1.0 creative
     max_tokens: 2048           # generation limit (4096 avoids cutoffs)
@@ -180,6 +180,8 @@ models:
 | `lmstudio` | `LMStudioAdapter` | `http://localhost:1234/v1` |
 | `deepseek` | `DeepSeekAdapter` | `DEEPSEEK_API_KEY` |
 | `openrouter` | `OpenRouterAdapter` | `OPENROUTER_API_KEY` |
+| `nvidia` | `NvidiaAdapter` | `NVIDIA_API_KEY` + `NVIDIA_BASE_URL` (default `https://integrate.api.nvidia.com/v1`) |
+| `cloudflare` | `CloudflareAdapter` (Workers AI) | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
 
 ### 3.2 `persona` — bipolar Big Five (`persona/big5_persona.py:76`)
 

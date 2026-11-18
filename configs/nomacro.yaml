@@ -1,5 +1,5 @@
 experiment:
-  name: experimento_VGA_nomacro agreeableness O - I
+  name: experimento_VGA_nomacro agreeableness I - I
   scenario: vga_purchase
   max_turns: 5
   use_system_reminder: true
@@ -8,12 +8,12 @@ context:
   macro_context_enabled: false
 models:
   agent_1:
-    provider: gemini
-    name: gemma-4-31b-it
+    provider: NVIDIA
+    name: google/gemma-4-31b-it
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: negative
+      agreeableness: positive
       #neuroticism: positive
       #extraversion: negative
       #openness: negative
@@ -35,7 +35,7 @@ models:
     max_tokens: 2048
     persona:
       agreeableness: positive
-      #neuroticism: negative
+      #neuroticism: positive
       #extraversion: negative
       #openness: negative
       #conscientiousness: negative
@@ -50,8 +50,8 @@ models:
       p_target: 470
       p_floor: 500
   judge:
-    provider: gemini
-    name: gemini-3.5-flash-lite
+    provider: cloudflare
+    name: "@cf/openai/gpt-oss-120b"
     temperature: 0.0
     metrics:
     - agreeableness

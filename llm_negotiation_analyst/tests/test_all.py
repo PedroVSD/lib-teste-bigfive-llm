@@ -137,6 +137,52 @@ class TestAdapters:
         assert adapter.config.temperature == 0.0
         assert adapter.config.max_tokens == 4096
 
+    def test_nvidia_adapter_defaults(self):
+        from llm_negotiation_analyst.adapters.nvidia_adapter import NvidiaAdapter
+
+        adapter = NvidiaAdapter(api_key="test-key")
+        assert adapter.base_url == "https://integrate.api.nvidia.com/v1"
+        assert adapter.model == "meta/llama-3.1-70b-instruct"
+        assert adapter.identifier == "NVIDIA:meta/llama-3.1-70b-instruct"
+
+    def test_nvidia_adapter_requires_api_key(self, monkeypatch):
+        from llm_negotiation_analyst.adapters.nvidia_adapter import NvidiaAdapter
+
+        monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+        with pytest.raises(ValueError):
+            NvidiaAdapter()
+
+    def test_cloudflare_adapter_defaults(self):
+        from llm_negotiation_analyst.adapters.cloudflare_adapter import CloudflareAdapter
+
+        adapter = CloudflareAdapter(account_id="acc123", api_token="tok")
+        assert adapter.identifier == "CloudflareWorkersAI:@cf/meta/llama-3.1-8b-instruct"
+        assert adapter._url == (
+            "https://api.cloudflare.com/client/v4/accounts/acc123/"
+            "ai/run/@cf/meta/llama-3.1-8b-instruct"
+        )
+
+    def test_cloudflare_adapter_requires_credentials(self, monkeypatch):
+        from llm_negotiation_analyst.adapters.cloudflare_adapter import CloudflareAdapter
+
+        monkeypatch.delenv("CLOUDFLARE_ACCOUNT_ID", raising=False)
+        monkeypatch.delenv("CLOUDFLARE_API_TOKEN", raising=False)
+        with pytest.raises(ValueError):
+            CloudflareAdapter()
+        with pytest.raises(ValueError):
+            CloudflareAdapter(account_id="acc123")
+
+    def test_cloudflare_extract_text_shapes(self):
+        from llm_negotiation_analyst.adapters.cloudflare_adapter import CloudflareAdapter
+
+        assert CloudflareAdapter._extract_text(
+            {"result": {"response": "hello"}}
+        ) == "hello"
+        assert CloudflareAdapter._extract_text(
+            {"result": {"response": {"offer": 100}}}
+        ) == '{"offer": 100}'
+        assert CloudflareAdapter._extract_text({"result": "plain"}) == "plain"
+
 
 # ---------------------------------------------------------------------------
 # Scenario tests
