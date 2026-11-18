@@ -25,6 +25,7 @@ from .adapters import LLMAdapter, OpenAIAdapter, OllamaAdapter, GeminiAdapter
 from .adapters.openrouter_adapter import OpenRouterAdapter
 from .adapters.nvidia_adapter import NvidiaAdapter
 from .adapters.cloudflare_adapter import CloudflareAdapter
+from .adapters.groq_adapter import GroqAdapter
 from .scenarios import NegotiationScenario, SCENARIO_REGISTRY
 from .simulation import SimulationEngine, NegotiationResult
 from .scoring import Evaluator, EvaluatorConfig, Dimension, Big5Profile

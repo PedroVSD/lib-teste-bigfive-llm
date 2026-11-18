@@ -183,6 +183,21 @@ class TestAdapters:
         ) == '{"offer": 100}'
         assert CloudflareAdapter._extract_text({"result": "plain"}) == "plain"
 
+    def test_groq_adapter_defaults(self):
+        from llm_negotiation_analyst.adapters.groq_adapter import GroqAdapter
+
+        adapter = GroqAdapter(api_key="test-key")
+        assert adapter.base_url == "https://api.groq.com/openai/v1"
+        assert adapter.model == "llama-3.3-70b-versatile"
+        assert adapter.identifier == "Groq:llama-3.3-70b-versatile"
+
+    def test_groq_adapter_requires_api_key(self, monkeypatch):
+        from llm_negotiation_analyst.adapters.groq_adapter import GroqAdapter
+
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        with pytest.raises(ValueError):
+            GroqAdapter()
+
 
 # ---------------------------------------------------------------------------
 # Scenario tests

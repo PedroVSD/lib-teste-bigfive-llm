@@ -12,6 +12,7 @@ from llm_negotiation_analyst.adapters.ollama_adapter import OllamaAdapter
 from llm_negotiation_analyst.adapters.ollama_local_adapter import OllamaLocalAdapter
 from llm_negotiation_analyst.adapters.nvidia_adapter import NvidiaAdapter
 from llm_negotiation_analyst.adapters.cloudflare_adapter import CloudflareAdapter
+from llm_negotiation_analyst.adapters.groq_adapter import GroqAdapter
 from llm_negotiation_analyst.scenarios import SCENARIO_REGISTRY
 from llm_negotiation_analyst.adapters.base import AdapterConfig
 from llm_negotiation_analyst.scoring import EvaluatorConfig
@@ -106,7 +107,15 @@ def create_adapter(config_dict: dict):
             json_mode=config_dict.get("json_mode", True),
             config=config_obj,
         )
-    raise ValueError(f"Unknown provider: {provider}. Options: gemini, openai, lmstudio, ollama, ollama_local, deepseek, openrouter, nvidia, cloudflare")
+    elif provider in ("groq", "groqcloud"):
+        return GroqAdapter(
+            model=model_name,
+            api_key=config_dict.get("api_key"),
+            base_url=config_dict.get("base_url"),
+            json_mode=config_dict.get("json_mode", True),
+            config=config_obj,
+        )
+    raise ValueError(f"Unknown provider: {provider}. Options: gemini, openai, lmstudio, ollama, ollama_local, deepseek, openrouter, nvidia, cloudflare, groq")
 
 
 def parse_persona(agent_config: dict) -> Big5Persona | None:

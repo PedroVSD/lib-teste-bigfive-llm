@@ -122,6 +122,7 @@ Providers:
 * Gemini -> gemini -> Exemplo: gemini-2.5-flash
 * NVIDIA NIM -> nvidia -> Exemplo: meta/llama-3.1-70b-instruct
 * Cloudflare Workers AI -> cloudflare -> Exemplo: @cf/meta/llama-3.1-8b-instruct
+* GroqCloud -> groq -> Exemplo: llama-3.3-70b-versatile
 
 #### IPC:
 Um ponto importante é que para o caso do ollama, como o mesmo possui suporte para rodar localmente e via API. Optei por ter adaptadores individuais. Por padrão o ollama se utiliza de URLs bases diferentes para o uso local ou API. Abaixo estão ambas.

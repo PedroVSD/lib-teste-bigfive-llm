@@ -1,5 +1,5 @@
 experiment:
-  name: experimento_VGA_nomacro agreeableness I - I
+  name: experimento_VGA_nomacro agreeableness O - O
   scenario: vga_purchase
   max_turns: 5
   use_system_reminder: true
@@ -13,7 +13,7 @@ models:
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: positive
+      agreeableness: negative
       #neuroticism: positive
       #extraversion: negative
       #openness: negative
@@ -34,7 +34,7 @@ models:
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: positive
+      agreeableness: negative
       #neuroticism: positive
       #extraversion: negative
       #openness: negative
@@ -50,8 +50,8 @@ models:
       p_target: 470
       p_floor: 500
   judge:
-    provider: cloudflare
-    name: "@cf/openai/gpt-oss-120b"
+    provider: groq
+    name: openai/gpt-oss-120b
     temperature: 0.0
     metrics:
     - agreeableness
@@ -65,7 +65,7 @@ models:
     - value_creation
     - clarity
     - fact_justification
-
+#"@cf/openai/gpt-oss-120b"cloudflare
 # Guard policy (optional). Each leak category accepts:
 #   block (default) = reject the turn, retry, abort after max_attempts
 #   warn            = record the event but forward the utterance
