@@ -441,6 +441,35 @@ def generate_report(
                             raw_str += f" ... (+{len(raw)-10} items)"
                         a(f"_Raw answers (sample): {raw_str}_")
                         a("")
+                    missing_items = getattr(bfi, "missing_items", None)
+                    if missing_items is None and isinstance(bfi, dict):
+                        missing_items = bfi.get("missing_items")
+                    if missing_items:
+                        missing_str = ", ".join(str(i) for i in sorted(missing_items))
+                        policy = getattr(bfi, "missing_policy", None)
+                        if policy is None and isinstance(bfi, dict):
+                            policy = bfi.get("missing_policy")
+                        if policy == "keep":
+                            consequence = (
+                                "left unanswered; dimension scores use only "
+                                "answered items"
+                            )
+                        else:
+                            consequence = "filled with 3 (neutral)"
+                        timed_out = getattr(bfi, "timed_out", None)
+                        if timed_out is None and isinstance(bfi, dict):
+                            timed_out = bfi.get("timed_out")
+                        timeout_note = (
+                            " The per-agent time budget was exhausted."
+                            if timed_out
+                            else ""
+                        )
+                        a(
+                            f"_⚠ BFI incomplete: {len(missing_items)} item(s) had no valid "
+                            f"answer across {getattr(bfi, 'attempts', '?')} attempt(s) and were "
+                            f"{consequence}: {missing_str}.{timeout_note}_"
+                        )
+                        a("")
                     a(f"_BFI applied via `{getattr(bfi, 'model_identifier', agent_id)}` right after `Big5Persona` and `SituationalContext`, before `Turn 0`._")
                     a("")
 

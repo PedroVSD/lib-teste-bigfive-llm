@@ -198,6 +198,28 @@ class TestAdapters:
         with pytest.raises(ValueError):
             GroqAdapter()
 
+    def test_ollama_normalizes_generate_url_to_chat(self):
+        from llm_negotiation_analyst.adapters.ollama_adapter import OllamaAdapter
+
+        adapter = OllamaAdapter(
+            model="gemma4:31b-cloud",
+            base_url="https://ollama.com/api/generate",
+            api_key="test",
+        )
+        assert adapter.base_url == "https://ollama.com/api/chat"
+
+    def test_ollama_extracts_all_supported_response_shapes(self):
+        from llm_negotiation_analyst.adapters.ollama_adapter import OllamaAdapter
+
+        assert OllamaAdapter._extract_content(
+            {"message": {"content": "chat"}}
+        ) == "chat"
+        assert OllamaAdapter._extract_content({"response": "generate"}) == "generate"
+        assert OllamaAdapter._extract_content(
+            {"choices": [{"message": {"content": "openai"}}]}
+        ) == "openai"
+        assert OllamaAdapter._extract_content({"message": {"content": ""}}) == ""
+
 
 # ---------------------------------------------------------------------------
 # Scenario tests
@@ -1095,6 +1117,303 @@ class TestBfiConfig:
         mod = self._load_experimento()
         assert mod.parse_bfi_enabled({"bfi": False}) is False
         assert mod.parse_bfi_enabled({"bfi": {"enabled": False}}) is False
+
+    def test_extra_is_forwarded_to_adapter_config(self):
+        mod = self._load_experimento()
+        adapter = mod.create_adapter({
+            "provider": "lmstudio",
+            "name": "local-model",
+            "extra": {"thinking_budget": 0},
+        })
+        assert adapter.config.extra == {"thinking_budget": 0}
+
+    def test_bfi_missing_policy_parsing(self):
+        mod = self._load_experimento()
+        assert mod.parse_bfi_missing_policy({}) == "neutral"
+        assert mod.parse_bfi_missing_policy({"bfi": True}) == "neutral"
+        assert mod.parse_bfi_missing_policy(
+            {"bfi": {"missing": "keep"}}
+        ) == "keep"
+        assert mod.parse_bfi_missing_policy(
+            {"bfi": {"missing_policy": "raise"}}
+        ) == "raise"
+
+    def test_bfi_timeout_parsing(self):
+        mod = self._load_experimento()
+        assert mod.parse_bfi_timeout({}) is None
+        assert mod.parse_bfi_timeout({"bfi": True}) is None
+        assert mod.parse_bfi_timeout({"bfi": {"timeout": 90}}) == 90.0
+        assert mod.parse_bfi_timeout({"bfi": {"timeout": "12.5"}}) == 12.5
+
+        with pytest.raises(ValueError):
+            mod.parse_bfi_timeout({"bfi": {"timeout": 0}})
+        with pytest.raises(ValueError):
+            mod.parse_bfi_timeout({"bfi": {"timeout": "soon"}})
+
+    def test_bfi_batch_size_parsing(self):
+        mod = self._load_experimento()
+        assert mod.parse_bfi_batch_size({}) is None
+        assert mod.parse_bfi_batch_size({"bfi": True}) is None
+        assert mod.parse_bfi_batch_size({"bfi": {"batch_size": 11}}) == 11
+        assert mod.parse_bfi_batch_size({"bfi": {"batch_size": "22"}}) == 22
+
+        for invalid in (0, 45, "many"):
+            with pytest.raises(ValueError):
+                mod.parse_bfi_batch_size({"bfi": {"batch_size": invalid}})
+
+    def test_bfi_max_attempts_parsing(self):
+        mod = self._load_experimento()
+        assert mod.parse_bfi_max_attempts({}) == 3
+        assert mod.parse_bfi_max_attempts({"bfi": {"max_attempts": 1}}) == 1
+        assert mod.parse_bfi_max_attempts({"bfi": {"attempts": 2}}) == 2
+
+        for invalid in (0, -1, "x"):
+            with pytest.raises(ValueError):
+                mod.parse_bfi_max_attempts({"bfi": {"max_attempts": invalid}})
+
+
+class TestBfiParsing:
+    class SequenceAdapter(LLMAdapter):
+        supports_structured_output = False
+
+        def __init__(self, responses):
+            super().__init__(model="bfi-mock", config=AdapterConfig())
+            self.responses = list(responses)
+            self.calls = 0
+
+        def complete(self, messages, **kwargs):
+            self.calls += 1
+            if not self.responses:
+                return ""
+            return self.responses.pop(0)
+
+    def test_parses_fenced_json_with_preamble_and_bare_keys(self):
+        from llm_negotiation_analyst.scoring.bfi import _parse_bfi_answers
+
+        raw = (
+            "Here is my answer:\n```json\n"
+            "{1: 4, 2: '2', '3': 5, 4: 1,}\n```"
+        )
+        answers = _parse_bfi_answers(raw)
+        assert answers == {1: 4, 2: 2, 3: 5, 4: 1}
+
+    def test_parses_plain_array_in_item_order(self):
+        from llm_negotiation_analyst.scoring.bfi import _parse_bfi_answers
+
+        raw = "[" + ", ".join(str((i % 5) + 1) for i in range(44)) + "]"
+        answers = _parse_bfi_answers(raw)
+        assert len(answers) == 44
+        assert answers[1] == 1
+        assert answers[44] == 4
+
+    def test_parses_nested_answers_and_scale_words(self):
+        from llm_negotiation_analyst.scoring.bfi import _parse_bfi_answers
+
+        raw = (
+            '{"answers": {"1": "Agree strongly", "2": "Disagree a little", '
+            '"3": "3 - neither agree nor disagree"}}'
+        )
+        answers = _parse_bfi_answers(raw)
+        assert answers == {1: 5, 2: 2, 3: 3}
+
+    def test_retries_only_missing_items(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        rest = {str(i): 3 for i in range(3, 45)}
+        adapter = self.SequenceAdapter([
+            '{"1": 4, "2": 2}',
+            json.dumps(rest),
+        ])
+        result = run_bfi_for_agent("agent", "buyer", adapter)
+
+        assert result.missing_items == []
+        assert result.attempts == 2
+        assert len(result.raw_answers) == 44
+        assert result.raw_answers[1] == 4
+        assert adapter.calls == 2
+
+    def test_incomplete_after_all_attempts_is_flagged(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        adapter = self.SequenceAdapter(["not json", "still not json", "{}"])
+        result = run_bfi_for_agent("agent", "buyer", adapter)
+
+        assert result.attempts == 3
+        assert result.missing_items == list(range(1, 45))
+        assert all(v == 3 for v in result.raw_answers.values())
+
+    def test_keep_policy_leaves_missing_items_unanswered(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        adapter = self.SequenceAdapter(['{"1": 4, "2": 2}'])
+        result = run_bfi_for_agent(
+            "agent", "buyer", adapter, missing_policy="keep"
+        )
+
+        assert result.missing_policy == "keep"
+        assert result.missing_items == list(range(3, 45))
+        assert result.raw_answers == {1: 4, 2: 2}
+        assert result.scores["extraversion"] == 4.0
+        assert result.scores["agreeableness"] == 4.0
+        assert result.scores["conscientiousness"] is None
+
+    def test_raise_policy_aborts_without_filling(self):
+        from llm_negotiation_analyst.scoring.bfi import (
+            BFIIncompleteError,
+            run_bfi_for_agent,
+        )
+
+        adapter = self.SequenceAdapter(["{}", "{}", "{}"])
+        with pytest.raises(BFIIncompleteError):
+            run_bfi_for_agent(
+                "agent", "buyer", adapter, missing_policy="raise"
+            )
+
+    def test_invalid_missing_policy_is_rejected(self):
+        from llm_negotiation_analyst.scoring.bfi import normalize_missing_policy
+
+        with pytest.raises(ValueError):
+            normalize_missing_policy("whatever")
+
+    def test_empty_structured_reply_falls_back_to_plain_completion(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        answers = {str(i): 4 for i in range(1, 45)}
+
+        class EmptyStructuredAdapter(LLMAdapter):
+            supports_structured_output = True
+
+            def __init__(self):
+                super().__init__(model="ollama-mock", config=AdapterConfig())
+
+            def complete_structured(self, messages, schema=None):
+                return ""
+
+            def complete(self, messages, **kwargs):
+                return json.dumps(answers)
+
+        result = run_bfi_for_agent("agent", "buyer", EmptyStructuredAdapter())
+        assert result.missing_items == []
+        assert len(result.raw_answers) == 44
+        assert result.raw_answers[1] == 4
+
+    def test_timeout_stops_attempts_and_restores_adapter_timeout(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        class TimeoutAdapter(LLMAdapter):
+            supports_structured_output = False
+
+            def __init__(self):
+                super().__init__(
+                    model="slow-mock", config=AdapterConfig(timeout=300.0)
+                )
+                self.calls = 0
+                self.seen_timeout = None
+
+            def complete(self, messages, **kwargs):
+                self.calls += 1
+                self.seen_timeout = self.config.timeout
+                raise TimeoutError("timed out")
+
+        adapter = TimeoutAdapter()
+        result = run_bfi_for_agent("agent", "buyer", adapter, timeout=5.0)
+
+        assert result.timed_out is True
+        assert result.attempts == 1
+        assert adapter.calls == 1
+        assert adapter.config.timeout == 300.0
+        assert 0 < adapter.seen_timeout <= 5.0
+        assert result.missing_items == list(range(1, 45))
+
+    def test_structured_timeout_does_not_fall_back_to_plain(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        class StructuredTimeoutAdapter(LLMAdapter):
+            supports_structured_output = True
+
+            def __init__(self):
+                super().__init__(model="slow-mock", config=AdapterConfig())
+                self.plain_calls = 0
+
+            def complete_structured(self, messages, schema=None):
+                raise TimeoutError("timed out")
+
+            def complete(self, messages, **kwargs):
+                self.plain_calls += 1
+                return json.dumps({str(i): 3 for i in range(1, 45)})
+
+        adapter = StructuredTimeoutAdapter()
+        result = run_bfi_for_agent("agent", "buyer", adapter, timeout=5.0)
+
+        assert adapter.plain_calls == 0
+        assert result.timed_out is True
+
+    def test_invalid_timeout_is_rejected(self):
+        from llm_negotiation_analyst.scoring.bfi import normalize_timeout
+
+        with pytest.raises(ValueError):
+            normalize_timeout(0)
+        with pytest.raises(ValueError):
+            normalize_timeout(-3)
+        with pytest.raises(ValueError):
+            normalize_timeout("later")
+        assert normalize_timeout(None) is None
+        assert normalize_timeout("2.5") == 2.5
+
+    @staticmethod
+    def _answer_range(start, end, value=4):
+        return json.dumps({str(i): value for i in range(start, end + 1)})
+
+    def test_batch_size_splits_into_multiple_requests(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        adapter = self.SequenceAdapter([
+            self._answer_range(1, 11),
+            self._answer_range(12, 22),
+            self._answer_range(23, 33),
+            self._answer_range(34, 44),
+        ])
+        result = run_bfi_for_agent("agent", "buyer", adapter, batch_size=11)
+
+        assert adapter.calls == 4
+        assert result.attempts == 4
+        assert result.missing_items == []
+        assert len(result.raw_answers) == 44
+
+    def test_retry_resends_only_the_failed_batch(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        adapter = self.SequenceAdapter([
+            '{"1": 4}',                 # batch 1 (1-22) incomplete
+            self._answer_range(2, 22),  # only the missing items of batch 1
+            self._answer_range(23, 44), # batch 2
+        ])
+        result = run_bfi_for_agent("agent", "buyer", adapter, batch_size=22)
+
+        assert adapter.calls == 3
+        assert result.attempts == 3
+        assert result.missing_items == []
+        assert len(result.raw_answers) == 44
+
+    def test_max_attempts_caps_calls_per_batch(self):
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_for_agent
+
+        adapter = self.SequenceAdapter([
+            '{"1": 4}',                  # batch 1 fails, no retry allowed
+            self._answer_range(23, 44),  # batch 2
+        ])
+        result = run_bfi_for_agent(
+            "agent",
+            "buyer",
+            adapter,
+            batch_size=22,
+            max_attempts=1,
+        )
+
+        assert adapter.calls == 2
+        assert result.attempts == 2
+        assert result.missing_items == list(range(2, 23))
+        assert all(result.raw_answers[i] == 3 for i in range(2, 23))
 
 
 # ---------------------------------------------------------------------------

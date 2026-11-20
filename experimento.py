@@ -66,7 +66,10 @@ def create_adapter(config_dict: dict):
     model_name = config_dict["name"]
     temp       = config_dict.get("temperature", 0.5)
     max_tokens = config_dict.get("max_tokens", 1024)
-    config_obj = AdapterConfig(temperature=temp, max_tokens=max_tokens)
+    extra      = config_dict.get("extra") or {}
+    if not isinstance(extra, dict):
+        raise ValueError("`extra` must be a mapping, e.g. extra: {thinking_budget: 0}")
+    config_obj = AdapterConfig(temperature=temp, max_tokens=max_tokens, extra=dict(extra))
 
     if provider == "gemini":
         return GeminiAdapter(model=model_name, config=config_obj)
@@ -270,6 +273,75 @@ def parse_bfi_enabled(config: dict) -> bool:
     return bool(cfg)
 
 
+def parse_bfi_missing_policy(config: dict) -> str:
+    """Top-level `bfi: {missing: neutral|keep|raise}` (default neutral)."""
+    cfg = (config or {}).get("bfi", True)
+    if isinstance(cfg, dict):
+        return str(cfg.get("missing", cfg.get("missing_policy", "neutral")))
+    return "neutral"
+
+
+def parse_bfi_batch_size(config: dict):
+    """Top-level `bfi: {batch_size: N}` — items per request (default 44 = 1 request)."""
+    cfg = (config or {}).get("bfi", True)
+    if not isinstance(cfg, dict):
+        return None
+    value = cfg.get("batch_size", cfg.get("batch", cfg.get("fraction")))
+    if value is None or value == "":
+        return None
+    try:
+        size = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Invalid `bfi.batch_size` value {value!r}; expected an integer 1-44."
+        )
+    if not 1 <= size <= 44:
+        raise ValueError(
+            f"Invalid `bfi.batch_size` value {value!r}; expected an integer 1-44."
+        )
+    return size
+
+
+def parse_bfi_max_attempts(config: dict) -> int:
+    """Top-level `bfi: {max_attempts: N}` — calls per batch (default 3)."""
+    cfg = (config or {}).get("bfi", True)
+    if not isinstance(cfg, dict):
+        return 3
+    value = cfg.get("max_attempts", cfg.get("attempts", 3))
+    try:
+        attempts = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Invalid `bfi.max_attempts` value {value!r}; expected an integer >= 1."
+        )
+    if attempts < 1:
+        raise ValueError(
+            f"Invalid `bfi.max_attempts` value {value!r}; expected an integer >= 1."
+        )
+    return attempts
+
+
+def parse_bfi_timeout(config: dict):
+    """Top-level `bfi: {timeout: seconds}` — total budget per agent (default none)."""
+    cfg = (config or {}).get("bfi", True)
+    if not isinstance(cfg, dict):
+        return None
+    value = cfg.get("timeout")
+    if value is None or value == "":
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Invalid `bfi.timeout` value {value!r}; expected a number of seconds."
+        )
+    if seconds <= 0:
+        raise ValueError(
+            f"Invalid `bfi.timeout` value {value!r}; it must be greater than zero."
+        )
+    return seconds
+
+
 def parse_utility_from_agents(models_cfg: dict, chaves_agentes: list[str], papeis: list[str]) -> dict[str, RoleUtilityParams]:
     """New: read utility inside models.agent_x.utility (after tactics)."""
     agent_to_role = {chave: role for chave, role in zip(chaves_agentes, papeis)}
@@ -426,12 +498,38 @@ if __name__ == "__main__":
     if not parse_bfi_enabled(config):
         print("BFI skipped (bfi: false).")
     else:
+        from llm_negotiation_analyst.scoring.bfi import run_bfi_all, BFIIncompleteError
+        from llm_negotiation_analyst.context import SituationalContext as _SC
         try:
-            from llm_negotiation_analyst.scoring.bfi import run_bfi_all
-            from llm_negotiation_analyst.context import SituationalContext as _SC
-            print("Applying BFI-44 to agents...")
-            bfi_results = run_bfi_all(agents_dict, personas_dict, macro_context if macro_context_enabled else _SC.disabled())
+            missing_policy = parse_bfi_missing_policy(config)
+            bfi_timeout = parse_bfi_timeout(config)
+            bfi_batch_size = parse_bfi_batch_size(config)
+            bfi_max_attempts = parse_bfi_max_attempts(config)
+            timeout_label = f", timeout={bfi_timeout:g}s" if bfi_timeout else ""
+            batch_label = (
+                f", batch_size={bfi_batch_size}"
+                if bfi_batch_size
+                else ""
+            )
+            print(
+                f"Applying BFI-44 to agents "
+                f"(missing={missing_policy}{timeout_label}{batch_label}, "
+                f"max_attempts={bfi_max_attempts})..."
+            )
+            bfi_results = run_bfi_all(
+                agents_dict,
+                personas_dict,
+                macro_context if macro_context_enabled else _SC.disabled(),
+                missing_policy=missing_policy,
+                timeout=bfi_timeout,
+                batch_size=bfi_batch_size,
+                max_attempts=bfi_max_attempts,
+            )
             print("BFI done.")
+        except BFIIncompleteError:
+            # `bfi.missing: raise` means an incomplete questionnaire must abort
+            # the run instead of being silently filled or omitted.
+            raise
         except Exception as e:
             print(f"BFI failed (continuing without BFI): {e}")
             import traceback; traceback.print_exc()

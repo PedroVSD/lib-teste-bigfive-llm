@@ -108,6 +108,25 @@ class GeminiAdapter(LLMAdapter):
         if structured:
             config_args.setdefault("response_mime_type", "application/json")
 
+        # Gemini expects the HTTP timeout in milliseconds.
+        if self.config.timeout:
+            config_args["http_options"] = types.HttpOptions(
+                timeout=max(1, int(self.config.timeout * 1000))
+            )
+
+        # Optional: disable/reduce thinking so output tokens go to the answer.
+        # YAML: extra: {thinking_budget: 0}
+        thinking_budget = self.config.extra.get("thinking_budget")
+        if thinking_budget is not None:
+            try:
+                config_args["thinking_config"] = types.ThinkingConfig(
+                    thinking_budget=int(thinking_budget)
+                )
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"Invalid thinking_budget={thinking_budget!r}; expected an integer."
+                )
+
         if system_instruction:
             config_args["system_instruction"] = system_instruction
 
@@ -142,8 +161,24 @@ class GeminiAdapter(LLMAdapter):
                             text = "".join(p.text or "" for p in response.candidates[0].content.parts)
                     except Exception:
                         text = None
-                if text is None:
-                    text = ""
+                if not text:
+                    finish_reason = None
+                    try:
+                        if response.candidates:
+                            finish_reason = response.candidates[0].finish_reason
+                    except Exception:
+                        pass
+                    if finish_reason is not None and "MAX_TOKENS" in str(finish_reason).upper():
+                        raise RuntimeError(
+                            f"Gemini returned no text for '{self.model}': the "
+                            f"max_output_tokens limit ({self.config.max_tokens}) was "
+                            "exhausted before any answer was produced. Increase "
+                            "max_tokens in the YAML or set extra.thinking_budget: 0."
+                        )
+                    print(
+                        f"[{self.model}] EMPTY response | finish_reason={finish_reason}"
+                    )
+                    return ""
                 return text
 
             except Exception as e:

@@ -54,6 +54,7 @@ class DeepSeekAdapter(LLMAdapter):
         extra = dict(self.config.extra)
         if structured:
             extra.setdefault("response_format", {"type": "json_object"})
+        extra.setdefault("timeout", self.config.timeout)
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,

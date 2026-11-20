@@ -64,6 +64,7 @@ class GroqAdapter(LLMAdapter):
         extra = dict(self.config.extra)
         if structured and self.json_mode:
             extra.setdefault("response_format", {"type": "json_object"})
+        extra.setdefault("timeout", self.config.timeout)
         try:
             response = self.client.chat.completions.create(
                 model=self.model,

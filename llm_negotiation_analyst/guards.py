@@ -234,6 +234,33 @@ def _loads_lenient(candidate: str):
         return None, False
 
 
+def load_json_value(raw: str) -> tuple[object, Optional[str]]:
+    """Extract and parse a JSON object/array from a model reply.
+
+    Tolerates markdown fences, surrounding prose, trailing commas and control
+    characters. Returns ``(value, error)``; ``error`` is ``None`` on success.
+    """
+    if raw is None:
+        return None, "empty_output"
+
+    text = _strip_code_fences(str(raw).strip())
+    if not text:
+        return None, "empty_output"
+
+    candidates = [text]
+    for open_ch, close_ch in (("{", "}"), ("[", "]")):
+        start, end = text.find(open_ch), text.rfind(close_ch)
+        if start != -1 and end > start:
+            candidates.append(text[start : end + 1])
+
+    for candidate in candidates:
+        value, parsed = _loads_lenient(candidate)
+        if parsed:
+            return value, None
+
+    return None, "invalid_json"
+
+
 def _salvage_utterance(text: str) -> Optional[str]:
     """Last-resort extraction for malformed JSON with an ``utterance`` key.
 

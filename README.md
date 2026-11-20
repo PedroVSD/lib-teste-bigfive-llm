@@ -127,8 +127,8 @@ Providers:
 #### IPC:
 Um ponto importante é que para o caso do ollama, como o mesmo possui suporte para rodar localmente e via API. Optei por ter adaptadores individuais. Por padrão o ollama se utiliza de URLs bases diferentes para o uso local ou API. Abaixo estão ambas.
 
-* Ollama_cloud: base_url: "https://ollama.com/api/generate"
-* Ollama_local: base_url:  http://localhost:11434/api/generate -d
+* Ollama_cloud: base_url: "https://ollama.com/api/chat"
+* Ollama_local: base_url:  http://localhost:11434/api/chat
 
 ---
 

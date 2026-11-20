@@ -184,6 +184,56 @@ models:
 | `cloudflare` | `CloudflareAdapter` (Workers AI) | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
 | `groq` | `GroqAdapter` | `GROQ_API_KEY` + `GROQ_BASE_URL` (default `https://api.groq.com/openai/v1`) |
 
+Optional provider parameters go in an `extra:` mapping and are forwarded to the adapter (`AdapterConfig.extra`). Example for Gemini/Gemma thinking models:
+
+```yaml
+models:
+  agent_2:
+    provider: gemini
+    name: gemma-4-26b-a4b-it
+    extra:
+      thinking_budget: 0   # disable thinking tokens so the answer is not truncated
+```
+
+The BFI-44 questionnaire retries incomplete/invalid replies up to 3 times, asking only for the missing items. What happens to items still unanswered is controlled by the top-level `bfi` block:
+
+```yaml
+bfi:
+  enabled: true
+  missing: keep        # neutral (default) | keep | raise
+  timeout: 120         # optional: total seconds per agent (all attempts included)
+  batch_size: 11       # optional: items per request (default 44 = 1 request)
+  max_attempts: 2      # optional: calls per batch (default 3)
+```
+
+| `bfi.missing` | Behavior |
+|---|---|
+| `neutral` | Fill unanswered items with 3 (neutral). Scores use all 44 items. |
+| `keep` | Leave them unanswered. Dimension scores use only answered items. |
+| `raise` | Abort the run with `BFIIncompleteError` instead of filling or omitting the BFI. |
+
+`bfi.timeout` caps the **total** time each agent may spend answering the BFI, including all retries and the structured→plain fallback. When the budget runs out, no further attempts are made and the remaining items follow `bfi.missing`. The limit is enforced in seconds and is also passed down to the provider's HTTP client, so a hung request cannot block the run. Omit it (default) to keep the adapter's normal timeout.
+
+`bfi.batch_size` splits the 44 items into smaller requests. Smaller batches are easier for weaker models, and a retry resends **only the failed batch**, not all 44 items. The trade-off is the number of base requests per agent:
+
+| `batch_size` | Base requests | Example |
+|---|---|---|
+| `44` (default) | **1** | One prompt with all items — fewest requests |
+| `22` | 2 | Two prompts of 22 items |
+| `11` | 4 | Four prompts of 11 items |
+| `4` | 11 | Eleven prompts of 4 items |
+
+`bfi.max_attempts` is the maximum number of calls **per batch** (default 3). To reduce requests, lower it: `max_attempts: 1` means each batch is requested once, with no retry.
+
+Worst-case calls per agent = `ceil(44 / batch_size) × max_attempts` (plus the structured→plain fallback when the structured call fails or returns empty). Examples:
+
+- `batch_size: 44`, `max_attempts: 1` → **1 call** (minimum).
+- `batch_size: 44` (default), `max_attempts: 3` → up to **3**.
+- `batch_size: 11`, `max_attempts: 1` → **4**.
+- `batch_size: 11`, `max_attempts: 2` → up to **8**.
+
+Missing items are recorded in `BFIResult.missing_items` and flagged in the report.
+
 ### 3.2 `persona` — bipolar Big Five (`persona/big5_persona.py:76`)
 
 | Dimension | `positive` (high) | `negative` (low) | `none` |

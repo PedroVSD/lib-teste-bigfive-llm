@@ -43,6 +43,7 @@ class OpenAIAdapter(LLMAdapter):
         extra = dict(self.config.extra)
         if structured:
             extra.setdefault("response_format", {"type": "json_object"})
+        extra.setdefault("timeout", self.config.timeout)
         try:
             response = self.client.chat.completions.create(
                 model=self.model,

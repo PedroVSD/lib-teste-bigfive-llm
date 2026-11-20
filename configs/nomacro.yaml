@@ -1,5 +1,5 @@
 experiment:
-  name: experimento_VGA_nomacro agreeableness O - O
+  name: experimento_VGA_nomacro conscientiousness I - I
   scenario: vga_purchase
   max_turns: 5
   use_system_reminder: true
@@ -13,11 +13,11 @@ models:
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: negative
+      #agreeableness: negative
       #neuroticism: positive
-      #extraversion: negative
-      #openness: negative
-      #conscientiousness: positive
+      #extraversion: positive
+      #openness: positive
+      conscientiousness: positive
     tactics:
       anchoring: disable
       loss_aversion: enabled
@@ -30,15 +30,15 @@ models:
       p_floor: 460
   agent_2:
     provider: gemini
-    name: gemma-4-26b-a4b-it
+    name: "gemma-4-26b-a4b-it"
     temperature: 0.5
     max_tokens: 2048
     persona:
-      agreeableness: negative
+      #agreeableness: negative
       #neuroticism: positive
-      #extraversion: negative
+      #extraversion: positive
       #openness: negative
-      #conscientiousness: negative
+      conscientiousness: positive
     tactics:
       anchoring: disable
       loss_aversion: enabled
@@ -50,8 +50,8 @@ models:
       p_target: 470
       p_floor: 500
   judge:
-    provider: groq
-    name: openai/gpt-oss-120b
+    provider: ollama
+    name: gpt-oss:120b-cloud
     temperature: 0.0
     metrics:
     - agreeableness
@@ -63,9 +63,10 @@ models:
     - loss_aversion
     - conditional_concession
     - value_creation
-    - clarity
-    - fact_justification
-#"@cf/openai/gpt-oss-120b"cloudflare
+    #- clarity
+    #- fact_justification
+#"@cf/openai/gpt-oss-120b"
+# @cf/google/gemma-4-26b-a4b-it
 # Guard policy (optional). Each leak category accepts:
 #   block (default) = reject the turn, retry, abort after max_attempts
 #   warn            = record the event but forward the utterance
@@ -79,3 +80,9 @@ guard:
   #self_disclosure: warn     # "my limit is...", "I can go up to..."
   invalid_output: plain     # never abort just because the reply was not JSON
   max_attempts: 3
+bfi:
+  enabled: true
+  missing: raise
+  timeout: 200
+  batch_size: 11     # itens por requisição (padrão 44 = 1 requisição)
+  max_attempts: 2

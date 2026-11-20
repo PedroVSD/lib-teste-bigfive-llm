@@ -31,7 +31,19 @@ class OllamaAdapter(LLMAdapter):
                 "'OLLAMA_BASE_URL' no arquivo .env."
             )
 
-        self.base_url = raw_url.rstrip("/")
+        raw_url = raw_url.rstrip("/")
+        if raw_url.endswith("/api/generate"):
+            # This adapter speaks the chat API (messages -> message.content).
+            # /api/generate uses prompt -> response and would return an empty
+            # message, silently breaking every call.
+            fixed = raw_url[: -len("/api/generate")] + "/api/chat"
+            if not self.config.quiet:
+                print(
+                    f"[Ollama] base_url '{raw_url}' is the generate endpoint; "
+                    f"using '{fixed}' instead."
+                )
+            raw_url = fixed
+        self.base_url = raw_url
         self.api_key = api_key or os.environ.get("OLLAMA_API_KEY")
 
     def complete(self, messages: list[dict], **kwargs) -> str:
@@ -78,8 +90,20 @@ class OllamaAdapter(LLMAdapter):
 
             response.raise_for_status()
 
-            content = response.json().get("message", {}).get("content")
-            return content if content is not None else ""
+            data = response.json()
+            if data.get("error"):
+                raise RuntimeError(f"Ollama API error: {data['error']}")
+
+            content = self._extract_content(data)
+            if not content:
+                message = data.get("message") or {}
+                print(
+                    f"[{self.model}] EMPTY content | "
+                    f"done_reason={data.get('done_reason')} | "
+                    f"thinking={bool(message.get('thinking'))} | "
+                    f"keys={list(data)[:8]}"
+                )
+            return content
 
         except httpx.ReadTimeout as e:
             tempo = time.perf_counter() - inicio
@@ -97,6 +121,28 @@ class OllamaAdapter(LLMAdapter):
             import traceback
             traceback.print_exc()
             raise
+
+    @staticmethod
+    def _extract_content(data: dict) -> str:
+        """Accept native chat, generate and OpenAI-compatible response shapes."""
+        message = data.get("message")
+        if isinstance(message, dict):
+            content = message.get("content")
+            if isinstance(content, str) and content:
+                return content
+
+        native = data.get("response")
+        if isinstance(native, str) and native:
+            return native
+
+        choices = data.get("choices")
+        if isinstance(choices, list) and choices:
+            try:
+                return choices[0]["message"]["content"] or ""
+            except (KeyError, TypeError, IndexError):
+                pass
+
+        return ""
 
     @property
     def identifier(self) -> str:
